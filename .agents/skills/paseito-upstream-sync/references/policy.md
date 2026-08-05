@@ -18,7 +18,8 @@ Use `adapt` when upstream is partial. Use `blocked` rather than guessing.
 - Preserve logically separated Paseito commits when practical.
 - It is acceptable to drop, split, or rewrite a local commit when the decision report explains why.
 - The new upstream commit must be an ancestor of the final candidate.
-- The worktree must be clean when reconciliation finishes.
+- Leave only intentional semantic edits; the controller stages and commits them, then requires a
+  clean worktree before review.
 
 ## Verification policy
 
