@@ -4,12 +4,13 @@ import hashlib
 import importlib.util
 import json
 import os
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from semantic_sync import SyncError, codex_environment, review_prompt, validate_artifacts
+from semantic_sync import SyncError, codex_environment, rebase_candidate, review_prompt, validate_artifacts
 
 ROOT = Path(__file__).parents[2]
 VALIDATOR_PATH = ROOT / ".agents/skills/paseito-upstream-sync/scripts/validate_decisions.py"
@@ -20,6 +21,45 @@ SPEC.loader.exec_module(VALIDATOR)
 
 
 class SemanticSyncTests(unittest.TestCase):
+    def test_controller_performs_clean_mechanical_rebase(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory) / "repo"
+            repo.mkdir()
+
+            def git(*args: str) -> str:
+                return subprocess.run(
+                    ["git", *args],
+                    cwd=repo,
+                    check=True,
+                    text=True,
+                    stdout=subprocess.PIPE,
+                ).stdout.strip()
+
+            git("init", "-b", "main")
+            git("config", "user.name", "Test")
+            git("config", "user.email", "test@example.invalid")
+            (repo / "upstream.txt").write_text("old\n", encoding="utf-8")
+            git("add", ".")
+            git("commit", "-m", "old upstream")
+            old = git("rev-parse", "HEAD")
+            git("switch", "-c", "candidate")
+            (repo / "feature.txt").write_text("local\n", encoding="utf-8")
+            git("add", ".")
+            git("commit", "-m", "local feature")
+            git("switch", "main")
+            (repo / "upstream.txt").write_text("new\n", encoding="utf-8")
+            git("commit", "-am", "new upstream")
+            new = git("rev-parse", "HEAD")
+            git("switch", "candidate")
+            rebase_candidate(
+                repo,
+                {"old_upstream_commit": old, "upstream_commit": new},
+                repo / "unused-skill",
+                repo / "unused-run",
+            )
+            self.assertEqual(git("merge-base", "HEAD", "main"), new)
+            self.assertEqual((repo / "feature.txt").read_text(encoding="utf-8"), "local\n")
+
     def test_review_prompt_explains_read_only_handoff_and_controller_verification(self) -> None:
         prompt = review_prompt(
             Path(".paseito-semantic-decision.json"),
@@ -60,7 +100,7 @@ class SemanticSyncTests(unittest.TestCase):
             "schemaVersion": 1,
             "upstreamTag": "v1.0.0",
             "upstreamCommit": "a" * 40,
-            "candidateCommit": "b" * 40,
+            "inputCommit": "b" * 40,
             "blocked": False,
             "blockers": [],
             "features": features,

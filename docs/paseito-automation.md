@@ -18,8 +18,10 @@ upstream commit represented by the branch.
 
 ## Local semantic release invariant
 
-An hourly macOS LaunchAgent refreshes a controller-owned checkout and asks the local Codex CLI to
-reconcile a disposable candidate with the exact peeled stable `vMAJOR.MINOR.PATCH` upstream commit.
+An hourly macOS LaunchAgent refreshes a controller-owned checkout and prepares a disposable
+candidate against the exact peeled stable `vMAJOR.MINOR.PATCH` upstream commit. The controller owns
+Git's mechanical rebase, staging, and commit operations; local Codex resolves each paused conflict
+semantically and then reconciles feature behavior in the rebased worktree.
 The feature registry records intent, invariants, contracts, paths, and whether a feature is
 permanent. Codex classifies every feature as `carry_forward`, `adapt`, `upstream_complete`, or
 `blocked`. It may retire a non-permanent feature only when upstream independently satisfies every
