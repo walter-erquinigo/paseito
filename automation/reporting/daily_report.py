@@ -1,31 +1,29 @@
 #!/usr/bin/env python3
-"""Build and send the idempotent 07:00 America/New_York Paseito report."""
+"""Build the idempotent daily Paseito status report."""
 
 from __future__ import annotations
 
-import argparse
 import html
 import json
 import os
 import urllib.request
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
-
-from graph_mail import access_token, decrypt_cache, encrypt_cache, send_mail
 
 API = "https://api.github.com"
 REPOSITORY = "walter-erquinigo/paseito"
 FAILURE_TITLES = {
     "Paseito local semantic sync is blocked",
     "Paseito automated release is blocked",
+    "Paseito daily email delivery is blocked",
 }
 
 
 def report_date(now: datetime, force: bool = False) -> str | None:
     local = now.astimezone(ZoneInfo("America/New_York"))
-    if not force and local.hour != 7:
+    if not force and local.hour < 7:
         return None
     return local.date().isoformat()
 
@@ -68,7 +66,9 @@ def collect(local_status: dict[str, Any] | None) -> dict[str, Any]:
     runs = github_json(f"/repos/{REPOSITORY}/actions/workflows/paseito-release.yml/runs?per_page=1")
     run = (runs.get("workflow_runs") or [None])[0]
     issues = github_json(f"/repos/{REPOSITORY}/issues?state=open&per_page=100")
-    issue = next((item for item in issues if item.get("title") in FAILURE_TITLES), None)
+    failure_issues = [
+        item.get("html_url") for item in issues if item.get("title") in FAILURE_TITLES and item.get("html_url")
+    ]
     semantic_result = (
         provenance.get("tests", {}).get("semanticReconciliation", "passed")
         if provenance
@@ -88,7 +88,7 @@ def collect(local_status: dict[str, Any] | None) -> dict[str, Any]:
             "pendingRestart": False,
             "timestamp": None,
         },
-        "failureIssue": issue.get("html_url") if issue else None,
+        "failureIssues": failure_issues,
         "runUrl": run.get("html_url") if run else None,
         "releaseUrl": release_url,
     }
@@ -96,6 +96,7 @@ def collect(local_status: dict[str, Any] | None) -> dict[str, Any]:
 
 def render_html(date_key: str, report: dict[str, Any]) -> str:
     local = report["localStatus"]
+    failures = report.get("failureIssues") or [report.get("failureIssue")]
     rows = [
         ("Upstream version", report["upstreamVersion"]),
         ("Semantic reconciliation", report["semanticResult"]),
@@ -111,7 +112,7 @@ def render_html(date_key: str, report: dict[str, Any]) -> str:
         ("Local installation", local.get("result", "not reported")),
         ("Local status timestamp", local.get("timestamp") or "not reported"),
         ("Pending restart", "yes" if local.get("pendingRestart") else "no"),
-        ("Unresolved release failure", report["failureIssue"] or "none"),
+        ("Unresolved automation failures", ", ".join(str(value) for value in failures if value) or "none"),
     ]
     rendered = "".join(
         f"<tr><th align='left'>{html.escape(str(label))}</th><td>{html.escape(str(value))}</td></tr>"
@@ -127,47 +128,3 @@ def render_html(date_key: str, report: dict[str, Any]) -> str:
         f"<p>{' · '.join(links) if links else 'No run or release links yet.'}</p>"
         "<p>This report is sent every day, including no-change days.</p>"
     )
-
-
-def main() -> int:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--gate-only", action="store_true")
-    parser.add_argument("--force", action="store_true")
-    parser.add_argument("--cache", type=Path)
-    parser.add_argument("--state", type=Path)
-    parser.add_argument("--status", type=Path)
-    parser.add_argument("--output-state", type=Path, default=Path("report-state.json"))
-    args = parser.parse_args()
-    date_key = report_date(datetime.now(timezone.utc), args.force)
-    output = os.environ.get("GITHUB_OUTPUT")
-    if args.gate_only:
-        if output:
-            with open(output, "a", encoding="utf-8") as stream:
-                stream.write(f"should_send={'true' if date_key else 'false'}\n")
-                stream.write(f"date_key={date_key or ''}\n")
-        return 0
-    if not date_key or not args.cache:
-        return 0
-    previous = read_json(args.state)
-    if previous and previous.get("lastSentNewYorkDate") == date_key:
-        args.output_state.write_text(json.dumps(previous, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-        print(f"Daily report {date_key} was already sent")
-        return 0
-    client_id = os.environ["GRAPH_CLIENT_ID"]
-    key = os.environ["GRAPH_TOKEN_CACHE_KEY"]
-    cache = decrypt_cache(args.cache, key)
-    token, cache = access_token(cache, client_id)
-    # Persist a rotated refresh token even if transport fails afterward.
-    encrypt_cache(cache, args.cache, key)
-    report = collect(read_json(args.status))
-    body = render_html(date_key, report)
-    send_mail(token, f"Paseito daily status — {date_key}", body)
-    args.output_state.write_text(
-        json.dumps({"lastSentNewYorkDate": date_key}, indent=2, sort_keys=True) + "\n", encoding="utf-8"
-    )
-    print(f"Daily report {date_key} sent")
-    return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

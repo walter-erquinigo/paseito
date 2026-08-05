@@ -14,6 +14,10 @@ class LaunchAgentTests(unittest.TestCase):
         self.assertNotIn("TOKEN", str(value).upper())
         self.assertEqual(value["StartInterval"], 3600)
 
+    def test_reporting_agent_does_not_run_during_installation(self) -> None:
+        value = agent("dev.werquinigo.paseito.daily-report", Path("/tmp/report.py"), 3600, False)
+        self.assertFalse(value["RunAtLoad"])
+
 
 if __name__ == "__main__":
     unittest.main()

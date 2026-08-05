@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Install the user-owned, no-fee Paseito semantic-sync LaunchAgent."""
+"""Install the user-owned Paseito semantic-sync and reporting LaunchAgents."""
 
 from __future__ import annotations
 
@@ -10,12 +10,12 @@ import subprocess
 from pathlib import Path
 
 
-def agent(label: str, script: Path, interval: int) -> dict[str, object]:
+def agent(label: str, script: Path, interval: int, run_at_load: bool = True) -> dict[str, object]:
     log_root = Path.home() / "Library/Logs/PaseitoAutomation"
     return {
         "Label": label,
         "ProgramArguments": ["/usr/bin/python3", str(script)],
-        "RunAtLoad": True,
+        "RunAtLoad": run_at_load,
         "StartInterval": interval,
         "ProcessType": "Background",
         "EnvironmentVariables": {
@@ -43,16 +43,23 @@ def main() -> int:
         subprocess.run(["/bin/launchctl", "bootout", f"gui/{uid}/{label}"], check=False)
         (launchagents / f"{label}.plist").unlink(missing_ok=True)
     definitions = {
-        "dev.werquinigo.paseito.semantic-sync": repo / "automation/release/local_watchdog.py",
+        "dev.werquinigo.paseito.semantic-sync": (
+            repo / "automation/release/local_watchdog.py",
+            True,
+        ),
+        "dev.werquinigo.paseito.daily-report": (
+            repo / "automation/reporting/local_smtp_report.py",
+            False,
+        ),
     }
-    for label, script in definitions.items():
+    for label, (script, run_at_load) in definitions.items():
         path = launchagents / f"{label}.plist"
         subprocess.run(["/bin/launchctl", "bootout", f"gui/{uid}/{label}"], check=False)
         if args.uninstall:
             path.unlink(missing_ok=True)
             continue
         with path.open("wb") as stream:
-            plistlib.dump(agent(label, script, 3600), stream, sort_keys=True)
+            plistlib.dump(agent(label, script, 3600, run_at_load), stream, sort_keys=True)
         os.chmod(path, 0o600)
         subprocess.run(["/bin/launchctl", "bootstrap", f"gui/{uid}", str(path)], check=True)
     return 0
