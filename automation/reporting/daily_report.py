@@ -17,7 +17,10 @@ from graph_mail import access_token, decrypt_cache, encrypt_cache, send_mail
 
 API = "https://api.github.com"
 REPOSITORY = "walter-erquinigo/paseito"
-FAILURE_TITLE = "Paseito automated release is blocked"
+FAILURE_TITLES = {
+    "Paseito local semantic sync is blocked",
+    "Paseito automated release is blocked",
+}
 
 
 def report_date(now: datetime, force: bool = False) -> str | None:
@@ -65,15 +68,18 @@ def collect(local_status: dict[str, Any] | None) -> dict[str, Any]:
     runs = github_json(f"/repos/{REPOSITORY}/actions/workflows/paseito-release.yml/runs?per_page=1")
     run = (runs.get("workflow_runs") or [None])[0]
     issues = github_json(f"/repos/{REPOSITORY}/issues?state=open&per_page=100")
-    issue = next((item for item in issues if item.get("title") == FAILURE_TITLE), None)
-    rebase_result = (
-        provenance.get("tests", {}).get("rebase", "passed")
+    issue = next((item for item in issues if item.get("title") in FAILURE_TITLES), None)
+    semantic_result = (
+        provenance.get("tests", {}).get("semanticReconciliation", "passed")
         if provenance
         else (run.get("conclusion") if run else "not run")
     )
+    classifications = provenance.get("semanticDecision", {}).get("featureClassifications", {}) if provenance else {}
     return {
         "upstreamVersion": provenance.get("upstreamTag") if provenance else "not published",
-        "rebaseResult": rebase_result,
+        "semanticResult": semantic_result,
+        "reviewResult": provenance.get("tests", {}).get("independentReview", "not published") if provenance else "not published",
+        "featureClassifications": classifications,
         "verificationBuild": "passed" if provenance else (run.get("conclusion") if run else "not run"),
         "publishedVersion": provenance.get("paseitoVersion") if provenance else "none",
         "localStatus": local_status or {
@@ -92,7 +98,13 @@ def render_html(date_key: str, report: dict[str, Any]) -> str:
     local = report["localStatus"]
     rows = [
         ("Upstream version", report["upstreamVersion"]),
-        ("Rebase result", report["rebaseResult"]),
+        ("Semantic reconciliation", report["semanticResult"]),
+        ("Independent review", report["reviewResult"]),
+        (
+            "Feature decisions",
+            ", ".join(f"{key}: {value}" for key, value in sorted(report["featureClassifications"].items()))
+            or "not published",
+        ),
         ("Verification/build", report["verificationBuild"]),
         ("Published Paseito version", report["publishedVersion"]),
         ("Installed version", local.get("installedVersion") or "not reported"),

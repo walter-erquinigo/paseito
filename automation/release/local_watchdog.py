@@ -1,25 +1,41 @@
 #!/usr/bin/env python3
-"""No-fee local fallback for GitHub's inactivity-disabled schedules."""
+"""Maintain a private control checkout and run local semantic synchronization."""
 
 from __future__ import annotations
 
-import json
+import os
 import subprocess
 import sys
-from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 REPOSITORY = "walter-erquinigo/paseito"
-WORKFLOW = "paseito-release.yml"
+FORK_URL = "https://github.com/walter-erquinigo/paseito.git"
 
 
-def gh(*args: str) -> subprocess.CompletedProcess[str]:
+def run(args: list[str], cwd: Path, check: bool = True) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        ["gh", *args, "--repo", REPOSITORY],
+        args,
+        cwd=cwd,
         text=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
-        check=False,
+        check=check,
     )
+
+
+def prepare_control_repo(state_root: Path) -> Path:
+    control = state_root / "control"
+    marker = control / ".paseito-automation-control"
+    if not control.exists():
+        run(["git", "clone", "--branch", "paseito", "--single-branch", FORK_URL, str(control)], state_root)
+        marker.write_text("controller-owned\n", encoding="utf-8")
+    if not marker.is_file() or not (control / ".git").is_dir():
+        raise RuntimeError("refusing to modify an unmarked control checkout")
+    run(["git", "fetch", "origin", "paseito", "--prune"], control)
+    run(["git", "checkout", "--detach", "origin/paseito"], control)
+    if run(["git", "status", "--porcelain", "--untracked-files=no"], control).stdout.strip():
+        raise RuntimeError("control checkout contains unexpected tracked changes")
+    return control
 
 
 def main() -> int:
@@ -33,23 +49,20 @@ def main() -> int:
     if visibility.returncode or visibility.stdout.strip().upper() != "PUBLIC":
         print("Paseito watchdog stopped: repository is unavailable or not public", file=sys.stderr)
         return 1
-    enabled = gh("workflow", "enable", WORKFLOW)
-    if enabled.returncode:
-        print("Paseito watchdog could not enable the release workflow", file=sys.stderr)
+    state_root = Path.home() / "Library/Application Support/PaseitoAutomation"
+    state_root.mkdir(parents=True, exist_ok=True, mode=0o700)
+    try:
+        control = prepare_control_repo(state_root)
+        result = subprocess.run(
+            [sys.executable, str(control / "automation/release/semantic_sync.py"), "--control-repo", str(control), "--state-root", str(state_root)],
+            cwd=control,
+            env={**os.environ, "PATH": "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"},
+            check=False,
+        )
+        return result.returncode
+    except (OSError, RuntimeError, subprocess.CalledProcessError) as error:
+        print(f"Paseito watchdog failed: {error}", file=sys.stderr)
         return 1
-    runs = gh("run", "list", "--workflow", WORKFLOW, "--limit", "1", "--json", "createdAt")
-    if runs.returncode:
-        return 1
-    values = json.loads(runs.stdout or "[]")
-    if values:
-        last = datetime.fromisoformat(values[0]["createdAt"].replace("Z", "+00:00"))
-        if datetime.now(timezone.utc) - last < timedelta(minutes=75):
-            return 0
-    dispatched = gh("workflow", "run", WORKFLOW, "--ref", "paseito")
-    if dispatched.returncode:
-        print("Paseito watchdog could not dispatch the release workflow", file=sys.stderr)
-        return 1
-    return 0
 
 
 if __name__ == "__main__":
