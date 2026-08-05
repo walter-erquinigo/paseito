@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -53,6 +54,7 @@ class MigrationTests(unittest.TestCase):
                 electron,
                 daemon,
                 root / "backups",
+                origin_migrator=lambda *_: None,
             )
             self.assertIsNotNone(backup)
             self.assertTrue((target_app / "existing").exists())
@@ -67,6 +69,58 @@ class MigrationTests(unittest.TestCase):
             config = json.loads((target_daemon / "config.json").read_text(encoding="utf-8"))
             self.assertEqual(config["daemon"]["listen"], "127.0.0.1:6769")
             self.assertEqual(config["home"], str(target_daemon))
+
+    def test_electron_database_logs_are_preserved(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source_app = root / "Paseo"
+            target_app = root / "Paseito"
+            source_daemon = root / ".paseo"
+            target_daemon = root / ".paseito"
+            (source_app / "Local Storage/leveldb").mkdir(parents=True)
+            (source_app / "Local Storage/leveldb/000001.log").write_text("essential", encoding="utf-8")
+            source_daemon.mkdir()
+            target_app.mkdir()
+            target_daemon.mkdir()
+            apply_migration(
+                source_app,
+                target_app,
+                source_daemon,
+                target_daemon,
+                existing_allowlist(source_app, ELECTRON_ALLOWLIST),
+                existing_allowlist(source_daemon, DAEMON_ALLOWLIST),
+                root / "backups",
+                origin_migrator=lambda *_: None,
+            )
+            self.assertEqual(
+                (target_app / "Local Storage/leveldb/000001.log").read_text(encoding="utf-8"),
+                "essential",
+            )
+
+    def test_origin_bridge_merges_remote_host_and_preserves_new_local_identity(self) -> None:
+        bridge = Path(__file__).with_name("local_storage_origin_bridge.cjs")
+        script = f"""
+const {{ mergeSnapshots }} = require({json.dumps(str(bridge))});
+const registry = '@paseo:daemon-registry';
+const replica = '@paseo:replica-cache';
+const source = {{
+  [registry]: JSON.stringify([{{serverId:'old-local'}}, {{serverId:'remote', connections:[{{type:'relay'}}]}}]),
+  [replica]: JSON.stringify({{version:1, hosts:[{{serverId:'old-local'}}, {{serverId:'remote', projects:[{{projectId:'p'}}]}}]}}),
+  preference: 'source',
+}};
+const target = {{
+  [registry]: JSON.stringify([{{serverId:'stale-local', connections:[{{type:'directTcp', endpoint:'localhost:6769'}}]}}]),
+  [replica]: JSON.stringify({{version:1, hosts:[{{serverId:'stale-local', projects:[]}}]}}),
+  targetOnly: 'keep',
+}};
+const merged = mergeSnapshots(source, target, 'old-local', 'new-local');
+const hosts = JSON.parse(merged[registry]);
+const cache = JSON.parse(merged[replica]);
+if (hosts.map(x => x.serverId).join(',') !== 'new-local,remote') process.exit(2);
+if (cache.hosts.map(x => x.serverId).join(',') !== 'new-local,remote') process.exit(3);
+if (merged.preference !== 'source' || merged.targetOnly !== 'keep') process.exit(4);
+"""
+        subprocess.run(["node", "-e", script], check=True)
 
     def test_second_tree_failure_restores_both_existing_targets(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -105,12 +159,47 @@ class MigrationTests(unittest.TestCase):
                         existing_allowlist(source_app, ELECTRON_ALLOWLIST),
                         existing_allowlist(source_daemon, DAEMON_ALLOWLIST),
                         root / "backups",
+                        origin_migrator=lambda *_: None,
                     )
 
             self.assertEqual((target_app / "original").read_text(encoding="utf-8"), "application")
             self.assertEqual((target_daemon / "original").read_text(encoding="utf-8"), "daemon")
             self.assertFalse((target_app / "Local Storage").exists())
             self.assertFalse((target_daemon / "agents").exists())
+
+    def test_origin_migration_failure_restores_both_existing_targets(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source_app = root / "Paseo"
+            target_app = root / "Paseito"
+            source_daemon = root / ".paseo"
+            target_daemon = root / ".paseito"
+            (source_app / "Local Storage").mkdir(parents=True)
+            (source_app / "Local Storage/new").write_text("new", encoding="utf-8")
+            source_daemon.mkdir()
+            target_app.mkdir()
+            (target_app / "original").write_text("application", encoding="utf-8")
+            target_daemon.mkdir()
+            (target_daemon / "original").write_text("daemon", encoding="utf-8")
+
+            def fail_origin_migration(*_: Path) -> None:
+                raise OSError("synthetic origin failure")
+
+            with self.assertRaises(MigrationError):
+                apply_migration(
+                    source_app,
+                    target_app,
+                    source_daemon,
+                    target_daemon,
+                    existing_allowlist(source_app, ELECTRON_ALLOWLIST),
+                    existing_allowlist(source_daemon, DAEMON_ALLOWLIST),
+                    root / "backups",
+                    origin_migrator=fail_origin_migration,
+                )
+
+            self.assertEqual((target_app / "original").read_text(encoding="utf-8"), "application")
+            self.assertEqual((target_daemon / "original").read_text(encoding="utf-8"), "daemon")
+            self.assertFalse((target_app / "Local Storage").exists())
 
 
 if __name__ == "__main__":

@@ -18,8 +18,10 @@ upstream commit represented by the branch.
 
 ## Local semantic release invariant
 
-At local noon each day, a macOS LaunchAgent refreshes a controller-owned checkout and prepares a disposable
-candidate against the exact peeled stable `vMAJOR.MINOR.PATCH` upstream commit. The controller owns
+At the first hourly tick at or after 18:00 America/New_York each day, a macOS LaunchAgent refreshes
+a controller-owned checkout and prepares a disposable candidate against the exact peeled stable
+`vMAJOR.MINOR.PATCH` upstream commit. A private success date prevents duplicate checks; failures retry
+hourly. The controller owns
 Git's mechanical rebase, staging, and commit operations; local Codex resolves each paused conflict
 semantically and then reconciles feature behavior in the rebased worktree.
 The feature registry records intent, invariants, contracts, paths, and whether a feature is
@@ -53,8 +55,9 @@ Each release publishes only:
 
 ## Installer and local watcher
 
-`automation/launchagents/install_launchagents.py` installs two user LaunchAgents: semantic sync at
-12:00 in the Mac's local timezone and hourly local email reporting. The small sync watcher updates a marked private control checkout under
+`automation/launchagents/install_launchagents.py` installs two hourly user LaunchAgents. The semantic
+watcher gates itself at 18:00 America/New_York, including DST changes, while local email reporting
+uses its separate daily gate. The small sync watcher updates a marked private control checkout under
 `~/Library/Application Support/PaseitoAutomation`, runs the semantic controller from that checkout,
 and relies on the user's existing Codex and GitHub CLI sessions. No token is copied into a plist or
 candidate checkout. Only fixed-field sanitized status is dispatched to GitHub.
@@ -71,7 +74,11 @@ allowlist, and `--apply` rejects a stale or missing receipt. Both applications a
 stopped. The migration backs up existing Paseito state, stages only allowlisted Electron and daemon
 data, removes caches and identity material, rewrites the daemon home/listen configuration, creates
 a fresh server id, and lets the first Paseito start create a fresh daemon keypair. Replacement of
-the application and daemon trees is rolled back as a unit on failure.
+the application and daemon trees is rolled back as a unit on failure. Chromium LevelDB transaction
+logs are preserved because they are database state, not diagnostic logs. A hidden local Electron
+bridge translates storage from the `paseo://app` origin to `paseito://app`, retains remote host
+pairings and cached workspaces, replaces the old local daemon identity with Paseito's fresh identity,
+and fails before handoff if the translated host registry cannot be verified.
 
 External agent CLI credential homes are reused in place and never copied. Chromium cookies are a
 best-effort surface because application identity can require reauthentication.
