@@ -52,7 +52,8 @@ def command(
     )
     if check and result.returncode:
         detail = (result.stderr or result.stdout).strip().splitlines()
-        raise SyncError("command", detail[-1] if detail else f"command failed: {args[0]}")
+        summary = next((line.strip() for line in reversed(detail) if re.search(r"[A-Za-z]", line)), "")
+        raise SyncError("command", summary[-500:] if summary else f"command failed: {args[0]}")
     return result
 
 
@@ -147,6 +148,9 @@ def focused_verification(candidate: Path) -> None:
         ["npm", "ci"],
         ["npm", "run", "format:check"],
         ["npm", "run", "lint"],
+        ["npm", "run", "build:server"],
+        ["npm", "run", "build", "--workspace=@getpaseo/expo-two-way-audio"],
+        ["npm", "run", "typecheck"],
         [
             "npx",
             "vitest",

@@ -116,6 +116,10 @@ class RebasePipelineTests(unittest.TestCase):
         self.assertIn("semantic_sync.py", watchdog)
         self.assertNotIn('"workflow", "run"', watchdog)
 
+    def test_local_controller_builds_dependencies_before_contract_tests(self) -> None:
+        controller = (Path(__file__).parent / "semantic_sync.py").read_text(encoding="utf-8")
+        self.assertLess(controller.index('"build:server"'), controller.index('"vitest"'))
+
 
 if __name__ == "__main__":
     unittest.main()
