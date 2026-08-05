@@ -57,7 +57,7 @@ def main() -> int:
     definitions = {
         "dev.werquinigo.paseito.semantic-sync": (
             repo / "automation/release/local_watchdog.py",
-            {"calendar_hour": 12, "run_at_load": False},
+            {"interval": 3600, "run_at_load": False},
         ),
         "dev.werquinigo.paseito.daily-report": (
             repo / "automation/reporting/local_smtp_report.py",

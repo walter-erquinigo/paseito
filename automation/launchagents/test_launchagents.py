@@ -23,15 +23,15 @@ class LaunchAgentTests(unittest.TestCase):
         )
         self.assertFalse(value["RunAtLoad"])
 
-    def test_semantic_sync_runs_at_local_noon_without_an_interval(self) -> None:
+    def test_semantic_sync_launches_hourly_for_timezone_gate(self) -> None:
         value = agent(
             "dev.werquinigo.paseito.semantic-sync",
             Path("/tmp/sync.py"),
-            calendar_hour=12,
+            interval=3600,
             run_at_load=False,
         )
-        self.assertEqual(value["StartCalendarInterval"], {"Hour": 12, "Minute": 0})
-        self.assertNotIn("StartInterval", value)
+        self.assertEqual(value["StartInterval"], 3600)
+        self.assertNotIn("StartCalendarInterval", value)
         self.assertFalse(value["RunAtLoad"])
 
     def test_agent_rejects_ambiguous_schedules(self) -> None:

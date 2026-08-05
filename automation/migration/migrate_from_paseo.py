@@ -14,7 +14,7 @@ import subprocess
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Callable, Iterable
 
 ELECTRON_ALLOWLIST = (
     "Local Storage",
@@ -103,17 +103,26 @@ def plan_receipt(electron_items: list[str], daemon_items: list[str]) -> str:
     return hashlib.sha256(payload.encode()).hexdigest()[:16]
 
 
-def ignore_excluded(root: str, names: list[str]) -> set[str]:
+def ignore_excluded(root: str, names: list[str], preserve_storage_logs: bool = False) -> set[str]:
     root_path = Path(root)
     ignored: set[str] = set()
     for name in names:
         candidate = root_path / name
-        if candidate.is_symlink() or is_excluded(Path(*candidate.parts[-2:])):
+        relative = Path(*candidate.parts[-2:])
+        excluded = is_excluded(relative)
+        if preserve_storage_logs and relative.name.casefold().endswith(".log"):
+            excluded = any(part.casefold() in EXCLUDED_PARTS for part in relative.parts)
+        if candidate.is_symlink() or excluded:
             ignored.add(name)
     return ignored
 
 
-def copy_allowlisted(source: Path, destination: Path, items: Iterable[str]) -> None:
+def copy_allowlisted(
+    source: Path,
+    destination: Path,
+    items: Iterable[str],
+    preserve_storage_logs: bool = False,
+) -> None:
     destination.mkdir(parents=True, exist_ok=True, mode=0o700)
     for name in items:
         source_path = source / name
@@ -126,7 +135,7 @@ def copy_allowlisted(source: Path, destination: Path, items: Iterable[str]) -> N
                 target_path,
                 dirs_exist_ok=True,
                 symlinks=False,
-                ignore=ignore_excluded,
+                ignore=lambda root, names: ignore_excluded(root, names, preserve_storage_logs),
             )
         elif source_path.is_file():
             target_path.parent.mkdir(parents=True, exist_ok=True)
@@ -167,6 +176,40 @@ def create_fresh_server_id(target_daemon: Path) -> None:
     path = target_daemon / "server-id"
     path.write_text(f"srv_{random_part}\n", encoding="utf-8")
     os.chmod(path, 0o600)
+
+
+def migrate_local_storage_origins(
+    target_electron: Path,
+    source_daemon: Path,
+    target_daemon: Path,
+) -> None:
+    local_storage = target_electron / "Local Storage/leveldb"
+    if not local_storage.is_dir():
+        return
+    source_id_path = source_daemon / "server-id"
+    target_id_path = target_daemon / "server-id"
+    if not source_id_path.is_file() or not target_id_path.is_file():
+        raise MigrationError("local storage origin migration requires both daemon server ids")
+    repo = Path(__file__).resolve().parents[2]
+    electron = repo / "node_modules/.bin/electron"
+    bridge = Path(__file__).with_name("local_storage_origin_bridge.cjs")
+    if not electron.is_file():
+        raise MigrationError("local storage origin migration requires the repository Electron runtime")
+    result = subprocess.run(
+        [
+            str(electron),
+            str(bridge),
+            str(target_electron),
+            source_id_path.read_text(encoding="utf-8").strip(),
+            target_id_path.read_text(encoding="utf-8").strip(),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=90,
+    )
+    if result.returncode:
+        raise MigrationError("Chromium local storage origin migration failed")
 
 
 def backup_targets(target_electron: Path, target_daemon: Path, backup_root: Path) -> Path | None:
@@ -219,6 +262,7 @@ def apply_migration(
     electron_items: list[str],
     daemon_items: list[str],
     backup_root: Path,
+    origin_migrator: Callable[[Path, Path, Path], None] = migrate_local_storage_origins,
 ) -> Path | None:
     electron_existed = target_electron.exists()
     daemon_existed = target_daemon.exists()
@@ -232,7 +276,7 @@ def apply_migration(
             shutil.copytree(target_electron, app_stage, symlinks=False)
         if target_daemon.exists():
             shutil.copytree(target_daemon, daemon_stage, symlinks=False)
-        copy_allowlisted(source_electron, app_stage, electron_items)
+        copy_allowlisted(source_electron, app_stage, electron_items, preserve_storage_logs=True)
         copy_allowlisted(source_daemon, daemon_stage, daemon_items)
         transform_daemon_config(daemon_stage / "config.json", source_daemon, target_daemon)
         for forbidden in (
@@ -251,6 +295,7 @@ def apply_migration(
         try:
             replace_tree(target_electron, app_stage)
             replace_tree(target_daemon, daemon_stage)
+            origin_migrator(target_electron, source_daemon, target_daemon)
         except Exception as error:
             restore_target(target_electron, backup, "application", electron_existed)
             restore_target(target_daemon, backup, "daemon", daemon_existed)
