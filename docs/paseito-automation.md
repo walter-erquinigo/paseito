@@ -7,14 +7,14 @@ upstream commit represented by the branch.
 ## No-fee boundary
 
 - The repository must remain public. Paseito workflows refuse to run for a private repository.
-- Release builds use GitHub's standard public `macos-14` arm64 runner. Reporting and status use
-  standard public Ubuntu runners.
+- Release builds use GitHub's standard public `macos-14` arm64 runner. Sanitized installation
+  status uses a standard public Ubuntu runner; email reporting runs only on the enrolled Mac.
 - Releases are unsigned. The local installer applies an ad-hoc signature after verification;
   Apple Developer membership and notarization are intentionally excluded.
-- Microsoft Graph reporting uses delegated `Mail.Send` and `offline_access`. It requires a free
-  public-client app registration and one local device-code login, not a paid mail service.
-- Artifact retention is deliberately small except for the encrypted Graph token cache and daily
-  date key. No third-party build, signing, updater, or email service is used.
+- Email reporting uses NVIDIA's authenticated SMTP relay over STARTTLS. Its password is read from
+  the macOS login Keychain and never copied into GitHub, a plist, a repository file, or a log.
+- Artifact retention is deliberately small. The daily date key is private local state. No
+  third-party build, signing, updater, or email service is used.
 
 ## Local semantic release invariant
 
@@ -53,8 +53,8 @@ Each release publishes only:
 
 ## Installer and local watcher
 
-`automation/launchagents/install_launchagents.py` installs one hourly user LaunchAgent. Its small
-watcher updates a marked private control checkout under
+`automation/launchagents/install_launchagents.py` installs two hourly user LaunchAgents: semantic
+sync and local email reporting. The small sync watcher updates a marked private control checkout under
 `~/Library/Application Support/PaseitoAutomation`, runs the semantic controller from that checkout,
 and relies on the user's existing Codex and GitHub CLI sessions. No token is copied into a plist or
 candidate checkout. Only fixed-field sanitized status is dispatched to GitHub.
@@ -78,11 +78,11 @@ best-effort surface because application identity can require reauthentication.
 
 ## Daily report
 
-The daily workflow runs at both UTC offsets that can correspond to 07:00 New York. `zoneinfo`
-selects the actual local hour, and an encrypted artifact stores the last-sent New York date to
-suppress duplicates. The report includes the latest semantic classifications, independent review,
-deterministic build, publication, local installation, and any unresolved controller failure. Email
-transport failure updates a persistent issue and fails visibly.
+The local reporting agent checks hourly. `zoneinfo` selects the first run at or after 07:00 New York,
+and a mode-0600 local date key suppresses duplicates while allowing catch-up after sleep. The report
+includes the latest semantic classifications, independent review, deterministic build, publication,
+local installation, and any unresolved controller failure. Email transport failure updates a
+persistent issue and fails visibly; the next hourly run retries.
 
-Bootstrap steps are in `automation/reporting/README.md`. The device-code login must remain local so
-its authorization code never appears in a public Actions log.
+Bootstrap steps are in `automation/reporting/README.md`. The NVIDIA password must be entered directly
+into macOS Keychain and the relay requires the Mac to be on-premises or connected to VPN.
