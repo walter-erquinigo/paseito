@@ -7,10 +7,16 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from package_linux_daemon import manifest, prepare_stage, write_bundle
+from package_linux_daemon import manifest, pack_arguments, prepare_stage, write_bundle
 
 
 class PackageLinuxDaemonTests(unittest.TestCase):
+    def test_workspace_pack_uses_prebuilt_files_without_lifecycle_output(self) -> None:
+        arguments = pack_arguments(Path("packs"), "server")
+        self.assertIn("--json", arguments)
+        self.assertIn("--ignore-scripts", arguments)
+        self.assertIn("--workspace=@getpaseo/server", arguments)
+
     def test_stage_contains_workspace_pack_directory(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             stage, packs = prepare_stage(Path(directory))

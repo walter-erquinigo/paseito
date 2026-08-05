@@ -29,18 +29,20 @@ def command(args: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
     )
 
 
+def pack_arguments(destination: Path, workspace: str) -> list[str]:
+    return [
+        "npm",
+        "pack",
+        "--json",
+        "--ignore-scripts",
+        f"--workspace=@getpaseo/{workspace}",
+        "--pack-destination",
+        str(destination),
+    ]
+
+
 def packed_workspace(root: Path, destination: Path, workspace: str) -> Path:
-    result = command(
-        [
-            "npm",
-            "pack",
-            "--json",
-            f"--workspace=@getpaseo/{workspace}",
-            "--pack-destination",
-            str(destination),
-        ],
-        root,
-    )
+    result = command(pack_arguments(destination, workspace), root)
     value = json.loads(result.stdout)
     if not isinstance(value, list) or len(value) != 1 or not isinstance(value[0], dict):
         raise RuntimeError(f"npm pack returned invalid metadata for {workspace}")
