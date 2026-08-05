@@ -48,9 +48,11 @@ jobs:
           set -euo pipefail
           force=false
           if [[ "${{ inputs.additional_release || 'false' }}" == true ]]; then force=true; fi
-          args=()
-          if [[ "$force" == true ]]; then args+=(--force); fi
-          python3 automation/release/check_upstream.py "${args[@]}"
+          if [[ "$force" == true ]]; then
+            python3 automation/release/check_upstream.py --force
+          else
+            python3 automation/release/check_upstream.py
+          fi
 
       - name: Stop when nothing changed
         if: steps.release.outputs.needs_release != 'true'
