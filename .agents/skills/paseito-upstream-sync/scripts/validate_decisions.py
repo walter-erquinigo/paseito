@@ -25,8 +25,8 @@ def load_object(path: Path) -> dict[str, Any]:
 
 
 def validate_decision(value: dict[str, Any], registry: dict[str, Any]) -> None:
-    if value.get("schemaVersion") != 1 or not COMMIT.fullmatch(str(value.get("candidateCommit", ""))):
-        raise DecisionError("invalid decision schema or candidate commit")
+    if value.get("schemaVersion") != 1 or not COMMIT.fullmatch(str(value.get("inputCommit", ""))):
+        raise DecisionError("invalid decision schema or input commit")
     registered = {item["id"]: item for item in registry.get("features", [])}
     decisions = value.get("features")
     if not isinstance(decisions, list):
@@ -82,12 +82,15 @@ def main() -> int:
     parser.add_argument("--registry", type=Path, required=True)
     parser.add_argument("--decision", type=Path, required=True)
     parser.add_argument("--review", type=Path)
+    parser.add_argument("--reviewed-commit")
     args = parser.parse_args()
     registry = load_object(args.registry)
     decision = load_object(args.decision)
     validate_decision(decision, registry)
     if args.review:
-        validate_review(load_object(args.review), registry, str(decision["candidateCommit"]))
+        if not args.reviewed_commit:
+            raise DecisionError("--reviewed-commit is required with --review")
+        validate_review(load_object(args.review), registry, args.reviewed_commit)
     return 0
 
 

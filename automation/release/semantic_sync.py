@@ -76,21 +76,37 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def reconciliation_prompt(values: dict[str, str], original_commit: str) -> str:
+def reconciliation_prompt(values: dict[str, str], input_commit: str) -> str:
     return f"""Use $paseito-upstream-sync to reconcile this candidate checkout.
 
 Exact inputs:
-- current Paseito commit: {original_commit}
+- rebased input commit: {input_commit}
 - old upstream commit: {values['old_upstream_commit']}
 - new stable upstream tag: {values['upstream_tag']}
 - new upstream commit: {values['upstream_commit']}
 
-Do not access the network; the exact old and new upstream commits are already present. Rebase the
-current branch onto the exact new upstream commit, resolve conflicts semantically, and evaluate every feature in
-automation/feature-registry.json. Retire an upstream-eligible feature only with passing behavioral
-proof and concrete upstream evidence. Preserve permanent features. Commit all candidate changes and
-leave a clean worktree. Never push, tag, publish, install, dispatch workflows, or open issues.
+Do not access the network; the controller already completed the mechanical rebase onto the exact new
+upstream commit. Evaluate every feature in automation/feature-registry.json and edit the worktree to
+carry forward, adapt, or remove local behavior as the evidence requires. Retire an upstream-eligible
+feature only with passing behavioral proof and concrete upstream evidence. Preserve permanent
+features. Do not stage, commit, or modify Git metadata. Never push, tag, publish, install, dispatch
+workflows, or open issues.
 Return the decision object required by the skill schema. Set blocked=true rather than guessing.
+"""
+
+
+def conflict_prompt(values: dict[str, str], files: list[str]) -> str:
+    rendered = "\n".join(f"- {path}" for path in files)
+    return f"""Use $paseito-upstream-sync to resolve the current mechanical rebase conflict.
+
+Exact new upstream commit: {values['upstream_commit']}
+Unmerged paths:
+{rendered}
+
+Inspect the old upstream, new upstream, feature registry, conflict stages, and surrounding code.
+Edit the worktree to resolve every listed path semantically while preserving permanent behavior.
+Do not run git add, git commit, git rebase, or any command that modifies Git metadata. Do not access
+the network. Return the conflict-resolution schema object. Set resolved=false rather than guessing.
 """
 
 
@@ -98,6 +114,8 @@ def review_prompt(decision_path: Path, candidate_commit: str, values: dict[str, 
     return f"""Independently review the Paseito semantic reconciliation at commit {candidate_commit}.
 Read automation/feature-registry.json, {decision_path.name}, the old upstream commit
 {values['old_upstream_commit']}, and the new upstream commit {values['upstream_commit']}.
+The decision's inputCommit is the mechanically rebased tree before Codex's semantic worktree edits;
+the reviewed commit above is the controller-created commit containing those edits.
 Check every feature decision and its cited evidence. Pay special attention to features classified
 upstream_complete: confirm executable equivalence and passing contract evidence, not changelog
 similarity. Confirm permanent features remain and the new upstream commit is an ancestor.
@@ -145,6 +163,64 @@ def invoke_codex(
     log.write_text(result.stdout + result.stderr, encoding="utf-8")
     if result.returncode or not output.exists():
         raise SyncError("codex", "Codex reconciliation did not produce a valid result")
+
+
+def rebase_candidate(candidate: Path, values: dict[str, str], skill: Path, run_root: Path) -> None:
+    if values["old_upstream_commit"] == values["upstream_commit"]:
+        return
+    environment = {**os.environ, "GIT_EDITOR": "true", "GIT_SEQUENCE_EDITOR": "true"}
+    result = command(
+        [
+            "git",
+            "rebase",
+            "--onto",
+            values["upstream_commit"],
+            values["old_upstream_commit"],
+        ],
+        cwd=candidate,
+        check=False,
+        timeout=600,
+        env=environment,
+    )
+    round_number = 0
+    while result.returncode:
+        files = git(candidate, "diff", "--name-only", "--diff-filter=U").splitlines()
+        if not files:
+            detail = (result.stderr or result.stdout).strip()
+            raise SyncError("semantic-sync", detail[-500:] or "mechanical rebase failed")
+        round_number += 1
+        if round_number > 50:
+            raise SyncError("semantic-sync", "rebase exceeded the conflict-resolution limit")
+        output = candidate / ".paseito-conflict-resolution.json"
+        invoke_codex(
+            candidate=candidate,
+            prompt=conflict_prompt(values, files),
+            schema=skill / "references/conflict-schema.json",
+            output=output,
+            sandbox="workspace-write",
+            log=run_root / f"codex-conflict-{round_number}.jsonl",
+        )
+        resolution = load_object(output)
+        output.unlink()
+        if resolution.get("schemaVersion") != 1 or not resolution.get("resolved") or resolution.get("blockers"):
+            raise SyncError("semantic-sync", "Codex blocked conflict resolution")
+        for relative in files:
+            path = candidate / relative
+            if not path.exists() or not path.is_file():
+                continue
+            content = path.read_text(encoding="utf-8", errors="replace")
+            if re.search(r"^(<<<<<<< |=======|>>>>>>> )", content, re.MULTILINE):
+                raise SyncError("semantic-sync", f"conflict markers remain in {relative}")
+        git(candidate, "add", "-A")
+        result = command(
+            ["git", "rebase", "--continue"],
+            cwd=candidate,
+            check=False,
+            timeout=600,
+            env=environment,
+        )
+    if git(candidate, "status", "--porcelain", "--untracked-files=no"):
+        raise SyncError("semantic-sync", "mechanical rebase left tracked worktree changes")
 
 
 def focused_verification(candidate: Path) -> None:
@@ -504,20 +580,26 @@ def synchronize(control_repo: Path, state_root: Path, force: bool = False) -> in
     git(candidate, "switch", "-c", branch)
 
     skill = candidate / ".agents/skills/paseito-upstream-sync"
+    git(candidate, "config", "user.name", "Paseito Local Automation")
+    git(candidate, "config", "user.email", "werquinigo@users.noreply.github.com")
+    rebase_candidate(candidate, values, skill, run_root)
+    command(["npm", "ci"], cwd=candidate, timeout=1800)
+    if git(candidate, "status", "--porcelain", "--untracked-files=no"):
+        raise SyncError("verification", "dependency installation changed tracked candidate files")
+    input_commit = git(candidate, "rev-parse", "HEAD")
     decision_path = candidate / ".paseito-semantic-decision.json"
     review_path = candidate / ".paseito-semantic-review.json"
     invoke_codex(
         candidate=candidate,
-        prompt=reconciliation_prompt(values, original_commit),
+        prompt=reconciliation_prompt(values, input_commit),
         schema=skill / "references/decision-schema.json",
         output=decision_path,
         sandbox="workspace-write",
         log=run_root / "codex-reconcile.jsonl",
     )
-    candidate_commit = git(candidate, "rev-parse", "HEAD")
     decision = load_object(decision_path)
     if (
-        decision.get("candidateCommit") != candidate_commit
+        decision.get("inputCommit") != input_commit
         or decision.get("upstreamTag") != values["upstream_tag"]
         or decision.get("upstreamCommit") != values["upstream_commit"]
         or decision.get("blocked")
@@ -529,8 +611,14 @@ def synchronize(control_repo: Path, state_root: Path, force: bool = False) -> in
     )
     if command(["git", "merge-base", "--is-ancestor", values["upstream_commit"], "HEAD"], cwd=candidate, check=False).returncode:
         raise SyncError("semantic-sync", "new upstream commit is not an ancestor of the candidate")
-    if git(candidate, "status", "--porcelain", "--untracked-files=no"):
-        raise SyncError("semantic-sync", "Codex left tracked candidate changes uncommitted")
+    decision_path.unlink()
+    git(candidate, "add", "-A")
+    if command(["git", "diff", "--cached", "--quiet"], cwd=candidate, check=False).returncode:
+        git(candidate, "commit", "-m", f"chore: reconcile Paseo {values['upstream_tag']}")
+    candidate_commit = git(candidate, "rev-parse", "HEAD")
+    if git(candidate, "status", "--porcelain"):
+        raise SyncError("semantic-sync", "semantic reconciliation left uncommitted changes")
+    decision_path.write_text(json.dumps(decision, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
     invoke_codex(
         candidate=candidate,
@@ -542,7 +630,18 @@ def synchronize(control_repo: Path, state_root: Path, force: bool = False) -> in
     )
     review = load_object(review_path)
     command(
-        [sys.executable, str(skill / "scripts/validate_decisions.py"), "--registry", "automation/feature-registry.json", "--decision", str(decision_path), "--review", str(review_path)],
+        [
+            sys.executable,
+            str(skill / "scripts/validate_decisions.py"),
+            "--registry",
+            "automation/feature-registry.json",
+            "--decision",
+            str(decision_path),
+            "--review",
+            str(review_path),
+            "--reviewed-commit",
+            candidate_commit,
+        ],
         cwd=candidate,
     )
     if not review.get("approved"):
@@ -559,8 +658,6 @@ def synchronize(control_repo: Path, state_root: Path, force: bool = False) -> in
     decisions_dir.mkdir(parents=True, exist_ok=True)
     record_path = decisions_dir / f"{values['paseito_version']}.json"
     record_path.write_text(json.dumps({"decision": decision, "review": review}, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    git(candidate, "config", "user.name", "Paseito Local Automation")
-    git(candidate, "config", "user.email", "werquinigo@users.noreply.github.com")
     git(candidate, "add", "package.json", "package-lock.json", "packages/desktop/package.json", "automation/upstream.json", str(record_path.relative_to(candidate)))
     git(candidate, "commit", "-m", f"chore: prepare {values['paseito_version']}")
     final_commit = git(candidate, "rev-parse", "HEAD")
