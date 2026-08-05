@@ -18,7 +18,7 @@ upstream commit represented by the branch.
 
 ## Local semantic release invariant
 
-At the first hourly tick at or after 18:00 America/New_York each day, a macOS LaunchAgent refreshes
+At 18:00 America/New_York each day, a macOS LaunchAgent refreshes
 a controller-owned checkout and prepares a disposable candidate against the exact peeled stable
 `vMAJOR.MINOR.PATCH` upstream commit. A private success date prevents duplicate checks; failures retry
 hourly. The controller owns
@@ -55,8 +55,8 @@ Each release publishes only:
 
 ## Installer and local watcher
 
-`automation/launchagents/install_launchagents.py` installs two hourly user LaunchAgents. The semantic
-watcher gates itself at 18:00 America/New_York, including DST changes, while local email reporting
+`automation/launchagents/install_launchagents.py` installs two user LaunchAgents. The semantic
+watcher launches at the top of every hour and gates itself at 18:00 America/New_York, including DST changes, while local email reporting
 uses its separate daily gate. The small sync watcher updates a marked private control checkout under
 `~/Library/Application Support/PaseitoAutomation`, runs the semantic controller from that checkout,
 and relies on the user's existing Codex and GitHub CLI sessions. No token is copied into a plist or
