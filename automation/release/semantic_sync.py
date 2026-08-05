@@ -110,17 +110,21 @@ the network. Return the conflict-resolution schema object. Set resolved=false ra
 """
 
 
-def review_prompt(decision_path: Path, candidate_commit: str, values: dict[str, str]) -> str:
+def review_prompt(
+    decision_path: Path, evidence_path: Path, candidate_commit: str, values: dict[str, str]
+) -> str:
     return f"""Independently review the Paseito semantic reconciliation at commit {candidate_commit}.
-Read automation/feature-registry.json, {decision_path.name}, the old upstream commit
+Read automation/feature-registry.json, {decision_path.name}, {evidence_path.name}, the old upstream commit
 {values['old_upstream_commit']}, and the new upstream commit {values['upstream_commit']}.
 The decision's inputCommit is the mechanically rebased tree before Codex's semantic worktree edits;
-the reviewed commit above is the controller-created commit containing those edits.
+the reviewed commit above is the resulting tree. They may be identical when every decision is
+carry_forward and no semantic edit is needed. The evidence JSONL is the first pass's captured command
+transcript; use it to substantiate recorded contract results.
 Check every feature decision and its cited evidence. Pay special attention to features classified
 upstream_complete: confirm executable equivalence and passing contract evidence, not changelog
 similarity. Confirm permanent features remain and the new upstream commit is an ancestor.
-The controller already verified that tracked files are clean. The untracked decision and review JSON
-files are controller-owned handoff files and are not candidate changes. This sandbox is intentionally
+The controller already verified that tracked files are clean. The untracked decision, evidence, and
+review files are controller-owned handoff files and are not candidate changes. This sandbox is intentionally
 read-only, so audit the recorded commands and repository evidence but do not rerun tests that need a
 writable temporary directory; the controller independently reruns all contracts after this review.
 Do not modify files, push, tag, publish, install, dispatch workflows, or open issues. Return only the
@@ -589,14 +593,17 @@ def synchronize(control_repo: Path, state_root: Path, force: bool = False) -> in
     input_commit = git(candidate, "rev-parse", "HEAD")
     decision_path = candidate / ".paseito-semantic-decision.json"
     review_path = candidate / ".paseito-semantic-review.json"
+    evidence_path = candidate / ".paseito-reconcile-evidence.jsonl"
+    reconcile_log = run_root / "codex-reconcile.jsonl"
     invoke_codex(
         candidate=candidate,
         prompt=reconciliation_prompt(values, input_commit),
         schema=skill / "references/decision-schema.json",
         output=decision_path,
         sandbox="workspace-write",
-        log=run_root / "codex-reconcile.jsonl",
+        log=reconcile_log,
     )
+    evidence_path.write_bytes(reconcile_log.read_bytes())
     decision = load_object(decision_path)
     if (
         decision.get("inputCommit") != input_commit
@@ -612,6 +619,7 @@ def synchronize(control_repo: Path, state_root: Path, force: bool = False) -> in
     if command(["git", "merge-base", "--is-ancestor", values["upstream_commit"], "HEAD"], cwd=candidate, check=False).returncode:
         raise SyncError("semantic-sync", "new upstream commit is not an ancestor of the candidate")
     decision_path.unlink()
+    evidence_path.unlink()
     git(candidate, "add", "-A")
     if command(["git", "diff", "--cached", "--quiet"], cwd=candidate, check=False).returncode:
         git(candidate, "commit", "-m", f"chore: reconcile Paseo {values['upstream_tag']}")
@@ -619,10 +627,11 @@ def synchronize(control_repo: Path, state_root: Path, force: bool = False) -> in
     if git(candidate, "status", "--porcelain"):
         raise SyncError("semantic-sync", "semantic reconciliation left uncommitted changes")
     decision_path.write_text(json.dumps(decision, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    evidence_path.write_bytes(reconcile_log.read_bytes())
 
     invoke_codex(
         candidate=candidate,
-        prompt=review_prompt(decision_path, candidate_commit, values),
+        prompt=review_prompt(decision_path, evidence_path, candidate_commit, values),
         schema=skill / "references/review-schema.json",
         output=review_path,
         sandbox="read-only",
@@ -650,6 +659,7 @@ def synchronize(control_repo: Path, state_root: Path, force: bool = False) -> in
     git(candidate, "remote", "add", "fork", FORK_URL)
     decision_path.unlink()
     review_path.unlink()
+    evidence_path.unlink()
     command(
         [sys.executable, str(candidate / "automation/release/set_version.py"), values["paseito_version"], "--root", str(candidate), "--upstream-tag", values["upstream_tag"], "--upstream-commit", values["upstream_commit"]],
         cwd=candidate,
