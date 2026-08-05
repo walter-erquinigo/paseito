@@ -1,6 +1,6 @@
 {
   "name": "@getpaseo/desktop",
-  "version": "0.2.5-paseito.1",
+  "version": "0.2.5-paseito.2",
   "private": true,
   "description": "Paseito desktop app for Apple Silicon macOS",
   "homepage": "https://github.com/walter-erquinigo/paseito",
