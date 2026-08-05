@@ -1,0 +1,180 @@
+{
+  "decision": {
+    "blocked": false,
+    "blockers": [],
+    "features": [
+      {
+        "classification": "carry_forward",
+        "confidence": "certain",
+        "contractChecks": [
+          {
+            "command": "npm run build:server",
+            "result": "passed"
+          },
+          {
+            "command": "npx vitest run packages/protocol/src/agent-deep-link.test.ts packages/desktop/src/agent-navigation.test.ts packages/cli/src/cli-surface.test.ts --bail=1",
+            "result": "passed"
+          }
+        ],
+        "evidence": [
+          {
+            "explanation": "The old and new upstream commits are identical, so upstream supplied no replacement behavior.",
+            "kind": "command",
+            "reference": "git diff --name-status 6fc491e6220fba6543bbbe4bf1b1f58cfe59228b..6fc491e6220fba6543bbbe4bf1b1f58cfe59228b"
+          },
+          {
+            "explanation": "Introduces the local independent macOS identity implementation after the upstream base.",
+            "kind": "commit",
+            "reference": "d9409bac7ace41ccacbb4c4115ea3a9caa7a612a"
+          },
+          {
+            "explanation": "These identity and attribution paths differ from upstream and implement the permanent registry invariants.",
+            "kind": "file",
+            "reference": "NOTICE-PASEITO.md; packages/app/app.config.js; packages/desktop; packages/cli"
+          }
+        ],
+        "id": "independent-desktop-identity",
+        "residualWork": [],
+        "summary": "Permanent Paseito identity behavior remains exclusively local and must be preserved; upstream v0.2.5 is unchanged from the supplied old upstream commit."
+      },
+      {
+        "classification": "carry_forward",
+        "confidence": "certain",
+        "contractChecks": [
+          {
+            "command": "npx vitest run packages/app/src/git/changes-base-selection.test.ts packages/protocol/src/messages.checkout-commits.test.ts packages/server/src/utils/checkout-git.commits.test.ts --bail=1",
+            "result": "passed"
+          }
+        ],
+        "evidence": [
+          {
+            "explanation": "No upstream changes exist between the supplied old and new commits.",
+            "kind": "command",
+            "reference": "git diff --name-status 6fc491e6220fba6543bbbe4bf1b1f58cfe59228b..6fc491e6220fba6543bbbe4bf1b1f58cfe59228b"
+          },
+          {
+            "explanation": "These local commits introduce and extend the comparison-base selector and related remote behavior.",
+            "kind": "commit",
+            "reference": "5fcf2dfd9aca4214fa43848574854529e89b82a8; 38744b23e1f78722e2fe9f747ebd42f6916ad438"
+          },
+          {
+            "explanation": "The selector files are added locally and the protocol/server integrations differ from upstream.",
+            "kind": "file",
+            "reference": "packages/app/src/git/changes-base-selection.ts; packages/app/src/git/changes-base-selector.tsx; packages/protocol/src/messages.ts; packages/server/src/utils/checkout-git.ts"
+          }
+        ],
+        "id": "changes-base-selector",
+        "residualWork": [],
+        "summary": "The selected comparison-base feature is local behavior absent from the unchanged upstream base; no adaptation or retirement is supported by evidence."
+      },
+      {
+        "classification": "carry_forward",
+        "confidence": "certain",
+        "contractChecks": [
+          {
+            "command": "python3 -m unittest discover -s automation/release -p 'test_*.py'",
+            "result": "passed"
+          },
+          {
+            "command": "python3 -m unittest discover -s automation/installer -p 'test_*.py'",
+            "result": "passed"
+          },
+          {
+            "command": "python3 -m unittest discover -s automation/launchagents -p 'test_*.py'",
+            "result": "passed"
+          },
+          {
+            "command": "python3 -m unittest discover -s automation/migration -p 'test_*.py'",
+            "result": "passed"
+          },
+          {
+            "command": "python3 -m unittest discover -s automation/reporting -p 'test_*.py'",
+            "result": "passed"
+          },
+          {
+            "command": "python3 -m unittest discover -s automation/remote -p 'test_*.py'",
+            "result": "passed"
+          }
+        ],
+        "evidence": [
+          {
+            "explanation": "No upstream changes exist between the supplied old and new commits.",
+            "kind": "command",
+            "reference": "git diff --name-status 6fc491e6220fba6543bbbe4bf1b1f58cfe59228b..6fc491e6220fba6543bbbe4bf1b1f58cfe59228b"
+          },
+          {
+            "explanation": "These local commits introduce fail-closed release/update automation and local Codex reconciliation.",
+            "kind": "commit",
+            "reference": "9f9257ce4218ae3ddd4280a6e2c47f080ba2597c; cb26e9ab4f35e906f6f6084f58259ce4716811cd"
+          },
+          {
+            "explanation": "The automation and local reconciliation paths are local to the candidate; the relevant files are absent from the upstream tree.",
+            "kind": "file",
+            "reference": "automation; .agents/skills/paseito-upstream-sync; .github/workflows/paseito-release.yml"
+          }
+        ],
+        "id": "local-semantic-maintenance",
+        "residualWork": [],
+        "summary": "Permanent fail-closed local reconciliation, release, migration, remote deployment, installer, and reporting behavior remains local; no upstream replacement was introduced."
+      }
+    ],
+    "inputCommit": "45f0eae3ec8046921edb7bb6d0e487533dc81c48",
+    "schemaVersion": 1,
+    "upstreamCommit": "6fc491e6220fba6543bbbe4bf1b1f58cfe59228b",
+    "upstreamTag": "v0.2.5",
+    "verificationRecommendations": [
+      "Controller should run its required formatting, lint, and typecheck gates before promotion."
+    ]
+  },
+  "review": {
+    "approved": true,
+    "blockers": [],
+    "featureFindings": [
+      {
+        "agrees": true,
+        "evidenceChecked": [
+          "automation/feature-registry.json",
+          ".paseito-semantic-decision.json",
+          ".paseito-reconcile-evidence.jsonl",
+          "git diff 6fc491e6220fba6543bbbe4bf1b1f58cfe59228b..6fc491e6220fba6543bbbe4bf1b1f58cfe59228b",
+          "NOTICE-PASEITO.md",
+          "packages/app/app.config.js",
+          "packages/desktop",
+          "packages/cli"
+        ],
+        "explanation": "[certain] Carry-forward is correct: old and new upstream commits are identical, the permanent identity implementation remains in the candidate, and the recorded focused contract passed after its required build.",
+        "id": "independent-desktop-identity"
+      },
+      {
+        "agrees": true,
+        "evidenceChecked": [
+          "automation/feature-registry.json",
+          ".paseito-semantic-decision.json",
+          ".paseito-reconcile-evidence.jsonl",
+          "packages/app/src/git/changes-base-selection.ts",
+          "packages/app/src/git/changes-base-selector.tsx",
+          "packages/protocol/src/messages.ts",
+          "packages/server/src/utils/checkout-git.ts"
+        ],
+        "explanation": "[certain] Carry-forward is correct: unchanged upstream cannot provide this local feature, candidate code retains the scoped validated selector and explicit unsupported-host state, and the recorded three-suite contract passed.",
+        "id": "changes-base-selector"
+      },
+      {
+        "agrees": true,
+        "evidenceChecked": [
+          "automation/feature-registry.json",
+          ".paseito-semantic-decision.json",
+          ".paseito-reconcile-evidence.jsonl",
+          "automation",
+          " .agents/skills/paseito-upstream-sync",
+          ".github/workflows/paseito-release.yml",
+          "git merge-base --is-ancestor 6fc491e6220fba6543bbbe4bf1b1f58cfe59228b 45f0eae3ec8046921edb7bb6d0e487533dc81c48"
+        ],
+        "explanation": "[certain] Carry-forward is correct: the permanent automation paths are absent from upstream, remain in the candidate, and all six recorded automation contract commands passed.",
+        "id": "local-semantic-maintenance"
+      }
+    ],
+    "reviewedCommit": "45f0eae3ec8046921edb7bb6d0e487533dc81c48",
+    "schemaVersion": 1
+  }
+}
