@@ -9,7 +9,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from semantic_sync import SyncError, codex_environment, validate_artifacts
+from semantic_sync import SyncError, codex_environment, review_prompt, validate_artifacts
 
 ROOT = Path(__file__).parents[2]
 VALIDATOR_PATH = ROOT / ".agents/skills/paseito-upstream-sync/scripts/validate_decisions.py"
@@ -20,6 +20,15 @@ SPEC.loader.exec_module(VALIDATOR)
 
 
 class SemanticSyncTests(unittest.TestCase):
+    def test_review_prompt_explains_read_only_handoff_and_controller_verification(self) -> None:
+        prompt = review_prompt(
+            Path(".paseito-semantic-decision.json"),
+            "b" * 40,
+            {"old_upstream_commit": "a" * 40, "upstream_commit": "c" * 40},
+        )
+        self.assertIn("controller-owned handoff files", prompt)
+        self.assertIn("controller independently reruns all contracts", prompt)
+
     def test_codex_environment_does_not_delegate_promotion_credentials(self) -> None:
         sensitive = {
             "GH_TOKEN": "gh",
