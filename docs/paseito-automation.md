@@ -35,23 +35,43 @@ The controller then runs local formatting, lint, and focused contract checks bef
 ephemeral candidate branch.
 
 GitHub Actions never rebases, resolves conflicts, retires features, advances `paseito`, creates a
-tag, publishes a release, or installs the app. It checks out the exact candidate SHA with persisted
-credentials disabled, repeats deterministic tests, builds the unsigned arm64 app, and emits a
-short-lived artifact plus provenance. The local controller verifies that artifact and advances the
-branch and annotated tag atomically with `--force-with-lease`. It then uploads the release and runs
-the local installer.
+tag, publishes a release, or installs the app. Separate macOS arm64 and Linux x64 jobs check out the
+exact candidate SHA with persisted credentials disabled. They repeat deterministic tests, build the
+unsigned desktop app and self-contained daemon runtime, and smoke-test each artifact. A final job
+emits provenance only after both jobs succeed. The local controller verifies the artifact set and
+advances the branch and annotated tag atomically with `--force-with-lease`. It then uploads the
+release, runs the local installer, and makes one deployment attempt for each registered remote host.
 
 A conflict, blocked decision, rejected independent review, failed check, rejected lease, or artifact
 mismatch leaves the last published app installable. Before promotion, the controller writes a
 private pending record. A later scheduled run resumes release upload and installation only when the
 remote branch, peeled tag, candidate commit, artifacts, checksum, and provenance still agree.
 
-Each release publishes only:
+Each release publishes:
 
 - the unsigned arm64 ZIP;
-- the exact SHA-256 checksum file;
+- the self-contained Linux x64 daemon archive;
+- an exact SHA-256 checksum file for each artifact;
 - `provenance.json`, binding the upstream tag and commit, Paseito commit, workflow run,
-  architecture, version, artifact digest, semantic decisions, and verification results.
+  architectures, version, artifact digests, semantic decisions, and verification results.
+
+## Registered remote hosts
+
+Remote deployment is local and opt-in. The private mode-0600 registry at
+`~/Library/Application Support/PaseitoAutomation/remote-hosts.json` lists exact SSH targets, Node
+binaries, runtime roots, systemd user units, daemon homes, and listen addresses. The tracked
+`automation/remote/remote-hosts.example.json` documents the schema. A release is never discovered,
+rebased, or selected independently on a remote host; the deployer accepts only the Linux artifact
+bound into the promoted candidate's provenance.
+
+The deployer stages under the registered runtime root, checks the archive digest and manifest, and
+refuses cutover while an agent has an active foreground turn. Otherwise it atomically switches the
+`current` symlink and service unit and verifies the live version, PID, server ID, websocket status,
+and relay connection. It retains the existing `~/.paseo`, port, and server identity. A failed
+post-cutover check restores the previous unit and runtime. Remote failure does not undo an already
+successful Mac release, is not automatically retried, and is written to
+`remote-deployment-state.json` for the daily report. A later release or an explicit manual deploy is
+required for another attempt.
 
 ## Installer and local watcher
 
@@ -88,8 +108,9 @@ best-effort surface because application identity can require reauthentication.
 The local reporting agent checks hourly. `zoneinfo` selects the first run at or after 07:00 New York,
 and a mode-0600 local date key suppresses duplicates while allowing catch-up after sleep. The report
 includes the latest semantic classifications, independent review, deterministic build, publication,
-local installation, and any unresolved controller failure. Email transport failure updates a
-persistent issue and fails visibly; the next hourly run retries.
+local installation, the most recent result for every registered remote host, and any unresolved
+controller failure. Email transport failure updates a persistent issue and fails visibly; the next
+hourly run retries.
 
 Bootstrap steps are in `automation/reporting/README.md`. The NVIDIA password must be entered directly
 into macOS Keychain and the relay requires the Mac to be on-premises or connected to VPN.

@@ -829,6 +829,7 @@ export const fr: TranslationResources = {
         baseSelectorEmpty: "Aucune branche correspondante",
         baseSelectorMissing: "La branche {{baseRef}} n’existe plus",
         baseSelectorError: "Impossible de changer la branche de comparaison",
+        baseSelectorUpdateHost: "Mettez à jour l’hôte pour choisir une branche de base",
         branchUnknown: "Inconnu",
         base: "base",
         newFile: "Nouveau",

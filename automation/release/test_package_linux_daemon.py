@@ -1,0 +1,49 @@
+from __future__ import annotations
+
+import gzip
+import json
+import tarfile
+import tempfile
+import unittest
+from pathlib import Path
+
+from package_linux_daemon import manifest, write_bundle
+
+
+class PackageLinuxDaemonTests(unittest.TestCase):
+    def test_manifest_binds_runtime_to_candidate(self) -> None:
+        self.assertEqual(
+            manifest("0.2.5-paseito.3", "a" * 40, "0.2.5"),
+            {
+                "schemaVersion": 1,
+                "product": "Paseito daemon",
+                "version": "0.2.5-paseito.3",
+                "daemonVersion": "0.2.5",
+                "commit": "a" * 40,
+                "platform": "linux",
+                "architecture": "x64",
+                "nodeMajor": 22,
+                "entrypoint": "node_modules/@getpaseo/cli/bin/paseito",
+                "feature": "changesBaseSelector",
+            },
+        )
+
+    def test_bundle_has_stable_metadata_and_root(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            stage = root / "stage"
+            stage.mkdir()
+            (stage / "manifest.json").write_text(json.dumps(manifest("1", "b" * 40, "1")))
+            first = root / "first.tar.gz"
+            second = root / "second.tar.gz"
+            write_bundle(stage, first)
+            write_bundle(stage, second)
+            self.assertEqual(first.read_bytes(), second.read_bytes())
+            with gzip.open(first, "rb") as zipped:
+                with tarfile.open(fileobj=zipped, mode="r:") as archive:
+                    member = archive.getmember("paseito-daemon/manifest.json")
+                    self.assertEqual(member.mtime, 0)
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -27,6 +27,7 @@ STATE_ROOT = Path.home() / "Library/Application Support/PaseitoAutomation"
 STATE_PATH = STATE_ROOT / "local-report-state.json"
 APP_PLIST = Path("/Applications/Paseito.app/Contents/Info.plist")
 PENDING_MARKER = Path.home() / "Library/Application Support/Paseito/Updater/pending-restart.json"
+REMOTE_STATE = STATE_ROOT / "remote-deployment-state.json"
 
 
 class CredentialUnavailable(RuntimeError):
@@ -57,6 +58,7 @@ def keychain_password() -> str:
 def local_status(
     app_plist: Path = APP_PLIST,
     pending_marker: Path = PENDING_MARKER,
+    remote_state: Path = REMOTE_STATE,
 ) -> dict[str, Any]:
     version: str | None = None
     timestamp: str | None = None
@@ -65,13 +67,18 @@ def local_status(
             value = plistlib.load(stream).get("CFBundleShortVersionString")
         version = str(value) if value else None
         timestamp = datetime.fromtimestamp(app_plist.stat().st_mtime, timezone.utc).isoformat()
+    remote = read_json(remote_state)
+    remote_hosts = remote.get("hosts", []) if remote else []
+    if not isinstance(remote_hosts, list):
+        remote_hosts = []
     return {
-        "schemaVersion": 1,
+        "schemaVersion": 2,
         "installedVersion": version,
         "timestamp": timestamp,
         "pendingRestart": pending_marker.is_file(),
         "result": "success" if version else "failure",
         "category": "installed" if version else "not-installed",
+        "remoteHosts": [item for item in remote_hosts if isinstance(item, dict)],
     }
 
 

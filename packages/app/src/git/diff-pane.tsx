@@ -121,6 +121,7 @@ import {
 import { usePublishWorkingDiffAttachment, useWorkingDiff } from "@/git/use-working-diff";
 import { DiffTooLargeState } from "@/git/diff-too-large-state";
 import { ChangesBaseSelector } from "@/git/changes-base-selector";
+import { applyChangesBaseSelection } from "@/git/changes-base-selection";
 
 export type { GitActionId, GitAction, GitActions } from "@/git/policy";
 
@@ -2619,19 +2620,23 @@ function useDiffTabNavigation({
 function DiffComparisonControls({
   diffMode,
   committedDescription,
+  showCompactBaseSelector,
   serverId,
   cwd,
   currentBranchName,
   baseSelection,
+  onSelectComparisonBase,
   onSelectUncommitted,
   onSelectBase,
 }: {
   diffMode: "uncommitted" | "base";
   committedDescription?: string;
+  showCompactBaseSelector: boolean;
   serverId: string;
   cwd: string;
   currentBranchName: string | null;
   baseSelection: ReturnType<typeof useWorkingDiff>["baseSelection"];
+  onSelectComparisonBase: (baseRef: string | null) => Promise<void>;
   onSelectUncommitted: () => void;
   onSelectBase: () => void;
 }) {
@@ -2643,18 +2648,47 @@ function DiffComparisonControls({
         onSelectUncommitted={onSelectUncommitted}
         onSelectBase={onSelectBase}
       />
-      {diffMode === "base" && baseSelection.supported ? (
-        <ChangesBaseSelector
-          serverId={serverId}
-          cwd={cwd}
-          currentBranch={currentBranchName}
-          recordedBaseRef={baseSelection.recordedBaseRef}
-          selectedBaseRef={baseSelection.selectedBaseRef}
-          effectiveBaseRef={baseSelection.effectiveBaseRef}
-          onSelect={baseSelection.setOverride}
-        />
-      ) : null}
+      <ChangesBaseSelectorPlacement
+        visible={showCompactBaseSelector}
+        serverId={serverId}
+        cwd={cwd}
+        currentBranchName={currentBranchName}
+        baseSelection={baseSelection}
+        onSelect={onSelectComparisonBase}
+      />
     </View>
+  );
+}
+
+function ChangesBaseSelectorPlacement({
+  visible,
+  serverId,
+  cwd,
+  currentBranchName,
+  baseSelection,
+  onSelect,
+}: {
+  visible: boolean;
+  serverId: string;
+  cwd: string;
+  currentBranchName: string | null;
+  baseSelection: ReturnType<typeof useWorkingDiff>["baseSelection"];
+  onSelect: (baseRef: string | null) => Promise<void>;
+}) {
+  if (!visible || !currentBranchName) {
+    return null;
+  }
+  return (
+    <ChangesBaseSelector
+      serverId={serverId}
+      cwd={cwd}
+      currentBranch={currentBranchName}
+      recordedBaseRef={baseSelection.recordedBaseRef}
+      selectedBaseRef={baseSelection.selectedBaseRef}
+      effectiveBaseRef={baseSelection.effectiveBaseRef}
+      supported={baseSelection.supported}
+      onSelect={onSelect}
+    />
   );
 }
 
@@ -2899,7 +2933,15 @@ export function GitDiffPane({
       againstBase: (label) => t("workspace.git.diff.emptyAgainstBase", { baseRef: label }),
     },
   );
-
+  const handleSelectComparisonBase = useCallback(
+    (nextBaseRef: string | null) =>
+      applyChangesBaseSelection({
+        baseRef: nextBaseRef,
+        setOverride: baseSelection.setOverride,
+        showCommitted: handleSelectBase,
+      }),
+    [baseSelection.setOverride, handleSelectBase],
+  );
   const bodyContent: ReactElement = (
     <DiffBodyContent
       isStatusLoading={isStatusLoading}
@@ -2925,14 +2967,24 @@ export function GitDiffPane({
     <View style={styles.container}>
       {isGit && (currentBranchName || isMobile) ? (
         <View style={styles.header} testID="changes-header">
-          <BranchSwitcher
-            currentBranchName={currentBranchName}
-            serverId={serverId}
-            workspaceId={workspaceId ?? cwd}
-            workspaceDirectory={cwd}
-            isGitCheckout={isGit}
-            testID="changes-branch-switcher"
-          />
+          <View style={styles.headerSelectors}>
+            <BranchSwitcher
+              currentBranchName={currentBranchName}
+              serverId={serverId}
+              workspaceId={workspaceId ?? cwd}
+              workspaceDirectory={cwd}
+              isGitCheckout={isGit}
+              testID="changes-branch-switcher"
+            />
+            <ChangesBaseSelectorPlacement
+              visible={!isMobile}
+              serverId={serverId}
+              cwd={cwd}
+              currentBranchName={currentBranchName}
+              baseSelection={baseSelection}
+              onSelect={handleSelectComparisonBase}
+            />
+          </View>
           {isMobile ? <GitActionsSplitButton gitActions={gitActions} /> : null}
         </View>
       ) : null}
@@ -2943,10 +2995,12 @@ export function GitDiffPane({
             <DiffComparisonControls
               diffMode={diffMode}
               committedDescription={committedDiffDescription}
+              showCompactBaseSelector={isMobile}
               serverId={serverId}
               cwd={cwd}
               currentBranchName={currentBranchName}
               baseSelection={baseSelection}
+              onSelectComparisonBase={handleSelectComparisonBase}
               onSelectUncommitted={handleSelectUncommitted}
               onSelectBase={handleSelectBase}
             />
@@ -3031,6 +3085,13 @@ const styles = StyleSheet.create((theme) => ({
     paddingVertical: theme.spacing[2],
     borderBottomWidth: 1,
     borderBottomColor: theme.colors.border,
+  },
+  headerSelectors: {
+    minWidth: 0,
+    flexShrink: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
   },
   diffStatusContainer: {
     height: WORKSPACE_SECONDARY_HEADER_HEIGHT,

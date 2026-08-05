@@ -54,6 +54,7 @@ class ReportingTests(unittest.TestCase):
         self.assertIn("Pending restart", body)
         self.assertIn("Semantic reconciliation", body)
         self.assertIn("changes-base-selector: carry_forward", body)
+        self.assertIn("none registered", body)
 
     def test_keychain_password_is_read_without_logging_it(self) -> None:
         result = subprocess.CompletedProcess([], 0, stdout="secret\n", stderr="")
@@ -69,10 +70,27 @@ class ReportingTests(unittest.TestCase):
                 plistlib.dump({"CFBundleShortVersionString": "0.2.5-paseito.2"}, stream)
             marker = root / "pending.json"
             marker.write_text("{}", encoding="utf-8")
-            status = local_status(app_plist, marker)
+            remote_state = root / "remote.json"
+            remote_state.write_text(
+                json.dumps(
+                    {
+                        "hosts": [
+                            {
+                                "host": "viking-new",
+                                "result": "failure",
+                                "version": "0.2.5-paseito.3",
+                                "category": "remote-verification",
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            status = local_status(app_plist, marker, remote_state)
         self.assertEqual(status["installedVersion"], "0.2.5-paseito.2")
         self.assertTrue(status["pendingRestart"])
         self.assertEqual(status["result"], "success")
+        self.assertEqual(status["remoteHosts"][0]["host"], "viking-new")
 
     def test_smtp_uses_starttls_before_authentication_and_same_sender_recipient(self) -> None:
         connection = MagicMock()

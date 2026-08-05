@@ -799,6 +799,7 @@ export const ar: TranslationResources = {
         baseSelectorEmpty: "لا توجد فروع مطابقة",
         baseSelectorMissing: "الفرع {{baseRef}} لم يعد موجودًا",
         baseSelectorError: "تعذر تغيير فرع المقارنة",
+        baseSelectorUpdateHost: "حدّث المضيف لاختيار الفرع الأساسي",
         branchUnknown: "مجهول",
         base: "قاعدة",
         newFile: "جديد",

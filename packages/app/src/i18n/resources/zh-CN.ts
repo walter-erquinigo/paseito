@@ -791,6 +791,7 @@ export const zhCN: TranslationResources = {
         baseSelectorEmpty: "没有匹配的分支",
         baseSelectorMissing: "分支 {{baseRef}} 已不存在",
         baseSelectorError: "无法更改比较分支",
+        baseSelectorUpdateHost: "更新主机以选择基础分支",
         branchUnknown: "未知",
         base: "base",
         newFile: "新增",

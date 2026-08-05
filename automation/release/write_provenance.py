@@ -21,6 +21,7 @@ def sha256(path: Path) -> str:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--artifact", type=Path, required=True)
+    parser.add_argument("--linux-artifact", type=Path, required=True)
     parser.add_argument("--upstream-tag", required=True)
     parser.add_argument("--upstream-commit", required=True)
     parser.add_argument("--paseito-commit", required=True)
@@ -32,13 +33,14 @@ def main() -> int:
     args = parser.parse_args()
 
     checksum = sha256(args.artifact)
+    linux_checksum = sha256(args.linux_artifact)
     semantic_decision = None
     if args.decision:
         semantic_decision = json.loads(args.decision.read_text(encoding="utf-8"))
         if not isinstance(semantic_decision, dict):
             raise ValueError("semantic decision must be an object")
     value = {
-        "schemaVersion": 1,
+        "schemaVersion": 2,
         "createdAt": datetime.now(timezone.utc).isoformat(),
         "upstreamRepository": "getpaseo/paseo",
         "upstreamTag": args.upstream_tag,
@@ -51,6 +53,22 @@ def main() -> int:
         "platform": "darwin",
         "architecture": "arm64",
         "artifact": {"name": args.artifact.name, "sha256": checksum},
+        "artifacts": [
+            {
+                "kind": "desktop",
+                "platform": "darwin",
+                "architecture": "arm64",
+                "name": args.artifact.name,
+                "sha256": checksum,
+            },
+            {
+                "kind": "daemon",
+                "platform": "linux",
+                "architecture": "x64",
+                "name": args.linux_artifact.name,
+                "sha256": linux_checksum,
+            },
+        ],
         "tests": {
             "semanticReconciliation": "passed",
             "independentReview": "passed",
@@ -60,6 +78,7 @@ def main() -> int:
             "feature": "passed",
             "upstream": "passed",
             "packagedDesktopSmoke": "passed",
+            "packagedLinuxDaemonSmoke": "passed",
         },
         "semanticDecision": {
             "sha256": sha256(args.decision) if args.decision else None,
@@ -72,6 +91,10 @@ def main() -> int:
     args.output.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     checksum_path = args.artifact.with_name(args.artifact.name + ".sha256")
     checksum_path.write_text(f"{checksum}  {args.artifact.name}\n", encoding="utf-8")
+    linux_checksum_path = args.linux_artifact.with_name(args.linux_artifact.name + ".sha256")
+    linux_checksum_path.write_text(
+        f"{linux_checksum}  {args.linux_artifact.name}\n", encoding="utf-8"
+    )
     return 0
 
 

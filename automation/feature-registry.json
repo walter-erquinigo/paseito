@@ -7,7 +7,7 @@
       "intent": "Keep Paseito independently installable beside Paseo with distinct app, daemon, CLI, storage, protocol and visual identities.",
       "invariants": [
         "The bundle id is dev.werquinigo.paseito and the product/executable is Paseito.",
-        "Paseito uses ~/.paseito, port 6769, Paseito-specific app data and the paseito URL/update source.",
+        "Standalone Paseito uses ~/.paseito, port 6769, Paseito-specific app data and the paseito URL/update source; an explicitly registered in-place remote deployment may retain its existing Paseo home, port and server identity.",
         "The original stepping-stone icon and AGPL attribution remain present."
       ],
       "contracts": [
@@ -26,8 +26,9 @@
       "intent": "Let the Changes tab select and remember a read-only comparison base without changing merge, update or pull-request targets.",
       "invariants": [
         "The selection is scoped by repository root and current branch.",
+        "On desktop, the base selector is beside the current branch selector and choosing a base switches Changes to Committed.",
         "Diffs, review attachments and commit history use the selected validated base.",
-        "Missing refs fall back safely and older hosts remain protocol-compatible."
+        "Missing refs fall back safely, and hosts without the advertised capability show an explicit update-host state without a degraded fallback."
       ],
       "contracts": [
         "npx vitest run packages/app/src/git/changes-base-selection.test.ts packages/protocol/src/messages.checkout-commits.test.ts packages/server/src/utils/checkout-git.commits.test.ts"
@@ -46,6 +47,8 @@
         "Codex never receives promotion authority and GitHub never rebases or semantically retires features.",
         "A separate read-only Codex review must approve every candidate.",
         "Failed reconciliation or verification preserves the published branch and installed app.",
+        "The verified release contains checksum-bound macOS arm64 desktop and Linux x64 daemon artifacts from the same candidate commit.",
+        "Each registered SSH host refuses cutover during an active foreground agent turn and otherwise deploys transactionally without replacing its Paseo home or server identity; remote failure rolls back and is reported without retrying automatically.",
         "Daily email runs locally, keeps its SMTP credential in macOS Keychain, and reports transport failures without exposing SMTP details."
       ],
       "contracts": [
@@ -53,7 +56,8 @@
         "python3 -m unittest discover -s automation/installer -p 'test_*.py'",
         "python3 -m unittest discover -s automation/launchagents -p 'test_*.py'",
         "python3 -m unittest discover -s automation/migration -p 'test_*.py'",
-        "python3 -m unittest discover -s automation/reporting -p 'test_*.py'"
+        "python3 -m unittest discover -s automation/reporting -p 'test_*.py'",
+        "python3 -m unittest discover -s automation/remote -p 'test_*.py'"
       ],
       "paths": [
         "automation",

@@ -119,6 +119,13 @@ class SemanticSyncTests(unittest.TestCase):
             digest = hashlib.sha256(b"candidate").hexdigest()
             checksum = artifact.with_name(artifact.name + ".sha256")
             checksum.write_text(f"{digest}  {artifact.name}\n", encoding="utf-8")
+            linux_artifact = root / "Paseito-daemon-1.0.0-paseito.1-linux-x64.tar.gz"
+            linux_artifact.write_bytes(b"linux candidate")
+            linux_digest = hashlib.sha256(b"linux candidate").hexdigest()
+            linux_checksum = linux_artifact.with_name(linux_artifact.name + ".sha256")
+            linux_checksum.write_text(
+                f"{linux_digest}  {linux_artifact.name}\n", encoding="utf-8"
+            )
             decision = root / "decision.json"
             decision.write_text('{"decision": {}, "review": {}}\n', encoding="utf-8")
             commit = "c" * 40
@@ -139,20 +146,39 @@ class SemanticSyncTests(unittest.TestCase):
                     "feature",
                     "upstream",
                     "packagedDesktopSmoke",
+                    "packagedLinuxDaemonSmoke",
                 )
             }
             provenance = {
+                "schemaVersion": 2,
                 "upstreamTag": values["upstream_tag"],
                 "upstreamCommit": values["upstream_commit"],
                 "paseitoCommit": commit,
                 "paseitoVersion": values["paseito_version"],
                 "releaseTag": values["release_tag"],
                 "artifact": {"name": artifact.name, "sha256": digest},
+                "artifacts": [
+                    {
+                        "kind": "desktop",
+                        "platform": "darwin",
+                        "architecture": "arm64",
+                        "name": artifact.name,
+                        "sha256": digest,
+                    },
+                    {
+                        "kind": "daemon",
+                        "platform": "linux",
+                        "architecture": "x64",
+                        "name": linux_artifact.name,
+                        "sha256": linux_digest,
+                    },
+                ],
                 "tests": tests,
                 "semanticDecision": {"sha256": hashlib.sha256(decision.read_bytes()).hexdigest()},
             }
             (root / "provenance.json").write_text(json.dumps(provenance), encoding="utf-8")
-            self.assertEqual(validate_artifacts(root, values, commit, decision)[0], artifact)
+            validated = validate_artifacts(root, values, commit, decision)
+            self.assertEqual(validated, (artifact, checksum, linux_artifact, linux_checksum, root / "provenance.json"))
             checksum.write_text(f"{'0' * 64}  {artifact.name}\n", encoding="utf-8")
             with self.assertRaises(SyncError):
                 validate_artifacts(root, values, commit, decision)

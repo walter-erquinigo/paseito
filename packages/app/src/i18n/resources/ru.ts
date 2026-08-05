@@ -821,6 +821,7 @@ export const ru: TranslationResources = {
         baseSelectorEmpty: "Подходящих веток нет",
         baseSelectorMissing: "Ветка {{baseRef}} больше не существует",
         baseSelectorError: "Не удалось изменить ветку сравнения",
+        baseSelectorUpdateHost: "Обновите хост, чтобы выбрать базовую ветку",
         branchUnknown: "Неизвестный",
         base: "база",
         newFile: "Новый",

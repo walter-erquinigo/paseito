@@ -16,6 +16,15 @@ export interface ChangesBaseBranchDetail {
   hasRemote?: boolean;
 }
 
+export async function applyChangesBaseSelection(input: {
+  baseRef: string | null;
+  setOverride: (baseRef: string | null) => Promise<void>;
+  showCommitted: () => void;
+}): Promise<void> {
+  await input.setOverride(input.baseRef);
+  input.showCommitted();
+}
+
 export function buildChangesBaseScopeKey(repoRoot: string, currentBranch: string): string {
   return JSON.stringify([repoRoot, currentBranch]);
 }
