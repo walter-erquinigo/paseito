@@ -10,7 +10,14 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from semantic_sync import SyncError, codex_environment, rebase_candidate, review_prompt, validate_artifacts
+from semantic_sync import (
+    SyncError,
+    codex_environment,
+    rebase_candidate,
+    reconciliation_prompt,
+    review_prompt,
+    validate_artifacts,
+)
 
 ROOT = Path(__file__).parents[2]
 VALIDATOR_PATH = ROOT / ".agents/skills/paseito-upstream-sync/scripts/validate_decisions.py"
@@ -70,6 +77,18 @@ class SemanticSyncTests(unittest.TestCase):
         self.assertIn("controller-owned handoff files", prompt)
         self.assertIn("controller independently reruns all contracts", prompt)
         self.assertIn("They may be identical", prompt)
+
+    def test_reconciliation_requires_separate_contract_evidence(self) -> None:
+        prompt = reconciliation_prompt(
+            {
+                "old_upstream_commit": "a" * 40,
+                "upstream_tag": "v1.0.0",
+                "upstream_commit": "b" * 40,
+            },
+            "c" * 40,
+        )
+        self.assertIn("Run every registry contract as its own command", prompt)
+        self.assertIn("Do not combine contracts", prompt)
 
     def test_codex_environment_does_not_delegate_promotion_credentials(self) -> None:
         sensitive = {

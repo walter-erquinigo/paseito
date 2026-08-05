@@ -91,6 +91,9 @@ carry forward, adapt, or remove local behavior as the evidence requires. Retire 
 feature only with passing behavioral proof and concrete upstream evidence. Preserve permanent
 features. Do not stage, commit, or modify Git metadata. Never push, tag, publish, install, dispatch
 workflows, or open issues.
+Run every registry contract as its own command. Do not combine contracts with shell loops, `&&`, or
+command groups; the independent reviewer must see a complete exit status and transcript for each
+individual contract.
 Return the decision object required by the skill schema. Set blocked=true rather than guessing.
 """
 
