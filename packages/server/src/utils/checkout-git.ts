@@ -430,20 +430,27 @@ export async function resolveBranchCheckout(
 ): Promise<BranchCheckoutResolution> {
   await requireGitRepo(cwd);
 
+  const explicitRemote = name.startsWith("origin/") || name.startsWith("refs/remotes/origin/");
+  const explicitLocal = name.startsWith("refs/heads/");
   const normalized = normalizeBranchSuggestionName(name);
   if (!normalized) {
     return { kind: "not-found" };
   }
 
-  const localRef = `refs/heads/${normalized}`;
-  const localResult = await runGitCommand(["rev-parse", "--verify", "--quiet", localRef], {
-    cwd,
-    envOverlay: READ_ONLY_GIT_ENV,
-    acceptExitCodes: [0, 1],
-  });
-  const hasLocal = localResult.exitCode === 0;
-  if (hasLocal) {
-    return { kind: "local", name: normalized };
+  if (!explicitRemote) {
+    const localRef = `refs/heads/${normalized}`;
+    const localResult = await runGitCommand(["rev-parse", "--verify", "--quiet", localRef], {
+      cwd,
+      envOverlay: READ_ONLY_GIT_ENV,
+      acceptExitCodes: [0, 1],
+    });
+    const hasLocal = localResult.exitCode === 0;
+    if (hasLocal) {
+      return { kind: "local", name: normalized };
+    }
+    if (explicitLocal) {
+      return { kind: "not-found" };
+    }
   }
 
   const remoteRef = `origin/${normalized}`;
@@ -1032,7 +1039,7 @@ export interface GitWorktreeEntry {
   isBare?: boolean;
 }
 
-/** Check whether a path is under Paseo's worktree root. */
+/** Check whether a path is under Paseito's root or a legacy Paseo worktree root. */
 export function isPaseoWorktreePath(
   p: string,
   options?: { paseoHome?: string; worktreesRoot?: string },
@@ -1040,7 +1047,7 @@ export function isPaseoWorktreePath(
   if (options?.worktreesRoot || options?.paseoHome) {
     return isDescendantPath(p, resolvePaseoWorktreesBaseRoot(options));
   }
-  return /[/\\]\.paseo[/\\]worktrees[/\\]/.test(p);
+  return /[/\\]\.pase(?:it)?o[/\\]worktrees[/\\]/.test(p);
 }
 
 /** True when `child` is strictly inside `parent` (handles both `/` and `\`). */
@@ -1596,6 +1603,14 @@ async function resolveMostAheadBaseRef(cwd: string, baseRef: string): Promise<st
   }
 
   return normalizedBaseRef;
+}
+
+async function resolveRequestedComparisonBaseRef(
+  cwd: string,
+  baseRef: string,
+  context?: CheckoutContext,
+): Promise<string> {
+  return resolveBestComparisonBaseRef(cwd, baseRef, context);
 }
 
 async function getAheadBehind(
@@ -2413,9 +2428,11 @@ async function tryResolveCheckoutCommitsBaseRef(
 export async function listCheckoutCommits({
   cwd,
   context,
+  baseRef,
 }: {
   cwd: string;
   context?: CheckoutContext;
+  baseRef?: string;
 }): Promise<CheckoutCommitsResult> {
   const currentBranch = await getCurrentBranch(cwd);
   if (!currentBranch) {
@@ -2424,12 +2441,16 @@ export async function listCheckoutCommits({
 
   const { resolvedBaseRef } = await resolveBaseRefForCwd(cwd, context);
   const normalizedBaseRef = resolvedBaseRef ? branchNameFromRef(resolvedBaseRef) : null;
-  let comparisonBaseRef = await tryResolveCheckoutCommitsBaseRef(
-    cwd,
-    resolvedBaseRef,
-    currentBranch,
-  );
-  if (!comparisonBaseRef && normalizedBaseRef && normalizedBaseRef !== currentBranch) {
+  let comparisonBaseRef =
+    baseRef === undefined
+      ? await tryResolveCheckoutCommitsBaseRef(cwd, resolvedBaseRef, currentBranch)
+      : await resolveRequestedComparisonBaseRef(cwd, baseRef, context);
+  if (
+    baseRef === undefined &&
+    !comparisonBaseRef &&
+    normalizedBaseRef &&
+    normalizedBaseRef !== currentBranch
+  ) {
     // Saved worktree metadata can outlive a renamed or deleted base branch.
     comparisonBaseRef = await tryResolveCheckoutCommitsBaseRef(
       cwd,
@@ -3170,16 +3191,15 @@ async function resolveCheckoutDiffRefs(
   if (compare.mode === "uncommitted") {
     return { baseRef: "HEAD", includeUntracked: true };
   }
-  const { storedBaseRef, resolvedBaseRef } = await resolveBaseRefForCwd(cwd, context);
-  const baseRef = resolveOperationBaseRef({
-    storedBaseRef,
-    resolvedBaseRef,
-    requestedBaseRef: compare.baseRef,
-  });
+  const { resolvedBaseRef } = await resolveBaseRefForCwd(cwd, context);
+  const baseRef = compare.baseRef ?? resolvedBaseRef;
   if (!baseRef) {
     return null;
   }
-  const bestBaseRef = await resolveBestComparisonBaseRef(cwd, baseRef);
+  const bestBaseRef =
+    compare.baseRef === undefined
+      ? await resolveBestComparisonBaseRef(cwd, baseRef, context)
+      : await resolveRequestedComparisonBaseRef(cwd, baseRef, context);
   return {
     baseRef: (await tryResolveMergeBase(cwd, bestBaseRef)) ?? bestBaseRef,
     targetRef: "HEAD",
