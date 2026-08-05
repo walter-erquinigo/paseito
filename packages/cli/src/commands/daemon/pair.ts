@@ -63,7 +63,7 @@ function createProcessOutput(): PairCommandOutput {
 
 export function pairCommand(): Command {
   return addJsonOption(new Command("pair").description("Print the daemon pairing QR code and link"))
-    .option("--home <path>", "Paseo home directory (default: ~/.paseo)")
+    .option("--home <path>", "Paseito home directory (default: ~/.paseito)")
     .option("--relay", "Enable relay without prompting")
     .action(async (_options: PairOptions, command: Command) => {
       await runPairCommand(command.optsWithGlobals());

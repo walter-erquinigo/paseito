@@ -17,7 +17,7 @@ export async function connectChatClient(host?: string) {
     const error: CommandError = {
       code: "DAEMON_NOT_RUNNING",
       message: `Cannot connect to daemon at ${daemonHost}: ${message}`,
-      details: "Start the daemon with: paseo daemon start",
+      details: "Start the daemon with: paseito daemon start",
     };
     throw error;
   }

@@ -1,8 +1,14 @@
 <p align="center">
-  <img src="packages/website/public/logo.svg" width="64" height="64" alt="Paseo logo">
+  <img src="packages/desktop/assets/icon-master.png" width="64" height="64" alt="Paseito icon">
 </p>
 
-<h1 align="center">Paseo</h1>
+<h1 align="center">Paseito</h1>
+
+<p align="center">
+  Independent Apple Silicon macOS fork of Paseo, with separate app state, daemon, port, CLI,
+  updates, URL scheme, and icon. See <a href="NOTICE-PASEITO.md">the modification notice</a> and
+  <a href="docs/paseito-automation.md">automation design</a>.
+</p>
 
 <p align="center">
   <a href="README.md">English</a> ·
@@ -12,11 +18,11 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/getpaseo/paseo/stargazers">
-    <img src="https://img.shields.io/github/stars/getpaseo/paseo?style=flat&logo=github" alt="GitHub stars">
+  <a href="https://github.com/walter-erquinigo/paseito/stargazers">
+    <img src="https://img.shields.io/github/stars/walter-erquinigo/paseito?style=flat&logo=github" alt="GitHub stars">
   </a>
-  <a href="https://github.com/getpaseo/paseo/releases">
-    <img src="https://img.shields.io/github/v/release/getpaseo/paseo?style=flat&logo=github" alt="GitHub release">
+  <a href="https://github.com/walter-erquinigo/paseito/releases">
+    <img src="https://img.shields.io/github/v/release/walter-erquinigo/paseito?style=flat&logo=github" alt="GitHub release">
   </a>
   <a href="https://x.com/moboudra">
     <img src="https://img.shields.io/badge/%40moboudra-555?logo=x" alt="X">
@@ -39,17 +45,18 @@
   <img src="https://paseo.sh/mobile-mockup.png" alt="Paseo mobile app" width="100%">
 </p>
 
-Run agents in parallel on your own machines. Ship from your phone or your desk.
+Run agents in parallel on your Apple Silicon Mac while keeping Paseo installed independently.
 
 - **Self-hosted:** Agents run on your machine with your full dev environment. Use your tools, your configs, and your skills.
 - **Multi-provider:** Claude Code, Codex, Copilot, OpenCode, and Pi through the same interface. Pick the right model for each job.
 - **Voice control:** Dictate tasks or talk through problems in voice mode. Hands-free when you need it.
-- **Cross-device:** iOS, Android, desktop, web, and CLI. Start work at your desk, check in from your phone, script it from the terminal.
-- **Privacy-first:** Paseo doesn't have any telemetry, tracking, or forced log-ins.
+- **Independent:** Paseito uses its own application data, daemon state, port, URL scheme, CLI, and updater.
+- **Privacy-first:** Paseito retains upstream's no-telemetry, no-tracking, and no-forced-login behavior.
 
 ## Getting Started
 
-Paseo runs a local server called the daemon that manages your coding agents. Clients like the desktop app, mobile app, web app, and CLI connect to it.
+Paseito runs a local daemon on port `6769` that manages your coding agents. This fork publishes
+only an Apple Silicon macOS desktop app with its bundled `paseito` CLI.
 
 ### Prerequisites
 
@@ -63,82 +70,60 @@ You need at least one agent CLI installed and configured with your credentials:
 
 ### Desktop app (recommended)
 
-Download it from [paseo.sh/download](https://paseo.sh/download) or the [GitHub releases page](https://github.com/getpaseo/paseo/releases). Open the app and the daemon starts automatically. Nothing else to install.
+Download the unsigned arm64 ZIP, checksum, and provenance file from the
+[Paseito releases page](https://github.com/walter-erquinigo/paseito/releases). The local installer
+verifies all three, applies an ad-hoc signature, and installs `/Applications/Paseito.app` without
+altering Paseo.
 
 To connect from your phone, open **Settings → your host → Pair Device**.
 
+The release is intentionally not Apple-notarized: notarization requires a paid Apple Developer
+membership. The automated release and installer use only no-charge services.
+
 ### CLI / headless
 
-Install the CLI and start Paseo:
+The desktop bundle contains the CLI. Install it from Paseito's settings, then start the daemon:
 
 ```bash
-npm install -g @getpaseo/cli
-paseo
+paseito daemon start
 ```
 
-Paseo starts locally, then asks whether to enable the end-to-end encrypted relay for device pairing. If you decline, connect directly over TCP, Tailscale, or another VPN. This path is useful for servers and remote machines.
+Paseito defaults to `~/.paseito` and `127.0.0.1:6769`.
 
-For full setup and configuration, see:
+Paseito starts locally, then asks whether to enable the end-to-end encrypted relay for device pairing. If you decline, connect directly over TCP, Tailscale, or another VPN. This path is useful for servers and remote machines.
+
+Paseito retains upstream package and environment-variable names where changing internal APIs would
+create avoidable rebase conflicts. For upstream behavior and configuration, see:
 
 - [Docs](https://paseo.sh/docs)
 - [Connectivity guide](https://paseo.sh/docs/connectivity)
 - [Configuration reference](https://paseo.sh/docs/configuration)
-
-### Docker
-
-Run the Paseo daemon and self-hosted web UI in Docker:
-
-```bash
-docker run -d --name paseo \
-  -p 6767:6767 \
-  -e PASEO_PASSWORD=change-me \
-  -v "$PWD/paseo-home:/home/paseo" \
-  -v "$PWD:/workspace" \
-  ghcr.io/getpaseo/paseo:latest
-```
-
-Open `http://localhost:6767` after it starts. Extend the base image with the agent CLIs you use, then provide credentials through environment variables or the persistent `/home/paseo` volume. See the [Docker documentation](docs/docker.md) for full setup details.
 
 ## CLI
 
 Everything you can do in the app, you can do from the terminal.
 
 ```bash
-paseo run --provider claude/opus-4.6 "implement user authentication"
-paseo run --provider codex/gpt-5.4 --worktree feature-x "implement feature X"
+paseito run --provider claude/opus-4.6 "implement user authentication"
+paseito run --provider codex/gpt-5.4 --worktree feature-x "implement feature X"
 
-paseo ls                           # list running agents
-paseo attach abc123                # stream live output
-paseo send abc123 "also add tests" # follow-up task
+paseito ls                           # list running agents
+paseito attach abc123                # stream live output
+paseito send abc123 "also add tests" # follow-up task
 
 # run on a remote daemon
-paseo --host workstation.local:6767 run "run the full test suite"
+paseito --host workstation.local:6769 run "run the full test suite"
 ```
 
 See the [full CLI reference](https://paseo.sh/docs/cli) for more.
-
-## Skills
-
-Skills teach your agent to use Paseo to orchestrate other agents.
-
-```bash
-npx skills add getpaseo/paseo
-```
-
-Then use them in any agent conversation:
-
-- `/paseo-handoff` — hand off work between agents. I use this to plan with Claude and then handoff to Codex to implement.
-- `/paseo-loop` — loop an agent against clear acceptance criteria (aka Ralph loops), optionally with a verifier.
-- `/paseo-advisor` — spin up a single agent as an advisor for a second opinion, without delegating the work itself.
-- `/paseo-committee` — form a committee of two contrasting agents to step back, do root cause analysis, and produce a plan.
 
 ## Development
 
 Quick monorepo package map:
 
-- `packages/server`: Paseo daemon (agent process orchestration, WebSocket API, MCP server)
+- `packages/server`: upstream-named daemon internals (agent orchestration, WebSocket API, MCP server)
 - `packages/app`: Expo client (iOS, Android, web)
-- `packages/cli`: `paseo` CLI for daemon and agent workflows
+- `packages/cli`: source for the bundled `paseito` CLI
 - `packages/desktop`: Electron desktop app
 - `packages/relay`: Relay transport and encryption used by the daemon and clients
 - `packages/website`: Marketing site and documentation (`paseo.sh`)
