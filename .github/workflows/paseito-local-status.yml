@@ -1,0 +1,52 @@
+name: Paseito sanitized local status
+
+on:
+  repository_dispatch:
+    types: [paseito-local-status]
+
+permissions:
+  contents: read
+
+jobs:
+  retain:
+    if: github.event.repository.private == false && github.repository == 'walter-erquinigo/paseito'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Validate and serialize sanitized status
+        env:
+          PAYLOAD: ${{ toJSON(github.event.client_payload) }}
+        shell: python3 {0}
+        run: |
+          import json, os, re
+          from datetime import datetime
+          value = json.loads(os.environ["PAYLOAD"])
+          allowed = {"schemaVersion", "installedVersion", "timestamp", "pendingRestart", "result", "category"}
+          if set(value) != allowed:
+              raise SystemExit("status contains unexpected fields")
+          if value["result"] not in {"success", "failure"} or not isinstance(value["pendingRestart"], bool):
+              raise SystemExit("invalid status values")
+          categories = {
+              "archive", "architecture", "backup", "checksum", "download", "health",
+              "install", "installed", "no-change", "provenance", "quarantine", "release",
+              "report", "sign",
+          }
+          if value["schemaVersion"] != 1 or value["category"] not in categories:
+              raise SystemExit("invalid status schema or category")
+          try:
+              datetime.fromisoformat(value["timestamp"].replace("Z", "+00:00"))
+          except (AttributeError, TypeError, ValueError):
+              raise SystemExit("invalid status timestamp")
+          version = value["installedVersion"]
+          if version is not None and not re.fullmatch(r"\d+\.\d+\.\d+-paseito\.[1-9]\d*", version):
+              raise SystemExit("invalid installed version")
+          serialized = json.dumps(value, indent=2, sort_keys=True) + "\n"
+          if "/Users/" in serialized or "hostname" in serialized.lower() or "token" in serialized.lower():
+              raise SystemExit("status failed redaction policy")
+          open("status.json", "w", encoding="utf-8").write(serialized)
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: paseito-local-status
+          path: status.json
+          retention-days: 3
