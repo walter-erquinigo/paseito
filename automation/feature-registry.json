@@ -45,11 +45,13 @@
       "invariants": [
         "Codex never receives promotion authority and GitHub never rebases or semantically retires features.",
         "A separate read-only Codex review must approve every candidate.",
-        "Failed reconciliation or verification preserves the published branch and installed app."
+        "Failed reconciliation or verification preserves the published branch and installed app.",
+        "Daily email runs locally, keeps its SMTP credential in macOS Keychain, and reports transport failures without exposing SMTP details."
       ],
       "contracts": [
         "python3 -m unittest discover -s automation/release -p 'test_*.py'",
         "python3 -m unittest discover -s automation/installer -p 'test_*.py'",
+        "python3 -m unittest discover -s automation/launchagents -p 'test_*.py'",
         "python3 -m unittest discover -s automation/migration -p 'test_*.py'",
         "python3 -m unittest discover -s automation/reporting -p 'test_*.py'"
       ],
