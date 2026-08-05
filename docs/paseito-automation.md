@@ -18,7 +18,7 @@ upstream commit represented by the branch.
 
 ## Local semantic release invariant
 
-An hourly macOS LaunchAgent refreshes a controller-owned checkout and prepares a disposable
+At local noon each day, a macOS LaunchAgent refreshes a controller-owned checkout and prepares a disposable
 candidate against the exact peeled stable `vMAJOR.MINOR.PATCH` upstream commit. The controller owns
 Git's mechanical rebase, staging, and commit operations; local Codex resolves each paused conflict
 semantically and then reconciles feature behavior in the rebased worktree.
@@ -41,7 +41,7 @@ the local installer.
 
 A conflict, blocked decision, rejected independent review, failed check, rejected lease, or artifact
 mismatch leaves the last published app installable. Before promotion, the controller writes a
-private pending record. A later hourly run resumes release upload and installation only when the
+private pending record. A later scheduled run resumes release upload and installation only when the
 remote branch, peeled tag, candidate commit, artifacts, checksum, and provenance still agree.
 
 Each release publishes only:
@@ -53,8 +53,8 @@ Each release publishes only:
 
 ## Installer and local watcher
 
-`automation/launchagents/install_launchagents.py` installs two hourly user LaunchAgents: semantic
-sync and local email reporting. The small sync watcher updates a marked private control checkout under
+`automation/launchagents/install_launchagents.py` installs two user LaunchAgents: semantic sync at
+12:00 in the Mac's local timezone and hourly local email reporting. The small sync watcher updates a marked private control checkout under
 `~/Library/Application Support/PaseitoAutomation`, runs the semantic controller from that checkout,
 and relies on the user's existing Codex and GitHub CLI sessions. No token is copied into a plist or
 candidate checkout. Only fixed-field sanitized status is dispatched to GitHub.
