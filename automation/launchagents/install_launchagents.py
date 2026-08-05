@@ -10,13 +10,20 @@ import subprocess
 from pathlib import Path
 
 
-def agent(label: str, script: Path, interval: int, run_at_load: bool = True) -> dict[str, object]:
+def agent(
+    label: str,
+    script: Path,
+    interval: int | None = None,
+    calendar_hour: int | None = None,
+    run_at_load: bool = True,
+) -> dict[str, object]:
+    if (interval is None) == (calendar_hour is None):
+        raise ValueError("exactly one launch schedule is required")
     log_root = Path.home() / "Library/Logs/PaseitoAutomation"
-    return {
+    value: dict[str, object] = {
         "Label": label,
         "ProgramArguments": ["/usr/bin/python3", str(script)],
         "RunAtLoad": run_at_load,
-        "StartInterval": interval,
         "ProcessType": "Background",
         "EnvironmentVariables": {
             "PATH": "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
@@ -24,6 +31,11 @@ def agent(label: str, script: Path, interval: int, run_at_load: bool = True) -> 
         "StandardOutPath": str(log_root / f"{label}.out.log"),
         "StandardErrorPath": str(log_root / f"{label}.err.log"),
     }
+    if interval is not None:
+        value["StartInterval"] = interval
+    else:
+        value["StartCalendarInterval"] = {"Hour": calendar_hour, "Minute": 0}
+    return value
 
 
 def main() -> int:
@@ -45,21 +57,21 @@ def main() -> int:
     definitions = {
         "dev.werquinigo.paseito.semantic-sync": (
             repo / "automation/release/local_watchdog.py",
-            True,
+            {"calendar_hour": 12, "run_at_load": False},
         ),
         "dev.werquinigo.paseito.daily-report": (
             repo / "automation/reporting/local_smtp_report.py",
-            False,
+            {"interval": 3600, "run_at_load": False},
         ),
     }
-    for label, (script, run_at_load) in definitions.items():
+    for label, (script, schedule) in definitions.items():
         path = launchagents / f"{label}.plist"
         subprocess.run(["/bin/launchctl", "bootout", f"gui/{uid}/{label}"], check=False)
         if args.uninstall:
             path.unlink(missing_ok=True)
             continue
         with path.open("wb") as stream:
-            plistlib.dump(agent(label, script, 3600, run_at_load), stream, sort_keys=True)
+            plistlib.dump(agent(label, script, **schedule), stream, sort_keys=True)
         os.chmod(path, 0o600)
         subprocess.run(["/bin/launchctl", "bootstrap", f"gui/{uid}", str(path)], check=True)
     return 0
