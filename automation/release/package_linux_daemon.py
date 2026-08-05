@@ -104,6 +104,14 @@ def manifest(version: str, commit: str, daemon_version: str) -> dict[str, Any]:
     }
 
 
+def prepare_stage(work: Path) -> tuple[Path, Path]:
+    stage = work / "stage"
+    packs = stage / ".packs"
+    stage.mkdir()
+    packs.mkdir()
+    return stage, packs
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[2])
@@ -119,10 +127,7 @@ def main() -> int:
     )
     with tempfile.TemporaryDirectory(prefix="paseito-linux-bundle-") as directory:
         work = Path(directory)
-        stage = work / "stage"
-        packs = stage / ".packs"
-        packs.mkdir()
-        stage.mkdir()
+        stage, packs = prepare_stage(work)
         tarballs = [packed_workspace(root, packs, workspace) for workspace in WORKSPACES]
         package = {
             "name": "paseito-daemon-runtime",

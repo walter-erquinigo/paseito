@@ -7,10 +7,16 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from package_linux_daemon import manifest, write_bundle
+from package_linux_daemon import manifest, prepare_stage, write_bundle
 
 
 class PackageLinuxDaemonTests(unittest.TestCase):
+    def test_stage_contains_workspace_pack_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            stage, packs = prepare_stage(Path(directory))
+            self.assertEqual(packs, stage / ".packs")
+            self.assertTrue(packs.is_dir())
+
     def test_manifest_binds_runtime_to_candidate(self) -> None:
         self.assertEqual(
             manifest("0.2.5-paseito.3", "a" * 40, "0.2.5"),
