@@ -89,7 +89,7 @@ def asset_by_name(release: dict[str, Any], name: str) -> dict[str, Any]:
 
 
 def validate_provenance(value: Any, release_tag: str, peeled_commit: str) -> dict[str, Any]:
-    if not isinstance(value, dict) or value.get("schemaVersion") != 1:
+    if not isinstance(value, dict) or value.get("schemaVersion") not in {1, 2}:
         raise InstallError("provenance", "unsupported provenance schema")
     version = value.get("paseitoVersion")
     artifact = value.get("artifact")
@@ -114,6 +114,24 @@ def validate_provenance(value: Any, release_tag: str, peeled_commit: str) -> dic
         raise InstallError("provenance", "unexpected artifact name")
     if not isinstance(checksum, str) or not re.fullmatch(r"[0-9a-f]{64}", checksum):
         raise InstallError("provenance", "invalid artifact SHA-256")
+    if value.get("schemaVersion") == 2:
+        entries = value.get("artifacts")
+        if not isinstance(entries, list) or len(entries) != 2:
+            raise InstallError("provenance", "multi-platform artifact provenance is incomplete")
+        identities = {
+            (entry.get("kind"), entry.get("platform"), entry.get("architecture"))
+            for entry in entries
+            if isinstance(entry, dict)
+        }
+        if identities != {("desktop", "darwin", "arm64"), ("daemon", "linux", "x64")}:
+            raise InstallError("provenance", "multi-platform artifact provenance is invalid")
+        desktop = next(
+            entry
+            for entry in entries
+            if isinstance(entry, dict) and entry.get("kind") == "desktop"
+        )
+        if artifact != {"name": desktop.get("name"), "sha256": desktop.get("sha256")}:
+            raise InstallError("provenance", "desktop artifact entries do not match")
     return value
 
 
