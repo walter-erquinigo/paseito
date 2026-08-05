@@ -96,7 +96,7 @@ export async function runLogsCommand(
 
   if (!id) {
     console.error("Error: Agent ID required");
-    console.error("Usage: paseo agent logs <id>");
+    console.error("Usage: paseito agent logs <id>");
     process.exit(1);
   }
 
@@ -106,7 +106,7 @@ export async function runLogsCommand(
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error(`Error: Cannot connect to daemon at ${host}: ${message}`);
-    console.error("Start the daemon with: paseo daemon start");
+    console.error("Start the daemon with: paseito daemon start");
     process.exit(1);
   }
 
@@ -114,7 +114,7 @@ export async function runLogsCommand(
     const fetchResult = await client.fetchAgent({ agentId: id });
     if (!fetchResult) {
       console.error(`Error: No agent found matching: ${id}`);
-      console.error("Use `paseo ls` to list available agents");
+      console.error("Use `paseito ls` to list available agents");
       await client.close();
       process.exit(1);
     }
