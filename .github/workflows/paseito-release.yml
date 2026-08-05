@@ -29,7 +29,7 @@ jobs:
       GITHUB_TOKEN: ${{ github.token }}
       FAILURE_TITLE: "Paseito automated release is blocked"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           ref: paseito
@@ -86,7 +86,7 @@ jobs:
           echo "original_sha=$original_sha" >> "$GITHUB_OUTPUT"
           echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         if: steps.release.outputs.needs_release == 'true'
         with:
           node-version: "22"
@@ -105,8 +105,8 @@ jobs:
       - name: Build dependencies and typecheck
         if: steps.release.outputs.needs_release == 'true'
         run: |
-          npm run build:app-deps
-          npm run build:server-deps
+          npm run build:server
+          npm run build --workspace=@getpaseo/expo-two-way-audio
           npm run typecheck
 
       - name: Run Paseito and relevant upstream tests
@@ -218,7 +218,7 @@ jobs:
 
       - name: Retain small failure diagnostics
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: paseito-release-failure-${{ github.run_id }}
           path: ${{ runner.temp }}/desktop-smoke

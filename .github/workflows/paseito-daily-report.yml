@@ -33,7 +33,7 @@ jobs:
       GRAPH_TOKEN_CACHE_KEY: ${{ secrets.GRAPH_TOKEN_CACHE_KEY }}
       REPORT_FAILURE_TITLE: Paseito daily email delivery is blocked
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: paseito
 
@@ -75,7 +75,7 @@ jobs:
 
       - name: Retain rotated encrypted token cache
         if: always() && steps.gate.outputs.should_send == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: graph-token-cache
           path: cache/graph-token-cache.enc
@@ -84,7 +84,7 @@ jobs:
 
       - name: Retain New York date idempotency key
         if: success() && steps.gate.outputs.should_send == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: paseito-report-state
           path: report-state.json
