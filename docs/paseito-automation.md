@@ -16,33 +16,46 @@ upstream commit represented by the branch.
 - Artifact retention is deliberately small except for the encrypted Graph token cache and daily
   date key. No third-party build, signing, updater, or email service is used.
 
-## Release invariant
+## Local semantic release invariant
 
-The hourly workflow filters upstream releases to exact stable `vMAJOR.MINOR.PATCH` tags, peels the
-tag to a commit, rebases a temporary candidate, and verifies that candidate. It advances `paseito`
-with `--force-with-lease` and creates an annotated `paseito-v...` tag only after formatting, lint,
-typechecking, focused tests, packaging, the packaged desktop smoke test, and arm64 inspection pass.
+An hourly macOS LaunchAgent refreshes a controller-owned checkout and asks the local Codex CLI to
+reconcile a disposable candidate with the exact peeled stable `vMAJOR.MINOR.PATCH` upstream commit.
+The feature registry records intent, invariants, contracts, paths, and whether a feature is
+permanent. Codex classifies every feature as `carry_forward`, `adapt`, `upstream_complete`, or
+`blocked`. It may retire a non-permanent feature only when upstream independently satisfies every
+invariant and executable contract. A changelog or similarly named upstream feature is not proof.
 
-A conflict, failed check, rejected lease, or artifact mismatch leaves the last published app
-installable. The workflow records diagnostics and updates one deduplicated failure issue. If tag
-publication succeeds but GitHub Release asset upload is interrupted, a rerun accepts the existing
-tag only when both the peeled tag and remote branch equal the newly verified commit, then resumes
-asset upload.
+A second, read-only Codex invocation independently reviews the committed candidate and its evidence.
+Both invocations run without GitHub or API-token environment variables and have no promotion role.
+The controller then runs local formatting, lint, and focused contract checks before pushing only an
+ephemeral candidate branch.
+
+GitHub Actions never rebases, resolves conflicts, retires features, advances `paseito`, creates a
+tag, publishes a release, or installs the app. It checks out the exact candidate SHA with persisted
+credentials disabled, repeats deterministic tests, builds the unsigned arm64 app, and emits a
+short-lived artifact plus provenance. The local controller verifies that artifact and advances the
+branch and annotated tag atomically with `--force-with-lease`. It then uploads the release and runs
+the local installer.
+
+A conflict, blocked decision, rejected independent review, failed check, rejected lease, or artifact
+mismatch leaves the last published app installable. Before promotion, the controller writes a
+private pending record. A later hourly run resumes release upload and installation only when the
+remote branch, peeled tag, candidate commit, artifacts, checksum, and provenance still agree.
 
 Each release publishes only:
 
 - the unsigned arm64 ZIP;
 - the exact SHA-256 checksum file;
 - `provenance.json`, binding the upstream tag and commit, Paseito commit, workflow run,
-  architecture, version, artifact digest, and verification results.
+  architecture, version, artifact digest, semantic decisions, and verification results.
 
-## Installer and local watchdog
+## Installer and local watcher
 
-`automation/launchagents/install_launchagents.py` installs two hourly user LaunchAgents. One polls
-and verifies releases before atomically replacing `/Applications/Paseito.app`; the other restores
-the release workflow if GitHub disables scheduled workflows after repository inactivity. Neither
-agent stores a credential. They reuse the local GitHub CLI credential from macOS Keychain and send
-only the fixed-field sanitized installation status.
+`automation/launchagents/install_launchagents.py` installs one hourly user LaunchAgent. Its small
+watcher updates a marked private control checkout under
+`~/Library/Application Support/PaseitoAutomation`, runs the semantic controller from that checkout,
+and relies on the user's existing Codex and GitHub CLI sessions. No token is copied into a plist or
+candidate checkout. Only fixed-field sanitized status is dispatched to GitHub.
 
 The installer never stops Paseito. When the app is running, it installs the verified update, keeps
 the previous known-good app, writes a pending-restart marker, and displays a notification. Failures
@@ -65,7 +78,9 @@ best-effort surface because application identity can require reauthentication.
 
 The daily workflow runs at both UTC offsets that can correspond to 07:00 New York. `zoneinfo`
 selects the actual local hour, and an encrypted artifact stores the last-sent New York date to
-suppress duplicates. Email transport failure updates a persistent issue and fails visibly.
+suppress duplicates. The report includes the latest semantic classifications, independent review,
+deterministic build, publication, local installation, and any unresolved controller failure. Email
+transport failure updates a persistent issue and fails visibly.
 
 Bootstrap steps are in `automation/reporting/README.md`. The device-code login must remain local so
 its authorization code never appears in a public Actions log.

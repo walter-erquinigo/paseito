@@ -27,10 +27,16 @@ def main() -> int:
     parser.add_argument("--version", required=True)
     parser.add_argument("--release-tag", required=True)
     parser.add_argument("--workflow-run", required=True)
+    parser.add_argument("--decision", type=Path)
     parser.add_argument("--output", type=Path, default=Path("provenance.json"))
     args = parser.parse_args()
 
     checksum = sha256(args.artifact)
+    semantic_decision = None
+    if args.decision:
+        semantic_decision = json.loads(args.decision.read_text(encoding="utf-8"))
+        if not isinstance(semantic_decision, dict):
+            raise ValueError("semantic decision must be an object")
     value = {
         "schemaVersion": 1,
         "createdAt": datetime.now(timezone.utc).isoformat(),
@@ -46,13 +52,21 @@ def main() -> int:
         "architecture": "arm64",
         "artifact": {"name": args.artifact.name, "sha256": checksum},
         "tests": {
-            "rebase": "passed",
+            "semanticReconciliation": "passed",
+            "independentReview": "passed",
             "format": "passed",
             "lint": "passed",
             "typecheck": "passed",
             "feature": "passed",
             "upstream": "passed",
             "packagedDesktopSmoke": "passed",
+        },
+        "semanticDecision": {
+            "sha256": sha256(args.decision) if args.decision else None,
+            "featureClassifications": {
+                item["id"]: item["classification"]
+                for item in (semantic_decision or {}).get("decision", {}).get("features", [])
+            },
         },
     }
     args.output.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8")
