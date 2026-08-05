@@ -37,7 +37,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  verify:
+  verify-macos:
     if: github.event.repository.private == false && github.repository == 'walter-erquinigo/paseito'
     runs-on: macos-14
     timeout-minutes: 90
@@ -87,7 +87,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for suite in automation/release automation/installer automation/launchagents automation/migration automation/reporting; do
+          for suite in automation/release automation/installer automation/launchagents automation/migration automation/reporting automation/remote; do
             python3 -m unittest discover -s "$suite" -p 'test_*.py'
           done
           npx vitest run \
@@ -111,7 +111,7 @@ jobs:
           PASEO_DESKTOP_SMOKE_ARTIFACT_DIR: ${{ runner.temp }}/desktop-smoke
         run: npm run build:desktop -- --publish never --mac --arm64
 
-      - name: Verify artifact and write provenance
+      - name: Verify macOS artifact
         shell: bash
         run: |
           set -euo pipefail
@@ -123,22 +123,13 @@ jobs:
           executable="$inspect_dir/Paseito.app/Contents/MacOS/Paseito"
           test -f "$executable"
           test "$(lipo -archs "$executable")" = arm64
-          python3 automation/release/write_provenance.py \
-            --artifact "$artifact" \
-            --upstream-tag "${{ inputs.upstream_tag }}" \
-            --upstream-commit "${{ inputs.upstream_commit }}" \
-            --paseito-commit "${{ inputs.expected_sha }}" \
-            --version "${{ inputs.paseito_version }}" \
-            --release-tag "${{ inputs.release_tag }}" \
-            --workflow-run "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
-            --decision "automation/decisions/${{ inputs.paseito_version }}.json"
-          mkdir candidate-artifact
-          cp "$artifact" "$artifact.sha256" provenance.json candidate-artifact/
+          mkdir candidate-macos
+          cp "$artifact" candidate-macos/
 
       - uses: actions/upload-artifact@v7
         with:
-          name: paseito-candidate
-          path: candidate-artifact
+          name: paseito-candidate-macos
+          path: candidate-macos
           if-no-files-found: error
           retention-days: 3
 
@@ -149,4 +140,112 @@ jobs:
           name: paseito-candidate-failure-${{ github.run_id }}
           path: ${{ runner.temp }}/desktop-smoke
           if-no-files-found: ignore
+          retention-days: 3
+
+  verify-linux-daemon:
+    if: github.event.repository.private == false && github.repository == 'walter-erquinigo/paseito'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.candidate_ref }}
+          persist-credentials: false
+
+      - name: Verify immutable candidate inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(uname -m)" = x86_64
+          test "$(git rev-parse HEAD)" = "${{ inputs.expected_sha }}"
+          test "$(jq -r .upstreamTag automation/upstream.json)" = "${{ inputs.upstream_tag }}"
+          test "$(jq -r .upstreamCommit automation/upstream.json)" = "${{ inputs.upstream_commit }}"
+          test "$(jq -r .paseitoVersion automation/upstream.json)" = "${{ inputs.paseito_version }}"
+          test "$(jq -r .version package.json)" = "${{ inputs.paseito_version }}"
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install and build daemon packages
+        run: |
+          node scripts/npm-retry.mjs ci
+          npm run build:server
+
+      - name: Package and smoke test Linux x64 daemon
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir candidate-linux extracted
+          artifact="candidate-linux/Paseito-daemon-${{ inputs.paseito_version }}-linux-x64.tar.gz"
+          python3 automation/release/package_linux_daemon.py \
+            --version "${{ inputs.paseito_version }}" \
+            --commit "${{ inputs.expected_sha }}" \
+            --output "$artifact"
+          tar -xzf "$artifact" -C extracted
+          manifest=extracted/paseito-daemon/manifest.json
+          test "$(jq -r .version "$manifest")" = "${{ inputs.paseito_version }}"
+          test "$(jq -r .daemonVersion "$manifest")" = "$(jq -r .version packages/server/package.json)"
+          test "$(jq -r .commit "$manifest")" = "${{ inputs.expected_sha }}"
+          test "$(jq -r .feature "$manifest")" = changesBaseSelector
+          entrypoint="$(jq -r .entrypoint "$manifest")"
+          test -x "extracted/paseito-daemon/$entrypoint"
+          node "extracted/paseito-daemon/$entrypoint" --version
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: paseito-candidate-linux
+          path: candidate-linux
+          if-no-files-found: error
+          retention-days: 3
+
+  assemble-provenance:
+    if: github.event.repository.private == false && github.repository == 'walter-erquinigo/paseito'
+    needs: [verify-macos, verify-linux-daemon]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.candidate_ref }}
+          persist-credentials: false
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: paseito-candidate-macos
+          path: candidate-artifact
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: paseito-candidate-linux
+          path: candidate-artifact
+
+      - name: Bind both artifacts to candidate provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ inputs.expected_sha }}"
+          mac_artifact="$(find candidate-artifact -maxdepth 1 -type f -name 'Paseito-*-arm64.zip' -print -quit)"
+          linux_artifact="$(find candidate-artifact -maxdepth 1 -type f -name 'Paseito-daemon-*-linux-x64.tar.gz' -print -quit)"
+          test -n "$mac_artifact"
+          test -n "$linux_artifact"
+          python3 automation/release/write_provenance.py \
+            --artifact "$mac_artifact" \
+            --linux-artifact "$linux_artifact" \
+            --upstream-tag "${{ inputs.upstream_tag }}" \
+            --upstream-commit "${{ inputs.upstream_commit }}" \
+            --paseito-commit "${{ inputs.expected_sha }}" \
+            --version "${{ inputs.paseito_version }}" \
+            --release-tag "${{ inputs.release_tag }}" \
+            --workflow-run "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            --decision "automation/decisions/${{ inputs.paseito_version }}.json" \
+            --output candidate-artifact/provenance.json
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: paseito-candidate
+          path: candidate-artifact
+          if-no-files-found: error
           retention-days: 3

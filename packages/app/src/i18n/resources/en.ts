@@ -831,6 +831,7 @@ export const en = {
         baseSelectorEmpty: "No matching branches",
         baseSelectorMissing: "Branch {{baseRef}} no longer exists",
         baseSelectorError: "Failed to change comparison branch",
+        baseSelectorUpdateHost: "Update the host to select a base branch",
         branchUnknown: "Unknown",
         base: "base",
         newFile: "New",

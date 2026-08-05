@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  applyChangesBaseSelection,
   buildChangesBaseOptions,
   buildChangesBaseScopeKey,
   CHANGES_BASE_OVERRIDES_STORAGE_KEY,
@@ -51,5 +52,19 @@ describe("Changes base selection", () => {
 
     const corrupt = createStorage({ [CHANGES_BASE_OVERRIDES_STORAGE_KEY]: "not json" });
     await expect(loadChangesBaseOverrides(corrupt)).resolves.toEqual({});
+  });
+
+  it("persists a selected base before switching to the committed diff", async () => {
+    const events: string[] = [];
+    await applyChangesBaseSelection({
+      baseRef: "origin/release",
+      setOverride: async (baseRef) => {
+        events.push(`base:${baseRef}`);
+      },
+      showCommitted: () => {
+        events.push("mode:committed");
+      },
+    });
+    expect(events).toEqual(["base:origin/release", "mode:committed"]);
   });
 });

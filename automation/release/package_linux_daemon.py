@@ -1,0 +1,156 @@
+#!/usr/bin/env python3
+"""Build a self-contained Linux x86_64 Paseito daemon runtime bundle."""
+
+from __future__ import annotations
+
+import argparse
+import gzip
+import json
+import os
+import platform
+import shutil
+import subprocess
+import tarfile
+import tempfile
+from pathlib import Path
+from typing import Any
+
+WORKSPACES = ("highlight", "relay", "protocol", "client", "server", "cli")
+
+
+def command(args: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        args,
+        cwd=cwd,
+        check=True,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+
+
+def packed_workspace(root: Path, destination: Path, workspace: str) -> Path:
+    result = command(
+        [
+            "npm",
+            "pack",
+            "--json",
+            f"--workspace=@getpaseo/{workspace}",
+            "--pack-destination",
+            str(destination),
+        ],
+        root,
+    )
+    value = json.loads(result.stdout)
+    if not isinstance(value, list) or len(value) != 1 or not isinstance(value[0], dict):
+        raise RuntimeError(f"npm pack returned invalid metadata for {workspace}")
+    filename = value[0].get("filename")
+    if not isinstance(filename, str):
+        raise RuntimeError(f"npm pack did not name the {workspace} artifact")
+    path = destination / filename
+    if not path.is_file():
+        raise RuntimeError(f"npm pack did not create {path}")
+    return path
+
+
+def validate_local_workspace_resolution(stage: Path) -> None:
+    lock = json.loads((stage / "package-lock.json").read_text(encoding="utf-8"))
+    packages = lock.get("packages")
+    if not isinstance(packages, dict):
+        raise RuntimeError("staged runtime lockfile has no package map")
+    for workspace in WORKSPACES:
+        key = f"node_modules/@getpaseo/{workspace}"
+        entry = packages.get(key)
+        if not isinstance(entry, dict) or not str(entry.get("resolved", "")).startswith("file:"):
+            raise RuntimeError(f"{key} did not resolve from the verified candidate")
+    feature_source = stage / "node_modules/@getpaseo/server/dist/server/server/websocket-server.js"
+    if not feature_source.is_file() or "changesBaseSelector" not in feature_source.read_text(
+        encoding="utf-8"
+    ):
+        raise RuntimeError("staged daemon does not advertise changesBaseSelector")
+
+
+def normalized_tar_info(info: tarfile.TarInfo) -> tarfile.TarInfo:
+    info.uid = 0
+    info.gid = 0
+    info.uname = ""
+    info.gname = ""
+    info.mtime = 0
+    return info
+
+
+def write_bundle(stage: Path, output: Path) -> None:
+    output.parent.mkdir(parents=True, exist_ok=True)
+    temporary = output.with_suffix(output.suffix + ".tmp")
+    with temporary.open("wb") as raw:
+        with gzip.GzipFile(filename="", mode="wb", fileobj=raw, mtime=0, compresslevel=9) as zipped:
+            with tarfile.open(fileobj=zipped, mode="w") as archive:
+                archive.add(stage, arcname="paseito-daemon", filter=normalized_tar_info)
+    temporary.replace(output)
+
+
+def manifest(version: str, commit: str, daemon_version: str) -> dict[str, Any]:
+    return {
+        "schemaVersion": 1,
+        "product": "Paseito daemon",
+        "version": version,
+        "daemonVersion": daemon_version,
+        "commit": commit,
+        "platform": "linux",
+        "architecture": "x64",
+        "nodeMajor": 22,
+        "entrypoint": "node_modules/@getpaseo/cli/bin/paseito",
+        "feature": "changesBaseSelector",
+    }
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[2])
+    parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--version", required=True)
+    parser.add_argument("--commit", required=True)
+    args = parser.parse_args()
+    root = args.root.resolve()
+    if platform.system() != "Linux" or platform.machine() not in {"x86_64", "amd64"}:
+        raise RuntimeError("Linux daemon bundles must be built on Linux x86_64")
+    daemon_version = str(
+        json.loads((root / "packages/server/package.json").read_text(encoding="utf-8"))["version"]
+    )
+    with tempfile.TemporaryDirectory(prefix="paseito-linux-bundle-") as directory:
+        work = Path(directory)
+        stage = work / "stage"
+        packs = stage / ".packs"
+        packs.mkdir()
+        stage.mkdir()
+        tarballs = [packed_workspace(root, packs, workspace) for workspace in WORKSPACES]
+        package = {
+            "name": "paseito-daemon-runtime",
+            "version": args.version,
+            "private": True,
+            "dependencies": {
+                f"@getpaseo/{workspace}": f"file:.packs/{tarball.name}"
+                for workspace, tarball in zip(WORKSPACES, tarballs, strict=True)
+            },
+        }
+        (stage / "package.json").write_text(
+            json.dumps(package, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
+        command(
+            ["npm", "install", "--omit=dev", "--no-audit", "--no-fund"],
+            stage,
+        )
+        validate_local_workspace_resolution(stage)
+        shutil.rmtree(packs)
+        (stage / "manifest.json").write_text(
+            json.dumps(manifest(args.version, args.commit, daemon_version), indent=2, sort_keys=True)
+            + "\n",
+            encoding="utf-8",
+        )
+        os.chmod(stage / "node_modules/@getpaseo/cli/bin/paseito", 0o755)
+        write_bundle(stage, args.output.resolve())
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

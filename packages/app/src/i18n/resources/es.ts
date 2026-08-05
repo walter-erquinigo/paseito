@@ -852,6 +852,7 @@ export const es: TranslationResources = {
         baseSelectorEmpty: "No hay ramas coincidentes",
         baseSelectorMissing: "La rama {{baseRef}} ya no existe",
         baseSelectorError: "No se pudo cambiar la rama de comparación",
+        baseSelectorUpdateHost: "Actualiza el host para seleccionar una rama base",
         branchUnknown: "Desconocido",
         base: "base",
         newFile: "Nuevo",
