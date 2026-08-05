@@ -101,6 +101,10 @@ Read automation/feature-registry.json, {decision_path.name}, the old upstream co
 Check every feature decision and its cited evidence. Pay special attention to features classified
 upstream_complete: confirm executable equivalence and passing contract evidence, not changelog
 similarity. Confirm permanent features remain and the new upstream commit is an ancestor.
+The controller already verified that tracked files are clean. The untracked decision and review JSON
+files are controller-owned handoff files and are not candidate changes. This sandbox is intentionally
+read-only, so audit the recorded commands and repository evidence but do not rerun tests that need a
+writable temporary directory; the controller independently reruns all contracts after this review.
 Do not modify files, push, tag, publish, install, dispatch workflows, or open issues. Return only the
 object required by the review schema; disapprove when any evidence is uncertain.
 """
