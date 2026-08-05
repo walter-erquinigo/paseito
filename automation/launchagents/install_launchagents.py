@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Install the user-owned, no-fee Paseito polling LaunchAgents."""
+"""Install the user-owned, no-fee Paseito semantic-sync LaunchAgent."""
 
 from __future__ import annotations
 
@@ -35,9 +35,15 @@ def main() -> int:
     launchagents.mkdir(parents=True, exist_ok=True)
     (Path.home() / "Library/Logs/PaseitoAutomation").mkdir(parents=True, exist_ok=True)
     uid = os.getuid()
+    legacy_labels = {
+        "dev.werquinigo.paseito.installer",
+        "dev.werquinigo.paseito.release-watchdog",
+    }
+    for label in legacy_labels:
+        subprocess.run(["/bin/launchctl", "bootout", f"gui/{uid}/{label}"], check=False)
+        (launchagents / f"{label}.plist").unlink(missing_ok=True)
     definitions = {
-        "dev.werquinigo.paseito.installer": repo / "automation/installer/paseito_installer.py",
-        "dev.werquinigo.paseito.release-watchdog": repo / "automation/release/local_watchdog.py",
+        "dev.werquinigo.paseito.semantic-sync": repo / "automation/release/local_watchdog.py",
     }
     for label, script in definitions.items():
         path = launchagents / f"{label}.plist"

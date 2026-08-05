@@ -29,7 +29,8 @@ jobs:
           categories = {
               "archive", "architecture", "backup", "checksum", "download", "health",
               "install", "installed", "no-change", "provenance", "quarantine", "release",
-              "report", "sign",
+              "report", "sign", "artifact", "codex", "command", "promotion", "repository",
+              "review", "semantic-sync", "state", "upstream", "verification",
           }
           if value["schemaVersion"] != 1 or value["category"] not in categories:
               raise SystemExit("invalid status schema or category")

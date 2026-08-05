@@ -26,7 +26,9 @@ class ReportingTests(unittest.TestCase):
             "2026-01-01",
             {
                 "upstreamVersion": "v1.0.0<script>",
-                "rebaseResult": "success",
+                "semanticResult": "success",
+                "reviewResult": "passed",
+                "featureClassifications": {"changes-base-selector": "carry_forward"},
                 "verificationBuild": "passed",
                 "publishedVersion": "1.0.0-paseito.1",
                 "localStatus": {"installedVersion": None, "result": "not reported", "pendingRestart": False},
@@ -38,6 +40,8 @@ class ReportingTests(unittest.TestCase):
         self.assertNotIn("<script>", body)
         self.assertIn("including no-change days", body)
         self.assertIn("Pending restart", body)
+        self.assertIn("Semantic reconciliation", body)
+        self.assertIn("changes-base-selector: carry_forward", body)
 
     def test_expired_token_is_refreshed_without_losing_rotated_refresh_token(self) -> None:
         cache = {"access_token": "old", "refresh_token": "refresh-old", "expires_at": 0}

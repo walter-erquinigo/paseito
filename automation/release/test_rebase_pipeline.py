@@ -101,13 +101,20 @@ class RebasePipelineTests(unittest.TestCase):
         self.assertIn("group: paseito-upstream-release", workflow)
         self.assertIn("cancel-in-progress: false", workflow)
 
-    def test_workflow_can_recover_interrupted_release_publication(self) -> None:
+    def test_github_workflow_only_verifies_a_local_candidate(self) -> None:
         workflow = (Path(__file__).parents[2] / ".github/workflows/paseito-release.yml").read_text(
             encoding="utf-8"
         )
-        self.assertIn("Recovering publication for the already-verified branch and tag.", workflow)
-        self.assertIn('gh release upload "$tag"', workflow)
-        self.assertIn("--clobber", workflow)
+        self.assertIn("candidate_ref:", workflow)
+        self.assertIn("expected_sha:", workflow)
+        self.assertNotIn("git rebase", workflow)
+        self.assertNotIn("git push", workflow)
+        self.assertNotIn("gh release create", workflow)
+
+    def test_watchdog_runs_local_semantic_controller(self) -> None:
+        watchdog = (Path(__file__).parent / "local_watchdog.py").read_text(encoding="utf-8")
+        self.assertIn("semantic_sync.py", watchdog)
+        self.assertNotIn('"workflow", "run"', watchdog)
 
 
 if __name__ == "__main__":
