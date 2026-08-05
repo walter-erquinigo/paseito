@@ -1,0 +1,192 @@
+{
+  "decision": {
+    "blocked": false,
+    "blockers": [],
+    "features": [
+      {
+        "classification": "carry_forward",
+        "confidence": "certain",
+        "contractChecks": [
+          {
+            "command": "npm run build:server",
+            "result": "passed"
+          },
+          {
+            "command": "npx vitest run packages/protocol/src/agent-deep-link.test.ts packages/desktop/src/agent-navigation.test.ts packages/cli/src/cli-surface.test.ts --bail=1",
+            "result": "passed"
+          }
+        ],
+        "evidence": [
+          {
+            "explanation": "The exact old and new upstream commits are identical, so no upstream behavior changed.",
+            "kind": "command",
+            "reference": "git diff --name-status 6fc491e6220fba6543bbbe4bf1b1f58cfe59228b..6fc491e6220fba6543bbbe4bf1b1f58cfe59228b"
+          },
+          {
+            "explanation": "Defines the Paseito name, dev.werquinigo.paseito identifier, paseito slug, and paseito scheme.",
+            "kind": "file",
+            "reference": "packages/app/app.config.js"
+          },
+          {
+            "explanation": "Introduces the local identity behavior after the upstream base.",
+            "kind": "commit",
+            "reference": "d9409bac7"
+          },
+          {
+            "explanation": "All 11 focused assertions passed.",
+            "kind": "test",
+            "reference": "packages/protocol/src/agent-deep-link.test.ts; packages/desktop/src/agent-navigation.test.ts; packages/cli/src/cli-surface.test.ts"
+          }
+        ],
+        "id": "independent-desktop-identity",
+        "residualWork": [],
+        "summary": "The exact upstream range is empty; permanent Paseito identity behavior remains locally required and passes its focused contract."
+      },
+      {
+        "classification": "carry_forward",
+        "confidence": "certain",
+        "contractChecks": [
+          {
+            "command": "npx vitest run packages/app/src/git/changes-base-selection.test.ts packages/protocol/src/messages.checkout-commits.test.ts packages/server/src/utils/checkout-git.commits.test.ts --bail=1",
+            "result": "passed"
+          }
+        ],
+        "evidence": [
+          {
+            "explanation": "The exact old and new upstream commits are identical, so no upstream behavior changed.",
+            "kind": "command",
+            "reference": "git diff --name-status 6fc491e6220fba6543bbbe4bf1b1f58cfe59228b..6fc491e6220fba6543bbbe4bf1b1f58cfe59228b"
+          },
+          {
+            "explanation": "Implements local branch-scoped comparison-base selection.",
+            "kind": "file",
+            "reference": "packages/app/src/git/changes-base-selection.ts"
+          },
+          {
+            "explanation": "Advertises the optional changesBaseSelector capability.",
+            "kind": "file",
+            "reference": "packages/protocol/src/messages.ts"
+          },
+          {
+            "explanation": "Introduces the local selector behavior after the upstream base.",
+            "kind": "commit",
+            "reference": "5fcf2dfd9"
+          },
+          {
+            "explanation": "All 27 focused assertions passed.",
+            "kind": "test",
+            "reference": "packages/app/src/git/changes-base-selection.test.ts; packages/protocol/src/messages.checkout-commits.test.ts; packages/server/src/utils/checkout-git.commits.test.ts"
+          }
+        ],
+        "id": "changes-base-selector",
+        "residualWork": [],
+        "summary": "The exact upstream range is empty; the local branch-scoped comparison-base selector and advertised capability remain required and pass their focused contract."
+      },
+      {
+        "classification": "carry_forward",
+        "confidence": "certain",
+        "contractChecks": [
+          {
+            "command": "python3 -m unittest discover -s automation/release -p 'test_*.py'",
+            "result": "passed"
+          },
+          {
+            "command": "python3 -m unittest discover -s automation/installer -p 'test_*.py'",
+            "result": "passed"
+          },
+          {
+            "command": "python3 -m unittest discover -s automation/launchagents -p 'test_*.py'",
+            "result": "passed"
+          },
+          {
+            "command": "python3 -m unittest discover -s automation/migration -p 'test_*.py'",
+            "result": "passed"
+          },
+          {
+            "command": "python3 -m unittest discover -s automation/reporting -p 'test_*.py'",
+            "result": "passed"
+          },
+          {
+            "command": "python3 -m unittest discover -s automation/remote -p 'test_*.py'",
+            "result": "passed"
+          }
+        ],
+        "evidence": [
+          {
+            "explanation": "The exact old and new upstream commits are identical, so no upstream behavior changed.",
+            "kind": "command",
+            "reference": "git diff --name-status 6fc491e6220fba6543bbbe4bf1b1f58cfe59228b..6fc491e6220fba6543bbbe4bf1b1f58cfe59228b"
+          },
+          {
+            "explanation": "Implements controller-owned semantic reconciliation and failure handling.",
+            "kind": "file",
+            "reference": "automation/release/semantic_sync.py"
+          },
+          {
+            "explanation": "Documents retained fail-closed automation boundaries.",
+            "kind": "file",
+            "reference": "docs/paseito-automation.md"
+          },
+          {
+            "explanation": "Introduces the local maintenance system after the upstream base.",
+            "kind": "commit",
+            "reference": "9f9257ce4"
+          },
+          {
+            "explanation": "Release (22), installer (7), LaunchAgent (4), migration (5), reporting (6), and remote deployment (4) tests passed.",
+            "kind": "test",
+            "reference": "automation registry unittest suites"
+          }
+        ],
+        "id": "local-semantic-maintenance",
+        "residualWork": [],
+        "summary": "The exact upstream range is empty; permanent local fail-closed reconciliation, installation, migration, reporting, and remote-deployment behavior remains required and passes its registry contracts."
+      }
+    ],
+    "inputCommit": "38744b23e1f78722e2fe9f747ebd42f6916ad438",
+    "schemaVersion": 1,
+    "upstreamCommit": "6fc491e6220fba6543bbbe4bf1b1f58cfe59228b",
+    "upstreamTag": "v0.2.5",
+    "verificationRecommendations": []
+  },
+  "review": {
+    "approved": true,
+    "blockers": [],
+    "featureFindings": [
+      {
+        "agrees": true,
+        "evidenceChecked": [
+          "Decision inputCommit equals reviewed commit.",
+          "git merge-base confirms 6fc491e6220fba6543bbbe4bf1b1f58cfe59228b is an ancestor.",
+          "packages/app/app.config.js, packages/server/src/server/config.ts, packages/server/src/server/paseo-home.ts, packages/cli, packages/desktop, and NOTICE-PASEITO.md retain the distinct identity.",
+          "Evidence item_10: identity contract command exited 0; 3 files and 11 tests passed."
+        ],
+        "explanation": "[certain] Correctly carry_forward: old and new upstream commits are identical, the permanent identity remains in the reviewed tree, and the recorded focused contract passed 11 tests.",
+        "id": "independent-desktop-identity"
+      },
+      {
+        "agrees": true,
+        "evidenceChecked": [
+          "Empty old..new upstream range.",
+          "packages/app/src/git/changes-base-selection.ts and use-changes-base-selection.ts.",
+          "packages/protocol/src/messages.ts and packages/server/src/server/websocket-server.ts capability declaration.",
+          "Evidence item_10: selector contract command exited 0; 3 files and 27 tests passed."
+        ],
+        "explanation": "[certain] Correctly carry_forward: no upstream change exists to replace the local selector, and the reviewed tree retains its scoped persistence, capability gate, validation, and diff/commit integration.",
+        "id": "changes-base-selector"
+      },
+      {
+        "agrees": true,
+        "evidenceChecked": [
+          "Empty old..new upstream range.",
+          "automation/release/semantic_sync.py, docs/paseito-automation.md, .github/workflows/paseito-release.yml, and automation/remote retain controller-owned fail-closed behavior.",
+          "Evidence item_12: release 22, installer 7, LaunchAgent 4, migration 5, reporting 6, and remote 4 tests passed."
+        ],
+        "explanation": "[certain] Correctly carry_forward: this permanent fork-only automation remains present; no feature was classified upstream_complete, and all six recorded registry contract suites exited successfully.",
+        "id": "local-semantic-maintenance"
+      }
+    ],
+    "reviewedCommit": "38744b23e1f78722e2fe9f747ebd42f6916ad438",
+    "schemaVersion": 1
+  }
+}
