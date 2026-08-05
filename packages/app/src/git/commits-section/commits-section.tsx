@@ -12,6 +12,7 @@ import { CommitRow } from "./commit-row";
 interface CommitsSectionProps {
   serverId: string;
   cwd: string;
+  baseRef?: string;
   onCommitPress: (sha: string) => void;
 }
 
@@ -82,7 +83,7 @@ function CommitsSectionContent({
   );
 }
 
-export function CommitsSection({ serverId, cwd, onCommitPress }: CommitsSectionProps) {
+export function CommitsSection({ serverId, cwd, baseRef, onCommitPress }: CommitsSectionProps) {
   const { t } = useTranslation();
   const { preferences, updatePreferences } = useChangesPreferences();
   const isPanelActive = useRetainedPanelActive();
@@ -92,6 +93,7 @@ export function CommitsSection({ serverId, cwd, onCommitPress }: CommitsSectionP
   const query = useCheckoutCommitsQuery({
     serverId,
     cwd,
+    baseRef,
     enabled: !collapsed,
   });
 

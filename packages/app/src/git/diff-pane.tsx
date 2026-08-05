@@ -120,6 +120,7 @@ import {
 } from "@/review";
 import { usePublishWorkingDiffAttachment, useWorkingDiff } from "@/git/use-working-diff";
 import { DiffTooLargeState } from "@/git/diff-too-large-state";
+import { ChangesBaseSelector } from "@/git/changes-base-selector";
 
 export type { GitActionId, GitAction, GitActions } from "@/git/policy";
 
@@ -2615,6 +2616,48 @@ function useDiffTabNavigation({
   };
 }
 
+function DiffComparisonControls({
+  diffMode,
+  committedDescription,
+  serverId,
+  cwd,
+  currentBranchName,
+  baseSelection,
+  onSelectUncommitted,
+  onSelectBase,
+}: {
+  diffMode: "uncommitted" | "base";
+  committedDescription?: string;
+  serverId: string;
+  cwd: string;
+  currentBranchName: string | null;
+  baseSelection: ReturnType<typeof useWorkingDiff>["baseSelection"];
+  onSelectUncommitted: () => void;
+  onSelectBase: () => void;
+}) {
+  return (
+    <View style={styles.diffComparisonControls}>
+      <DiffModeMenu
+        diffMode={diffMode}
+        committedDescription={committedDescription}
+        onSelectUncommitted={onSelectUncommitted}
+        onSelectBase={onSelectBase}
+      />
+      {diffMode === "base" && baseSelection.supported ? (
+        <ChangesBaseSelector
+          serverId={serverId}
+          cwd={cwd}
+          currentBranch={currentBranchName}
+          recordedBaseRef={baseSelection.recordedBaseRef}
+          selectedBaseRef={baseSelection.selectedBaseRef}
+          effectiveBaseRef={baseSelection.effectiveBaseRef}
+          onSelect={baseSelection.setOverride}
+        />
+      ) : null}
+    </View>
+  );
+}
+
 export function GitDiffPane({
   serverId,
   workspaceId,
@@ -2693,6 +2736,8 @@ export function GitDiffPane({
     notGit,
     statusErrorMessage,
     baseRef,
+    comparisonBaseRef,
+    baseSelection,
     currentBranchName,
     diffMode,
     selectUncommitted: handleSelectUncommitted,
@@ -2895,9 +2940,13 @@ export function GitDiffPane({
       {isGit ? (
         <View style={styles.diffStatusContainer}>
           <View style={styles.diffStatusInner}>
-            <DiffModeMenu
+            <DiffComparisonControls
               diffMode={diffMode}
               committedDescription={committedDiffDescription}
+              serverId={serverId}
+              cwd={cwd}
+              currentBranchName={currentBranchName}
+              baseSelection={baseSelection}
               onSelectUncommitted={handleSelectUncommitted}
               onSelectBase={handleSelectBase}
             />
@@ -2958,7 +3007,12 @@ export function GitDiffPane({
 
       <View style={styles.diffContainer}>{bodyContent}</View>
 
-      <CommitsSection serverId={serverId} cwd={cwd} onCommitPress={handleCommitPress} />
+      <CommitsSection
+        serverId={serverId}
+        cwd={cwd}
+        baseRef={comparisonBaseRef}
+        onCommitPress={handleCommitPress}
+      />
     </View>
   );
 }
@@ -2989,6 +3043,13 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     justifyContent: "space-between",
     paddingRight: theme.spacing[3],
+  },
+  diffComparisonControls: {
+    minWidth: 0,
+    flexShrink: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[1],
   },
   diffModeTrigger: {
     flexDirection: "row",

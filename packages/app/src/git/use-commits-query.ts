@@ -12,6 +12,7 @@ const CHECKOUT_COMMITS_STALE_TIME = 30_000;
 interface UseCheckoutCommitsQueryOptions {
   serverId: string;
   cwd: string;
+  baseRef?: string;
   enabled?: boolean;
 }
 
@@ -70,6 +71,7 @@ export function resolveCheckoutCommitsQueryResult({
 export function useCheckoutCommitsQuery({
   serverId,
   cwd,
+  baseRef,
   enabled = true,
 }: UseCheckoutCommitsQueryOptions): CheckoutCommitsQueryResult {
   const client = useHostRuntimeClient(serverId);
@@ -87,12 +89,12 @@ export function useCheckoutCommitsQuery({
   const queryEnabled = enabled && capabilityPresent && canFetch;
 
   const query = useFetchQuery<CheckoutCommitsData>({
-    queryKey: checkoutCommitsQueryKey(serverId, cwd),
+    queryKey: checkoutCommitsQueryKey(serverId, cwd, baseRef),
     queryFn: async () => {
       if (!client) {
         throw new Error("Host disconnected");
       }
-      const data = await client.listCheckoutCommits(cwd);
+      const data = await client.listCheckoutCommits(cwd, { baseRef });
       const commits = data.commits.map((commit) => {
         invariant(commit.isOnBase !== undefined, "Host omitted commit base classification");
         return { ...commit, isOnBase: commit.isOnBase };

@@ -1745,6 +1745,8 @@ const CheckoutCommitSchema = z.object({
 export const CheckoutCommitsListRequestSchema = z.object({
   type: z.literal("checkout.commits.list.request"),
   cwd: z.string(),
+  // COMPAT(changesBaseSelector): added in Paseito v0.2.5-paseito.1, remove after 2027-02-04.
+  baseRef: z.string().optional(),
   requestId: z.string(),
 });
 
@@ -2826,6 +2828,8 @@ export const ServerInfoStatusPayloadSchema = z
         commitsList: z.boolean().optional(),
         // COMPAT(commitBaseClassification): added in v0.2.0, remove gate after 2027-01-23.
         commitBaseClassification: z.boolean().optional(),
+        // COMPAT(changesBaseSelector): added in Paseito v0.2.5-paseito.1, remove gate after 2027-02-04.
+        changesBaseSelector: z.boolean().optional(),
         // COMPAT(providerRemoval): added in v0.1.105, drop the gate when floor >= v0.1.105.
         providerRemoval: z.boolean().optional(),
         // COMPAT(importSessionWorkspaceTarget): added in v0.1.110, remove gate after 2027-01-16.

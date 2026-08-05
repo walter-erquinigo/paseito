@@ -13,6 +13,7 @@ import {
 } from "@/review";
 import { useCheckoutDiffQuery } from "@/git/use-diff-query";
 import { useCheckoutStatusQuery } from "@/git/use-status-query";
+import { useChangesBaseSelection } from "@/git/use-changes-base-selection";
 
 interface UseWorkingDiffOptions {
   serverId: string;
@@ -21,6 +22,16 @@ interface UseWorkingDiffOptions {
   ignoreWhitespace: boolean;
   enabled: boolean;
   queryScope?: string;
+}
+
+function resolveSelectedComparisonBaseRef(
+  selection: ReturnType<typeof useChangesBaseSelection>,
+): string | undefined {
+  return selection.supported &&
+    selection.selectedBaseRef !== null &&
+    selection.selectedBaseRef === selection.effectiveBaseRef
+    ? selection.effectiveBaseRef
+    : undefined;
 }
 
 export function useWorkingDiff({
@@ -43,10 +54,19 @@ export function useWorkingDiff({
   const statusErrorMessage =
     status?.error?.message ??
     (isStatusError && statusError instanceof Error ? statusError.message : null);
-  const baseRef = gitStatus?.baseRef ?? undefined;
+  const recordedBaseRef = gitStatus?.baseRef ?? undefined;
   const hasUncommittedChanges = Boolean(gitStatus?.isDirty);
   const currentBranchName =
     gitStatus?.currentBranch && gitStatus.currentBranch !== "HEAD" ? gitStatus.currentBranch : null;
+  const baseSelection = useChangesBaseSelection({
+    serverId,
+    cwd,
+    repoRoot: gitStatus?.repoRoot,
+    currentBranch: currentBranchName,
+    recordedBaseRef,
+  });
+  const baseRef = baseSelection.effectiveBaseRef;
+  const comparisonBaseRef = resolveSelectedComparisonBaseRef(baseSelection);
 
   const reviewDraftScopeKey = useMemo(
     () =>
@@ -85,7 +105,7 @@ export function useWorkingDiff({
     serverId,
     cwd,
     mode: diffMode,
-    baseRef,
+    baseRef: comparisonBaseRef,
     ignoreWhitespace,
     enabled: enabled && isGit,
     queryScope,
@@ -118,6 +138,8 @@ export function useWorkingDiff({
     notGit,
     statusErrorMessage,
     baseRef,
+    comparisonBaseRef,
+    baseSelection,
     currentBranchName,
     diffMode,
     selectUncommitted,

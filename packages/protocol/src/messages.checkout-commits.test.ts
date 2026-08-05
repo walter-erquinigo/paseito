@@ -23,6 +23,17 @@ describe("checkout.commits.list schemas", () => {
     });
   });
 
+  test("parses an optional custom comparison base", () => {
+    expect(
+      CheckoutCommitsListRequestSchema.parse({
+        type: "checkout.commits.list.request",
+        cwd: "/tmp/repo",
+        baseRef: "origin/release",
+        requestId: "request-custom-base",
+      }),
+    ).toMatchObject({ baseRef: "origin/release" });
+  });
+
   test("parses a valid response with local-only and remote commits", () => {
     const payload = {
       cwd: "/tmp/repo",
@@ -144,9 +155,14 @@ describe("checkout.commits.list schemas", () => {
         features: {
           commitsList: true,
           commitBaseClassification: true,
+          changesBaseSelector: true,
         },
       }).features,
-    ).toEqual({ commitsList: true, commitBaseClassification: true });
+    ).toEqual({
+      commitsList: true,
+      commitBaseClassification: true,
+      changesBaseSelector: true,
+    });
   });
 
   test("still parses server_info without the commitsList feature flag", () => {

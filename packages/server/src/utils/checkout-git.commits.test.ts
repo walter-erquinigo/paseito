@@ -205,6 +205,33 @@ describe("listCheckoutCommits", () => {
     ]);
   });
 
+  it("classifies history from the merge base of an explicit comparison branch", async () => {
+    const { repoDir } = initRepoOnMain();
+    git(["checkout", "-b", "develop"], repoDir);
+    commitFile(repoDir, "develop.txt", "develop\n", "Develop work");
+    git(["checkout", "-b", "feature"], repoDir);
+    commitFile(repoDir, "feature.txt", "feature\n", "Feature work");
+
+    const againstMain = await listCheckoutCommits({ cwd: repoDir, baseRef: "main" });
+    const againstDevelop = await listCheckoutCommits({ cwd: repoDir, baseRef: "develop" });
+
+    expect(
+      againstMain.commits.filter((entry) => !entry.isOnBase).map((entry) => entry.subject),
+    ).toEqual(["Feature work", "Develop work"]);
+    expect(
+      againstDevelop.commits.filter((entry) => !entry.isOnBase).map((entry) => entry.subject),
+    ).toEqual(["Feature work"]);
+  });
+
+  it("rejects a missing explicit comparison branch instead of falling back", async () => {
+    const { repoDir } = initRepoOnMain();
+    git(["checkout", "-b", "feature"], repoDir);
+
+    await expect(listCheckoutCommits({ cwd: repoDir, baseRef: "missing" })).rejects.toThrow(
+      "Base branch not found locally: missing",
+    );
+  });
+
   it("limits base-branch history to 10 commits", async () => {
     const { repoDir } = initRepoOnMain();
     for (let index = 1; index <= 14; index += 1) {
