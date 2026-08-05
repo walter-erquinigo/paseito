@@ -47,6 +47,34 @@ class InstallerTests(unittest.TestCase):
         with self.assertRaises(InstallError):
             validate_provenance(value, value["releaseTag"], commit)
 
+    def test_schema_two_binds_desktop_to_multi_platform_artifact_set(self) -> None:
+        commit = "a" * 40
+        desktop = {"name": "Paseito-0.2.5-paseito.3-arm64.zip", "sha256": "b" * 64}
+        value = {
+            "schemaVersion": 2,
+            "paseitoRepository": "walter-erquinigo/paseito",
+            "releaseTag": "paseito-v0.2.5-paseito.3",
+            "paseitoCommit": commit,
+            "paseitoVersion": "0.2.5-paseito.3",
+            "platform": "darwin",
+            "architecture": "arm64",
+            "artifact": desktop,
+            "artifacts": [
+                {"kind": "desktop", "platform": "darwin", "architecture": "arm64", **desktop},
+                {
+                    "kind": "daemon",
+                    "platform": "linux",
+                    "architecture": "x64",
+                    "name": "Paseito-daemon-0.2.5-paseito.3-linux-x64.tar.gz",
+                    "sha256": "c" * 64,
+                },
+            ],
+        }
+        self.assertIs(validate_provenance(value, value["releaseTag"], commit), value)
+        value["artifacts"][0]["sha256"] = "d" * 64
+        with self.assertRaises(InstallError):
+            validate_provenance(value, value["releaseTag"], commit)
+
     def test_checksum_requires_bytes_and_checksum_asset_to_match_provenance(self) -> None:
         digest = "b" * 64
         name = "Paseito-0.2.5-paseito.1-arm64.zip"
