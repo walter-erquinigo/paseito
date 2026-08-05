@@ -28,7 +28,7 @@ export interface DaemonConnectionCommandError {
   details: string;
 }
 
-const DEFAULT_HOST = "localhost:6767";
+const DEFAULT_HOST = "localhost:6769";
 const DEFAULT_TIMEOUT = 15000;
 const PID_FILENAME = "paseo.pid";
 
@@ -59,7 +59,7 @@ export function buildDaemonConnectionCommandError(options: {
   return {
     code: "DAEMON_NOT_RUNNING",
     message: `Cannot connect to daemon at ${host}: ${message}`,
-    details: "Start the daemon with: paseo daemon start",
+    details: "Start the daemon with: paseito daemon start",
   };
 }
 
@@ -166,7 +166,7 @@ function resolveConfiguredTcpDaemonHost(env: NodeJS.ProcessEnv, paseoHome: strin
   if (!isTcpDaemonHost(configuredHost)) {
     return null;
   }
-  return configuredHost === "127.0.0.1:6767" ? null : configuredHost;
+  return configuredHost === "127.0.0.1:6769" ? null : configuredHost;
 }
 
 export function resolveDefaultDaemonHosts(env: NodeJS.ProcessEnv = process.env): string[] {
@@ -364,7 +364,7 @@ export async function connectToDaemon(options?: ConnectOptions): Promise<DaemonC
   async function tryNext(index: number, lastError: unknown): Promise<DaemonClient> {
     if (index >= hosts.length) {
       if (lastError instanceof Error) throw lastError;
-      throw new Error(`Unable to connect to Paseo daemon via ${hosts.join(", ")}`);
+      throw new Error(`Unable to connect to Paseito daemon via ${hosts.join(", ")}`);
     }
     const host = hosts[index];
     const password = resolveDaemonPassword(host);

@@ -329,7 +329,7 @@ const CONFIG_FILENAME = "config.json";
 const DEFAULT_PERSISTED_CONFIG = PersistedConfigSchema.parse({
   version: 1,
   daemon: {
-    listen: "127.0.0.1:6767",
+    listen: "127.0.0.1:6769",
     cors: {
       allowedOrigins: ["https://app.paseo.sh"],
     },

@@ -15,7 +15,7 @@ const PAIRING_DAEMON_RPC_TIMEOUT_MS = 1500;
 
 export function pairCommand(): Command {
   return addJsonOption(new Command("pair").description("Print the daemon pairing QR code and link"))
-    .option("--home <path>", "Paseo home directory (default: ~/.paseo)")
+    .option("--home <path>", "Paseito home directory (default: ~/.paseito)")
     .action(async (_options: PairOptions, command: Command) => {
       await runPairCommand(command.optsWithGlobals());
     });

@@ -131,7 +131,7 @@ describe("Hub device authorization", () => {
         return "approved-enrollment-token-1234567890";
       },
       displayName: () => "Studio Mac",
-    }).parseAsync(["node", "paseo hub", "connect", "https://cloud.paseo.test", "--json"], {
+    }).parseAsync(["node", "paseito hub", "connect", "https://cloud.paseo.test", "--json"], {
       from: "node",
     });
 
@@ -155,7 +155,7 @@ describe("Hub device authorization", () => {
         return "approved-enrollment-token-1234567890";
       },
       displayName: () => `  ${"very-long-hostname".repeat(10)}  `,
-    }).parseAsync(["node", "paseo hub", "connect", "https://cloud.paseo.test", "--json"], {
+    }).parseAsync(["node", "paseito hub", "connect", "https://cloud.paseo.test", "--json"], {
       from: "node",
     });
 

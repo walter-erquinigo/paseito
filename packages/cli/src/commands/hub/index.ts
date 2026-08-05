@@ -100,7 +100,7 @@ async function withClient<T>(
 export function createHubCommand(
   environment: HubCommandEnvironment = productionEnvironment,
 ): Command {
-  const hub = new Command("hub").description("Manage this daemon's Paseo Hub relationship");
+  const hub = new Command("hub").description("Manage this daemon's Paseito Hub relationship");
   addJsonAndDaemonHostOptions(
     hub.command("connect").argument("<url>").option("--token <token>"),
   ).action(
@@ -148,5 +148,5 @@ export function createHubCommand(
 }
 
 function suggestedDisplayName(value: string): string {
-  return value.trim().slice(0, 100) || "Paseo daemon";
+  return value.trim().slice(0, 100) || "Paseito daemon";
 }

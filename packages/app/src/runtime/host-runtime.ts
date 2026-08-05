@@ -1271,7 +1271,7 @@ export class HostRuntimeController {
 }
 
 const REGISTRY_STORAGE_KEY = "@paseo:daemon-registry";
-const LOCALHOST_FALLBACK_ENDPOINT = "localhost:6767";
+const LOCALHOST_FALLBACK_ENDPOINT = "localhost:6769";
 const DEFAULT_LOCALHOST_BOOTSTRAP_TIMEOUT_MS = 2500;
 const E2E_STORAGE_KEY = "@paseo:e2e";
 const INITIAL_DAEMON_CONNECTION_HINT_GLOBAL_KEY = "__PASEO_INITIAL_DAEMON_CONNECTION__";
