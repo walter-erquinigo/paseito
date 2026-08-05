@@ -15,9 +15,13 @@ def agent(
     script: Path,
     interval: int | None = None,
     calendar_hour: int | None = None,
+    calendar_minute: int | None = None,
     run_at_load: bool = True,
 ) -> dict[str, object]:
-    if (interval is None) == (calendar_hour is None):
+    schedule_count = sum(
+        value is not None for value in (interval, calendar_hour, calendar_minute)
+    )
+    if schedule_count != 1:
         raise ValueError("exactly one launch schedule is required")
     log_root = Path.home() / "Library/Logs/PaseitoAutomation"
     value: dict[str, object] = {
@@ -33,8 +37,10 @@ def agent(
     }
     if interval is not None:
         value["StartInterval"] = interval
-    else:
+    elif calendar_hour is not None:
         value["StartCalendarInterval"] = {"Hour": calendar_hour, "Minute": 0}
+    else:
+        value["StartCalendarInterval"] = {"Minute": calendar_minute}
     return value
 
 
@@ -57,7 +63,7 @@ def main() -> int:
     definitions = {
         "dev.werquinigo.paseito.semantic-sync": (
             repo / "automation/release/local_watchdog.py",
-            {"interval": 3600, "run_at_load": False},
+            {"calendar_minute": 0, "run_at_load": False},
         ),
         "dev.werquinigo.paseito.daily-report": (
             repo / "automation/reporting/local_smtp_report.py",
