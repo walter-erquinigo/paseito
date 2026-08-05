@@ -111,6 +111,17 @@ class RebasePipelineTests(unittest.TestCase):
         self.assertNotIn("git push", workflow)
         self.assertNotIn("gh release create", workflow)
 
+    def test_workflow_builds_both_platform_artifacts_before_provenance(self) -> None:
+        workflow = (Path(__file__).parents[2] / ".github/workflows/paseito-release.yml").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("verify-macos:", workflow)
+        self.assertIn("verify-linux-daemon:", workflow)
+        self.assertIn("needs: [verify-macos, verify-linux-daemon]", workflow)
+        self.assertIn("package_linux_daemon.py", workflow)
+        self.assertIn("--linux-artifact", workflow)
+        self.assertLess(workflow.index("verify-linux-daemon:"), workflow.index("assemble-provenance:"))
+
     def test_watchdog_runs_local_semantic_controller(self) -> None:
         watchdog = (Path(__file__).parent / "local_watchdog.py").read_text(encoding="utf-8")
         self.assertIn("semantic_sync.py", watchdog)
@@ -119,6 +130,12 @@ class RebasePipelineTests(unittest.TestCase):
     def test_local_controller_builds_dependencies_before_contract_tests(self) -> None:
         controller = (Path(__file__).parent / "semantic_sync.py").read_text(encoding="utf-8")
         self.assertLess(controller.index('"build:server"'), controller.index('"vitest"'))
+
+    def test_remote_deployment_is_report_only_after_mac_install(self) -> None:
+        controller = (Path(__file__).parent / "semantic_sync.py").read_text(encoding="utf-8")
+        self.assertLess(controller.index("paseito_installer.py"), controller.index("deploy_remote_daemons.py"))
+        remote_call = controller[controller.index("deploy_remote_daemons.py") :]
+        self.assertIn("check=False", remote_call[:500])
 
 
 if __name__ == "__main__":

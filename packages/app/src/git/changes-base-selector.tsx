@@ -4,6 +4,7 @@ import { GitCompareArrows } from "lucide-react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
 import { Combobox, ComboboxItem, type ComboboxProps } from "@/components/ui/combobox";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/contexts/toast-context";
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import { useFetchQuery } from "@/data/query";
@@ -21,6 +22,7 @@ interface ChangesBaseSelectorProps {
   recordedBaseRef?: string;
   selectedBaseRef: string | null;
   effectiveBaseRef?: string;
+  supported: boolean;
   onSelect: (baseRef: string | null) => Promise<void>;
 }
 
@@ -34,6 +36,7 @@ export function ChangesBaseSelector({
   recordedBaseRef,
   selectedBaseRef,
   effectiveBaseRef,
+  supported,
   onSelect,
 }: ChangesBaseSelectorProps) {
   const { t } = useTranslation();
@@ -56,7 +59,7 @@ export function ChangesBaseSelector({
       const details = payload.branchDetails ?? [];
       return details.length > 0 ? details : payload.branches.map((name) => ({ name }));
     },
-    enabled: open && Boolean(client) && isConnected,
+    enabled: supported && open && Boolean(client) && isConnected,
     retry: false,
     staleTimeMs: 15_000,
     dataShape: "list",
@@ -116,7 +119,12 @@ export function ChangesBaseSelector({
     ],
     [open],
   );
-  const handleOpen = useCallback(() => setOpen(true), []);
+  const accessibilityState = useMemo(() => ({ disabled: !supported }), [supported]);
+  const handleOpen = useCallback(() => {
+    if (supported) {
+      setOpen(true);
+    }
+  }, [supported]);
 
   if (!currentBranch) {
     return null;
@@ -125,36 +133,56 @@ export function ChangesBaseSelector({
     displayChangesBaseRef(effectiveBaseRef ?? recordedBaseRef) ?? t("workspace.git.diff.base");
   const value = normalizeChangesBaseRef(effectiveBaseRef ?? recordedBaseRef) ?? label;
 
+  const trigger = (
+    <Pressable
+      testID="changes-base-selector"
+      accessibilityRole="button"
+      accessibilityLabel={
+        supported
+          ? t("workspace.git.diff.baseSelectorLabel", { baseRef: label })
+          : t("workspace.git.diff.baseSelectorUpdateHost")
+      }
+      accessibilityState={accessibilityState}
+      onPress={handleOpen}
+      style={triggerStyle}
+    >
+      <ThemedGitCompareArrows size={13} uniProps={iconColorMapping} />
+      <Text style={[styles.label, !supported && styles.disabledLabel]} numberOfLines={1}>
+        <Text style={styles.prefix}>{t("workspace.git.diff.base")}:</Text> {label}
+      </Text>
+    </Pressable>
+  );
+
   return (
     <View ref={anchorRef} collapsable={false} style={styles.anchor}>
-      <Pressable
-        testID="changes-base-selector"
-        accessibilityRole="button"
-        accessibilityLabel={t("workspace.git.diff.baseSelectorLabel", { baseRef: label })}
-        onPress={handleOpen}
-        style={triggerStyle}
-      >
-        <ThemedGitCompareArrows size={13} uniProps={iconColorMapping} />
-        <Text style={styles.label} numberOfLines={1}>
-          {label}
-        </Text>
-      </Pressable>
-      <Combobox
-        options={options}
-        value={value}
-        onSelect={handleSelect}
-        searchable
-        title={t("workspace.git.diff.baseSelectorTitle")}
-        searchPlaceholder={t("workspace.git.diff.baseSelectorSearch")}
-        emptyText={t("workspace.git.diff.baseSelectorEmpty")}
-        open={open}
-        onOpenChange={setOpen}
-        anchorRef={anchorRef}
-        desktopPlacement="bottom-start"
-        desktopMinWidth={280}
-        desktopPreventInitialFlash
-        renderOption={renderOption}
-      />
+      {supported ? (
+        trigger
+      ) : (
+        <Tooltip delayDuration={300} enabledOnDesktop enabledOnMobile={false}>
+          <TooltipTrigger asChild>{trigger}</TooltipTrigger>
+          <TooltipContent side="bottom" align="start" offset={6}>
+            <Text style={styles.tooltipText}>{t("workspace.git.diff.baseSelectorUpdateHost")}</Text>
+          </TooltipContent>
+        </Tooltip>
+      )}
+      {supported ? (
+        <Combobox
+          options={options}
+          value={value}
+          onSelect={handleSelect}
+          searchable
+          title={t("workspace.git.diff.baseSelectorTitle")}
+          searchPlaceholder={t("workspace.git.diff.baseSelectorSearch")}
+          emptyText={t("workspace.git.diff.baseSelectorEmpty")}
+          open={open}
+          onOpenChange={setOpen}
+          anchorRef={anchorRef}
+          desktopPlacement="bottom-start"
+          desktopMinWidth={280}
+          desktopPreventInitialFlash
+          renderOption={renderOption}
+        />
+      ) : null}
     </View>
   );
 }
@@ -182,5 +210,15 @@ const styles = StyleSheet.create((theme) => ({
     flexShrink: 1,
     fontSize: theme.fontSize.xs,
     color: theme.colors.foregroundMuted,
+  },
+  prefix: {
+    textTransform: "capitalize",
+  },
+  disabledLabel: {
+    opacity: theme.opacity[50],
+  },
+  tooltipText: {
+    fontSize: theme.fontSize.xs,
+    color: theme.colors.foreground,
   },
 }));

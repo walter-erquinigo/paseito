@@ -843,6 +843,7 @@ export const ptBR: TranslationResources = {
         baseSelectorEmpty: "Nenhuma branch correspondente",
         baseSelectorMissing: "A branch {{baseRef}} não existe mais",
         baseSelectorError: "Não foi possível alterar a branch de comparação",
+        baseSelectorUpdateHost: "Atualize o host para selecionar uma branch base",
         branchUnknown: "Desconhecido",
         base: "base",
         newFile: "Novo",

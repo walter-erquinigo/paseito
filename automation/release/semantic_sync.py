@@ -249,7 +249,7 @@ def focused_verification(candidate: Path) -> None:
     ]
     for args in commands:
         command(args, cwd=candidate, timeout=1800)
-    for suite in ("release", "installer", "launchagents", "migration", "reporting"):
+    for suite in ("release", "installer", "launchagents", "migration", "reporting", "remote"):
         command(
             [sys.executable, "-m", "unittest", "discover", "-s", f"automation/{suite}", "-p", "test_*.py"],
             cwd=candidate,
@@ -363,7 +363,7 @@ def wait_for_workflow(control_repo: Path, display_fragment: str, started: dateti
 
 def validate_artifacts(
     directory: Path, values: dict[str, str], commit: str, decision_path: Path
-) -> tuple[Path, Path, Path]:
+) -> tuple[Path, ...]:
     provenance_path = directory / "provenance.json"
     provenance = load_object(provenance_path)
     expected = {
@@ -375,15 +375,46 @@ def validate_artifacts(
     }
     if any(provenance.get(key) != value for key, value in expected.items()):
         raise SyncError("provenance", "candidate artifact provenance does not match local decision")
-    artifact = directory / str(provenance.get("artifact", {}).get("name", ""))
-    checksum = artifact.with_name(artifact.name + ".sha256")
-    if not artifact.is_file() or not checksum.is_file():
-        raise SyncError("artifact", "candidate artifact set is incomplete")
-    digest = sha256(artifact)
-    if digest != provenance["artifact"]["sha256"]:
-        raise SyncError("checksum", "candidate artifact checksum does not match provenance")
-    if checksum.read_text(encoding="utf-8") != f"{digest}  {artifact.name}\n":
-        raise SyncError("checksum", "candidate checksum file is malformed")
+    entries = provenance.get("artifacts")
+    if provenance.get("schemaVersion") != 2 or not isinstance(entries, list):
+        raise SyncError("provenance", "candidate provenance has no versioned artifact set")
+    expected_artifacts = {
+        ("desktop", "darwin", "arm64"),
+        ("daemon", "linux", "x64"),
+    }
+    actual_artifacts: set[tuple[str, str, str]] = set()
+    artifact_paths: list[Path] = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            raise SyncError("provenance", "candidate provenance has an invalid artifact entry")
+        identity = (
+            str(entry.get("kind", "")),
+            str(entry.get("platform", "")),
+            str(entry.get("architecture", "")),
+        )
+        actual_artifacts.add(identity)
+        artifact = directory / str(entry.get("name", ""))
+        checksum = artifact.with_name(artifact.name + ".sha256")
+        if not artifact.is_file() or not checksum.is_file():
+            raise SyncError("artifact", "candidate artifact set is incomplete")
+        digest = sha256(artifact)
+        if digest != entry.get("sha256"):
+            raise SyncError("checksum", "candidate artifact checksum does not match provenance")
+        if checksum.read_text(encoding="utf-8") != f"{digest}  {artifact.name}\n":
+            raise SyncError("checksum", "candidate checksum file is malformed")
+        artifact_paths.extend((artifact, checksum))
+    if actual_artifacts != expected_artifacts or len(entries) != len(expected_artifacts):
+        raise SyncError("artifact", "candidate artifact platforms are incomplete")
+    desktop = next(
+        entry
+        for entry in entries
+        if isinstance(entry, dict) and entry.get("kind") == "desktop"
+    )
+    if provenance.get("artifact") != {
+        "name": desktop.get("name"),
+        "sha256": desktop.get("sha256"),
+    }:
+        raise SyncError("provenance", "legacy desktop artifact does not match artifact set")
     if provenance.get("semanticDecision", {}).get("sha256") != sha256(decision_path):
         raise SyncError("provenance", "semantic decision record does not match provenance")
     required_tests = {
@@ -395,11 +426,12 @@ def validate_artifacts(
         "feature",
         "upstream",
         "packagedDesktopSmoke",
+        "packagedLinuxDaemonSmoke",
     }
     tests = provenance.get("tests", {})
     if not isinstance(tests, dict) or any(tests.get(name) != "passed" for name in required_tests):
         raise SyncError("provenance", "candidate provenance does not attest every required check")
-    return artifact, checksum, provenance_path
+    return (*artifact_paths, provenance_path)
 
 
 def promote(
@@ -409,7 +441,7 @@ def promote(
     original_commit: str,
     commit: str,
     values: dict[str, str],
-    artifacts: tuple[Path, Path, Path],
+    artifacts: tuple[Path, ...],
 ) -> None:
     tag = values["release_tag"]
     branch_lines = git(candidate, "ls-remote", "fork", "refs/heads/paseito").splitlines()
@@ -478,6 +510,23 @@ def promote(
         )
     command(["git", "push", "fork", "--delete", branch], cwd=candidate, check=False, timeout=120)
     command([sys.executable, str(candidate / "automation/installer/paseito_installer.py")], cwd=candidate, timeout=600)
+    remote = command(
+        [
+            sys.executable,
+            str(candidate / "automation/remote/deploy_remote_daemons.py"),
+            "--provenance",
+            str(artifacts[-1]),
+        ],
+        cwd=candidate,
+        check=False,
+        timeout=600,
+    )
+    if remote.returncode:
+        print(
+            "Paseito Mac promotion succeeded; at least one registered remote deployment failed "
+            "and was recorded for the daily report.",
+            file=sys.stderr,
+        )
 
 
 def pending_path(state_root: Path) -> Path:
@@ -491,7 +540,7 @@ def save_pending(
     original_commit: str,
     commit: str,
     values: dict[str, str],
-    artifacts: tuple[Path, Path, Path],
+    artifacts: tuple[Path, ...],
 ) -> None:
     value = {
         "candidate": str(candidate),
@@ -515,9 +564,9 @@ def resume_pending(control_repo: Path, state_root: Path) -> bool:
     value = load_object(path)
     candidate = Path(str(value["candidate"]))
     raw_artifacts = value.get("artifacts")
-    if not isinstance(raw_artifacts, list) or len(raw_artifacts) != 3:
+    if not isinstance(raw_artifacts, list) or len(raw_artifacts) != 5:
         raise SyncError("promotion", "pending promotion artifact list is invalid")
-    artifacts = (Path(str(raw_artifacts[0])), Path(str(raw_artifacts[1])), Path(str(raw_artifacts[2])))
+    artifacts = tuple(Path(str(item)) for item in raw_artifacts)
     if not all(item.is_file() for item in artifacts):
         raise SyncError("promotion", "pending promotion artifacts are missing")
     commit = str(value["commit"])

@@ -97,6 +97,7 @@ def collect(local_status: dict[str, Any] | None) -> dict[str, Any]:
 def render_html(date_key: str, report: dict[str, Any]) -> str:
     local = report["localStatus"]
     failures = report.get("failureIssues") or [report.get("failureIssue")]
+    remote_hosts = local.get("remoteHosts") or []
     rows = [
         ("Upstream version", report["upstreamVersion"]),
         ("Semantic reconciliation", report["semanticResult"]),
@@ -112,6 +113,16 @@ def render_html(date_key: str, report: dict[str, Any]) -> str:
         ("Local installation", local.get("result", "not reported")),
         ("Local status timestamp", local.get("timestamp") or "not reported"),
         ("Pending restart", "yes" if local.get("pendingRestart") else "no"),
+        (
+            "Remote deployments",
+            ", ".join(
+                f"{item.get('host', 'unknown')}: {item.get('result', 'not reported')} "
+                f"({item.get('version') or 'unknown version'}, {item.get('category', 'unknown')})"
+                for item in remote_hosts
+                if isinstance(item, dict)
+            )
+            or "none registered",
+        ),
         ("Unresolved automation failures", ", ".join(str(value) for value in failures if value) or "none"),
     ]
     rendered = "".join(

@@ -832,6 +832,7 @@ export const ja: TranslationResources = {
         baseSelectorEmpty: "一致するブランチがありません",
         baseSelectorMissing: "ブランチ {{baseRef}} は存在しません",
         baseSelectorError: "比較ブランチを変更できませんでした",
+        baseSelectorUpdateHost: "ベースブランチを選択するにはホストを更新してください",
         branchUnknown: "不明",
         base: "ベース",
         newFile: "新規",
