@@ -78,8 +78,20 @@ class RemoteDeploymentTests(unittest.TestCase):
         self.assertIn("remote-busy:", REMOTE_INSTALL)
         self.assertIn("rollback()", REMOTE_INSTALL)
         self.assertIn('systemctl --user restart "$service"', REMOTE_INSTALL)
+        self.assertIn('for _ in $(seq 1 30); do\n  status=', REMOTE_INSTALL)
+        self.assertIn('.connectedDaemon 2>/dev/null)', REMOTE_INSTALL)
+        self.assertGreater(
+            REMOTE_INSTALL.index('test -s "$HOME/$paseo_home/paseo.pid"'),
+            REMOTE_INSTALL.index('.daemonVersion)" = "$daemon_version"'),
+        )
+        self.assertIn('select(.time >= $since and .msg == "relay_control_connected")', REMOTE_INSTALL)
+        self.assertNotIn("journalctl --user-unit", REMOTE_INSTALL)
         self.assertIn("changesBaseSelector", REMOTE_INSTALL)
         self.assertGreaterEqual(REMOTE_INSTALL.count("ensure_idle"), 3)
+
+    def test_vpn_upload_has_a_bounded_slow_link_allowance(self) -> None:
+        source = Path(__file__).with_name("deploy_remote_daemons.py").read_text(encoding="utf-8")
+        self.assertIn("timeout=900", source)
 
     def test_state_is_atomic_and_private(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

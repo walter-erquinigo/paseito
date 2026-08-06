@@ -239,22 +239,32 @@ ln -sfn "$release" "$current.next"
 mv -Tf "$current.next" "$current"
 mv "$unit_next" "$unit"
 systemctl --user daemon-reload
+cutover_time="$(date +%s000)"
 systemctl --user restart "$service"
 for _ in $(seq 1 30); do
   systemctl --user is-active --quiet "$service" && break
   sleep 1
 done
 systemctl --user is-active --quiet "$service"
-test -s "$HOME/$paseo_home/paseo.pid"
 test "$(cat "$HOME/$paseo_home/server-id")" = "$before_id"
-status="$($node "$current/$entry" daemon status --home "$HOME/$paseo_home" --json)"
-test "$(printf '%s' "$status" | jq -r .connectedDaemon)" = reachable
-test "$(printf '%s' "$status" | jq -r .daemonVersion)" = "$daemon_version"
+status=""
 for _ in $(seq 1 30); do
-  journalctl --user-unit "$service" --since '-2 minutes' --no-pager | grep -q relay_control_connected && break
+  status="$($node "$current/$entry" daemon status --home "$HOME/$paseo_home" --json 2>/dev/null || true)"
+  if test "$(printf '%s' "$status" | jq -r .connectedDaemon 2>/dev/null)" = reachable \
+    && test "$(printf '%s' "$status" | jq -r .daemonVersion 2>/dev/null)" = "$daemon_version"; then
+    break
+  fi
   sleep 1
 done
-journalctl --user-unit "$service" --since '-2 minutes' --no-pager | grep -q relay_control_connected
+test "$(printf '%s' "$status" | jq -r .connectedDaemon)" = reachable
+test "$(printf '%s' "$status" | jq -r .daemonVersion)" = "$daemon_version"
+test -s "$HOME/$paseo_home/paseo.pid"
+for _ in $(seq 1 30); do
+  relay_connected="$(tail -n 2000 "$HOME/$paseo_home/daemon.log" | jq -Rr --argjson since "$cutover_time" 'fromjson? | select(.time >= $since and .msg == "relay_control_connected") | .msg' | tail -n 1)"
+  test "$relay_connected" = relay_control_connected && break
+  sleep 1
+done
+test "$relay_connected" = relay_control_connected
 cutover=0
 trap - ERR
 printf '%s\n' "$before_id"
@@ -303,7 +313,7 @@ def deploy_host(host: dict[str, str], artifact: Path, provenance: dict[str, Any]
     remote_bundle = f"{stage}/{artifact.name}"
     copied = command(
         ["scp", "-q", "-o", "BatchMode=yes", str(artifact), f"{target}:{remote_bundle}"],
-        timeout=300,
+        timeout=900,
     )
     if copied.returncode:
         raise DeploymentError("upload", "Linux daemon upload failed")
