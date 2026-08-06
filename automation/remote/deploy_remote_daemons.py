@@ -74,6 +74,7 @@ def validate_private_config(path: Path) -> list[dict[str, str]]:
         "service",
         "paseoHome",
         "listen",
+        "toolPath",
     }
     parsed: list[dict[str, str]] = []
     ids: set[str] = set()
@@ -89,6 +90,8 @@ def validate_private_config(path: Path) -> list[dict[str, str]]:
             raise DeploymentError("configuration", "node and runtimeRoot must be absolute paths")
         if host["paseoHome"] != ".paseo" or host["listen"] != "127.0.0.1:6767":
             raise DeploymentError("configuration", "registered host identity settings are not allowed")
+        if any(not entry.startswith("/") for entry in host["toolPath"].split(":")):
+            raise DeploymentError("configuration", "toolPath entries must be absolute paths")
         if "/" in host["service"] or not host["service"].endswith(".service"):
             raise DeploymentError("configuration", "service must be a systemd user unit name")
         if any(not SAFE_REMOTE_VALUE.fullmatch(value) for value in host.values()):
@@ -157,7 +160,8 @@ expected_checksum="$5"
 service="$6"
 paseo_home="$7"
 listen="$8"
-bundle="$9"
+tool_path="$9"
+bundle="${10}"
 unit="$HOME/.config/systemd/user/$service"
 release="$runtime_root/releases/$commit"
 current="$runtime_root/current"
@@ -223,7 +227,7 @@ After=network-online.target
 
 [Service]
 Type=simple
-Environment="PATH=$(dirname "$node"):/usr/local/bin:/usr/bin:/bin"
+Environment="PATH=$tool_path"
 Environment="PASEO_HOME=%h/$paseo_home"
 WorkingDirectory=%h
 ExecStart=$node --disable-warning=DEP0040 $current/$entry daemon start --foreground --home %h/$paseo_home --listen $listen --relay-use-tls
@@ -334,6 +338,7 @@ def deploy_host(host: dict[str, str], artifact: Path, provenance: dict[str, Any]
             host["service"],
             host["paseoHome"],
             host["listen"],
+            host["toolPath"],
             remote_bundle,
         ],
         input_text=REMOTE_INSTALL,
