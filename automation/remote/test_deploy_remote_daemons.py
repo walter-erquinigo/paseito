@@ -30,6 +30,7 @@ class RemoteDeploymentTests(unittest.TestCase):
                                 "service": "paseo.service",
                                 "paseoHome": ".paseo",
                                 "listen": "127.0.0.1:6767",
+                                "toolPath": "/raid/npm/bin:/raid/node/bin:/usr/bin:/bin",
                             }
                         ],
                     }
@@ -40,6 +41,7 @@ class RemoteDeploymentTests(unittest.TestCase):
             hosts = validate_private_config(path)
         self.assertEqual(hosts[0]["paseoHome"], ".paseo")
         self.assertEqual(hosts[0]["listen"], "127.0.0.1:6767")
+        self.assertEqual(hosts[0]["toolPath"].split(":")[0], "/raid/npm/bin")
 
     def test_provenance_selects_checksum_bound_linux_daemon(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -78,6 +80,7 @@ class RemoteDeploymentTests(unittest.TestCase):
         self.assertIn("remote-busy:", REMOTE_INSTALL)
         self.assertIn("rollback()", REMOTE_INSTALL)
         self.assertIn('systemctl --user restart "$service"', REMOTE_INSTALL)
+        self.assertIn('Environment="PATH=$tool_path"', REMOTE_INSTALL)
         self.assertIn('for _ in $(seq 1 30); do\n  status=', REMOTE_INSTALL)
         self.assertIn('.connectedDaemon 2>/dev/null)', REMOTE_INSTALL)
         self.assertGreater(
