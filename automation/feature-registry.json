@@ -28,6 +28,7 @@
         "The selection is scoped by repository root and current branch.",
         "On desktop, the base selector is beside the current branch selector and choosing a base switches Changes to Committed.",
         "Diffs, review attachments and commit history use the selected validated base.",
+        "Branch dropdowns rank the current ancestry stack from base to tip, then werquinigo/ branches, then remaining branches.",
         "Missing refs fall back safely, and hosts without the advertised capability show an explicit update-host state without a degraded fallback."
       ],
       "contracts": [
@@ -37,6 +38,46 @@
         "packages/app/src/git",
         "packages/protocol/src/messages.ts",
         "packages/server/src/utils/checkout-git.ts"
+      ]
+    },
+    {
+      "id": "changes-context-expansion",
+      "permanent": false,
+      "intent": "Load and review omitted source context on demand from the Changes diff without transferring entire files by default.",
+      "invariants": [
+        "Expansion is capability-gated and unavailable against an older daemon.",
+        "Each omitted region offers 20-line upward/downward expansion and a bounded full expansion.",
+        "The daemon validates repository-relative paths, file revisions, a 5000-line limit and a 1 MiB response budget.",
+        "Expanded current-side lines retain syntax highlighting and can receive comments and suggestions."
+      ],
+      "contracts": [
+        "npx vitest run packages/protocol/src/messages.checkout-diff-context.test.ts packages/server/src/utils/checkout-git.context.test.ts packages/app/src/git/diff-context-expansion.test.ts"
+      ],
+      "paths": [
+        "packages/app/src/git",
+        "packages/client/src/daemon-client.ts",
+        "packages/protocol/src/messages.ts",
+        "packages/server/src/utils/checkout-git.ts"
+      ]
+    },
+    {
+      "id": "review-suggestions-v1",
+      "permanent": false,
+      "intent": "Let a reviewer send persisted, structured one- or multi-line replacement suggestions to the destination agent from Changes.",
+      "invariants": [
+        "Suggestions target only contiguous current-side added or context lines in one displayed hunk.",
+        "Replacement text may be empty, must differ from the original, and is bounded to 200 lines and 64 KiB.",
+        "Suggestions are persisted with original lines and source revision; stale suggestions remain visible and block sending until updated or deleted.",
+        "Suggestions are sent only to the destination agent and never mutate a checkout or forge review."
+      ],
+      "contracts": [
+        "npx vitest run packages/app/src/review/store.test.ts packages/app/src/review/surface.test.tsx packages/server/src/server/agent/prompt-attachments.test.ts"
+      ],
+      "paths": [
+        "packages/app/src/review",
+        "packages/app/src/git/diff-pane.tsx",
+        "packages/protocol/src/messages.ts",
+        "packages/server/src/server/agent/prompt-attachments.ts"
       ]
     },
     {

@@ -32,12 +32,14 @@ export function getAttachmentKey(attachment: WorkspaceComposerAttachment): strin
     mode: attachment.attachment.mode,
     baseRef: attachment.attachment.baseRef ?? null,
     reviewDraftKey: attachment.reviewDraftKey,
+    blockingReason: attachment.blockingReason ?? null,
     comments: attachment.attachment.comments.map((comment) => ({
       filePath: comment.filePath,
       side: comment.side,
       lineNumber: comment.lineNumber,
       body: comment.body,
     })),
+    suggestions: attachment.attachment.suggestions ?? [],
   });
 }
 

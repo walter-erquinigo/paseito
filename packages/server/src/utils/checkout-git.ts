@@ -1,4 +1,5 @@
-import { resolve, dirname, basename } from "path";
+import { createHash } from "node:crypto";
+import { resolve, dirname, basename, isAbsolute, relative } from "path";
 import { existsSync, realpathSync } from "fs";
 import { open as openFile, readFile, stat as statFile } from "fs/promises";
 import { TTLCache } from "@isaacs/ttlcache";
@@ -242,6 +243,7 @@ export interface BranchSuggestion {
   hasRemote: boolean;
   localAhead?: number;
   localBehind?: number;
+  stackOrder?: number;
 }
 
 async function listGitRefs(cwd: string, refPrefix: string): Promise<GitRef[]> {
@@ -272,6 +274,7 @@ interface BranchSuggestionMeta {
   hasRemote: boolean;
   localOid?: string;
   remoteOid?: string;
+  stackOrder?: number;
 }
 
 function sortBranchSuggestions(
@@ -290,6 +293,18 @@ function sortBranchSuggestions(
       }
     }
 
+    const aStackOrder = branchMeta.get(a)?.stackOrder;
+    const bStackOrder = branchMeta.get(b)?.stackOrder;
+    if (aStackOrder !== undefined || bStackOrder !== undefined) {
+      if (aStackOrder === undefined) return 1;
+      if (bStackOrder === undefined) return -1;
+      if (aStackOrder !== bStackOrder) return aStackOrder - bStackOrder;
+    }
+
+    const aPreferredOwner = a.startsWith("werquinigo/");
+    const bPreferredOwner = b.startsWith("werquinigo/");
+    if (aPreferredOwner !== bPreferredOwner) return aPreferredOwner ? -1 : 1;
+
     const aMeta = branchMeta.get(a);
     const bMeta = branchMeta.get(b);
     const aDate = aMeta?.committerDate ?? 0;
@@ -300,6 +315,78 @@ function sortBranchSuggestions(
 
     return a.localeCompare(b);
   });
+}
+
+function buildBranchSuggestionMeta(
+  localRefs: GitRef[],
+  remoteRefs: GitRef[],
+): Map<string, BranchSuggestionMeta> {
+  const branchMeta = new Map<string, BranchSuggestionMeta>();
+  for (const ref of localRefs) {
+    const normalized = normalizeBranchSuggestionName(ref.name);
+    if (!normalized) continue;
+    const existing = branchMeta.get(normalized);
+    branchMeta.set(normalized, {
+      hasLocal: true,
+      hasRemote: existing?.hasRemote ?? false,
+      localOid: ref.oid,
+      ...(existing?.remoteOid ? { remoteOid: existing.remoteOid } : {}),
+      committerDate: Math.max(ref.committerDate, existing?.committerDate ?? 0),
+    });
+  }
+  for (const ref of remoteRefs) {
+    const normalized = normalizeBranchSuggestionName(ref.name);
+    if (!normalized) continue;
+    const existing = branchMeta.get(normalized);
+    branchMeta.set(normalized, {
+      hasLocal: existing?.hasLocal ?? false,
+      hasRemote: true,
+      committerDate: Math.max(ref.committerDate, existing?.committerDate ?? 0),
+      ...(existing?.localOid ? { localOid: existing.localOid } : {}),
+      remoteOid: ref.oid,
+    });
+  }
+  return branchMeta;
+}
+
+async function applyCurrentStackOrder(
+  cwd: string,
+  branchNames: string[],
+  branchMeta: Map<string, BranchSuggestionMeta>,
+): Promise<void> {
+  const currentBranch = await getCurrentBranch(cwd);
+  if (!currentBranch) return;
+  try {
+    const { stdout } = await runGitCommand(["rev-list", "--first-parent", currentBranch], {
+      cwd,
+      envOverlay: READ_ONLY_GIT_ENV,
+    });
+    const distanceBySha = new Map(
+      stdout
+        .split("\n")
+        .filter(Boolean)
+        .map((sha, distance) => [sha, distance] as const),
+    );
+    const resolvedBaseRef = await getResolvedBaseRefForCwd(cwd);
+    const mergeBase = resolvedBaseRef ? await tryResolveMergeBase(cwd, resolvedBaseRef) : null;
+    const baseDistance = mergeBase ? distanceBySha.get(mergeBase) : undefined;
+    const isInsideStack = (distance: number | undefined): distance is number =>
+      distance !== undefined && (baseDistance === undefined || distance < baseDistance);
+    const distances = branchNames
+      .map((name) => {
+        const meta = branchMeta.get(name);
+        return distanceBySha.get(meta?.localOid ?? meta?.remoteOid ?? "");
+      })
+      .filter(isInsideStack);
+    const furthestDistance = Math.max(0, ...distances);
+    for (const name of branchNames) {
+      const meta = branchMeta.get(name);
+      const distance = meta ? distanceBySha.get(meta.localOid ?? meta.remoteOid ?? "") : undefined;
+      if (meta && isInsideStack(distance)) meta.stackOrder = furthestDistance - distance;
+    }
+  } catch {
+    // Sorting falls back to owner preference and recency when ancestry is unavailable.
+  }
 }
 
 export async function listBranchSuggestions(
@@ -318,41 +405,7 @@ export async function listBranchSuggestions(
     listGitRefs(cwd, "refs/remotes/origin"),
   ]);
 
-  const branchMeta = new Map<string, BranchSuggestionMeta>();
-
-  for (const ref of localRefs) {
-    const normalized = normalizeBranchSuggestionName(ref.name);
-    if (!normalized) continue;
-    const existing = branchMeta.get(normalized);
-    branchMeta.set(normalized, {
-      hasLocal: true,
-      hasRemote: existing?.hasRemote ?? false,
-      localOid: ref.oid,
-      ...(existing?.remoteOid ? { remoteOid: existing.remoteOid } : {}),
-      committerDate: Math.max(ref.committerDate, existing?.committerDate ?? 0),
-    });
-  }
-
-  for (const ref of remoteRefs) {
-    const normalized = normalizeBranchSuggestionName(ref.name);
-    if (!normalized) continue;
-    const existing = branchMeta.get(normalized);
-    if (!existing) {
-      branchMeta.set(normalized, {
-        hasLocal: false,
-        hasRemote: true,
-        remoteOid: ref.oid,
-        committerDate: ref.committerDate,
-      });
-    } else {
-      branchMeta.set(normalized, {
-        ...existing,
-        hasRemote: true,
-        remoteOid: ref.oid,
-        committerDate: Math.max(ref.committerDate, existing.committerDate),
-      });
-    }
-  }
+  const branchMeta = buildBranchSuggestionMeta(localRefs, remoteRefs);
 
   const filteredNames = Array.from(branchMeta.keys()).filter((name) =>
     query ? name.toLowerCase().includes(query) : true,
@@ -360,6 +413,8 @@ export async function listBranchSuggestions(
   if (filteredNames.length === 0) {
     return [];
   }
+
+  await applyCurrentStackOrder(cwd, filteredNames, branchMeta);
 
   const ordered = sortBranchSuggestions(filteredNames, branchMeta, query);
   return Promise.all(
@@ -834,6 +889,35 @@ export interface CheckoutDiffCompare {
   baseRef?: string;
   ignoreWhitespace?: boolean;
   includeStructured?: boolean;
+}
+
+export interface CheckoutDiffContextRegion {
+  oldStart: number;
+  newStart: number;
+  lineCount: number;
+}
+
+export interface CheckoutDiffContextRequest {
+  compare: CheckoutDiffCompare;
+  filePath: string;
+  expectedRevision?: string;
+  region: CheckoutDiffContextRegion;
+  offset: number;
+  limit: number;
+}
+
+export interface CheckoutDiffContextResult {
+  revision: string;
+  region: CheckoutDiffContextRegion;
+  offset: number;
+  lines: Array<{
+    oldLineNumber: number;
+    newLineNumber: number;
+    content: string;
+    tokens?: Array<{ text: string; style: string | null }>;
+  }>;
+  hasMore: boolean;
+  truncated?: boolean;
 }
 
 export interface MergeToBaseOptions {
@@ -2940,6 +3024,18 @@ interface AppendStructuredTrackedDiffsInput {
   ) => void;
 }
 
+async function readTrackedTargetContent(input: {
+  cwd: string;
+  change: CheckoutFileChange;
+  refsForDiff: CheckoutDiffRefs;
+}): Promise<string | null> {
+  if (input.change.isDeleted) return null;
+  if (input.refsForDiff.targetRef) {
+    return readGitFileContentAtRef(input.cwd, input.refsForDiff.targetRef, input.change.path);
+  }
+  return readFile(resolve(input.cwd, input.change.path), "utf8").catch(() => null);
+}
+
 async function buildHighlightedTrackedDiffFile(input: {
   cwd: string;
   change: CheckoutFileChange;
@@ -2950,7 +3046,7 @@ async function buildHighlightedTrackedDiffFile(input: {
   const refPath = change.oldPath ?? change.path;
   const [oldFileContent, newFileContent] = await Promise.all([
     change.isNew ? null : readGitFileContentAtRef(cwd, refsForDiff.baseRef, refPath),
-    refsForDiff.targetRef ? readGitFileContentAtRef(cwd, refsForDiff.targetRef, change.path) : null,
+    readTrackedTargetContent({ cwd, change, refsForDiff }),
   ]);
   const highlightedFile = await highlightDiffWithFileContent(parsedFile, cwd, {
     oldFileContent,
@@ -2962,6 +3058,9 @@ async function buildHighlightedTrackedDiffFile(input: {
     isNew: change.isNew,
     isDeleted: change.isDeleted,
     status: "ok",
+    oldLineCount: countContentLines(oldFileContent),
+    newLineCount: countContentLines(newFileContent),
+    ...(newFileContent === null ? {} : { revision: hashFileContent(newFileContent) }),
   };
 }
 
@@ -3118,6 +3217,11 @@ async function processUntrackedChange(input: ProcessUntrackedChangeInput): Promi
     isNew: change.isNew,
     isDeleted: change.isDeleted,
     status: "ok",
+    oldLineCount: 0,
+    newLineCount: parsedFile.hunks.reduce(
+      (maximum, hunk) => Math.max(maximum, hunk.newStart + hunk.newCount - 1),
+      0,
+    ),
   } satisfies ParsedDiffFile;
   return appendStructuredFile(structured, file);
 }
@@ -3224,6 +3328,171 @@ async function resolveCheckoutDiffRefs(
     baseRef: (await tryResolveMergeBase(cwd, bestBaseRef)) ?? bestBaseRef,
     targetRef: "HEAD",
     includeUntracked: false,
+  };
+}
+
+const CHECKOUT_DIFF_CONTEXT_MAX_LINES = 5_000;
+const CHECKOUT_DIFF_CONTEXT_MAX_BYTES = 1024 * 1024;
+
+function splitContentLines(content: string | null): string[] {
+  if (content === null || content.length === 0) {
+    return [];
+  }
+  const lines = content.split("\n");
+  if (lines.at(-1) === "") {
+    lines.pop();
+  }
+  return lines;
+}
+
+function countContentLines(content: string | null): number {
+  return splitContentLines(content).length;
+}
+
+function hashFileContent(content: string): string {
+  return createHash("sha256").update(content).digest("hex");
+}
+
+async function resolveContextFileContent(
+  cwd: string,
+  compare: CheckoutDiffCompare,
+  filePath: string,
+  context?: CheckoutContext,
+): Promise<string> {
+  if (isAbsolute(filePath) || filePath.split(/[\\/]/).includes("..")) {
+    throw new Error("Diff context path must stay within the repository");
+  }
+
+  const refs = await resolveCheckoutDiffRefs(cwd, compare, context);
+  if (!refs) {
+    throw new Error("No comparison base is available");
+  }
+  if (refs.targetRef) {
+    const content = await readGitFileContentAtRef(cwd, refs.targetRef, filePath);
+    if (content === null) {
+      throw new Error(`Unable to read ${filePath} at ${refs.targetRef}`);
+    }
+    return content;
+  }
+
+  const absolutePath = resolve(cwd, filePath);
+  const relativePath = relative(resolve(cwd), absolutePath);
+  if (relativePath.startsWith("..") || isAbsolute(relativePath)) {
+    throw new Error("Diff context path must stay within the repository");
+  }
+  const realCwd = realpathSync(cwd);
+  const realFilePath = realpathSync(absolutePath);
+  const realRelativePath = relative(realCwd, realFilePath);
+  if (realRelativePath.startsWith("..") || isAbsolute(realRelativePath)) {
+    throw new Error("Diff context path must stay within the repository");
+  }
+  return readFile(realFilePath, "utf8");
+}
+
+function validateCheckoutDiffContextRequest(request: CheckoutDiffContextRequest): void {
+  const { region, offset, limit } = request;
+  if (!Number.isSafeInteger(offset) || offset < 0) {
+    throw new Error("Diff context offset must be a non-negative integer");
+  }
+  if (!Number.isSafeInteger(limit) || limit <= 0 || limit > CHECKOUT_DIFF_CONTEXT_MAX_LINES) {
+    throw new Error(`Diff context limit must be between 1 and ${CHECKOUT_DIFF_CONTEXT_MAX_LINES}`);
+  }
+  const validRegion =
+    Number.isSafeInteger(region.oldStart) &&
+    Number.isSafeInteger(region.newStart) &&
+    Number.isSafeInteger(region.lineCount) &&
+    region.oldStart > 0 &&
+    region.newStart > 0 &&
+    region.lineCount > 0 &&
+    offset <= region.lineCount;
+  if (!validRegion) throw new Error("Invalid diff context region");
+}
+
+function selectBoundedContextLines(input: {
+  allLines: string[];
+  region: CheckoutDiffContextRegion;
+  offset: number;
+  limit: number;
+}): { selected: string[]; requestedCount: number } {
+  const { allLines, region, offset } = input;
+  const requestedCount = Math.min(input.limit, region.lineCount - offset);
+  const selected: string[] = [];
+  let byteCount = 0;
+  for (let index = 0; index < requestedCount; index += 1) {
+    const line = allLines[region.newStart - 1 + offset + index] ?? "";
+    const lineBytes = Buffer.byteLength(line, "utf8") + 1;
+    if (selected.length > 0 && byteCount + lineBytes > CHECKOUT_DIFF_CONTEXT_MAX_BYTES) break;
+    selected.push(line);
+    byteCount += lineBytes;
+  }
+  return { selected, requestedCount };
+}
+
+export async function getCheckoutDiffContext(
+  cwd: string,
+  request: CheckoutDiffContextRequest,
+  context?: CheckoutContext,
+): Promise<CheckoutDiffContextResult> {
+  await requireGitRepo(cwd);
+  const { filePath, region, offset } = request;
+  validateCheckoutDiffContextRequest(request);
+
+  const content = await resolveContextFileContent(cwd, request.compare, filePath, context);
+  const revision = hashFileContent(content);
+  if (request.expectedRevision && request.expectedRevision !== revision) {
+    throw new Error("The file changed while loading hidden diff context");
+  }
+
+  const allLines = splitContentLines(content);
+  const regionEnd = region.newStart + region.lineCount - 1;
+  if (regionEnd > allLines.length) {
+    throw new Error("Diff context region is outside the current file");
+  }
+
+  const { selected, requestedCount } = selectBoundedContextLines({
+    allLines,
+    region,
+    offset,
+    limit: request.limit,
+  });
+
+  const syntheticFile: ParsedDiffFile = {
+    path: filePath,
+    isNew: false,
+    isDeleted: false,
+    additions: 0,
+    deletions: 0,
+    hunks: [
+      {
+        oldStart: region.oldStart + offset,
+        oldCount: selected.length,
+        newStart: region.newStart + offset,
+        newCount: selected.length,
+        lines: selected.map((line) => ({ type: "context" as const, content: ` ${line}` })),
+      },
+    ],
+  };
+  const highlighted = await highlightDiffWithFileContent(syntheticFile, cwd, {
+    newFileContent: content,
+  });
+  const highlightedLines = highlighted.hunks[0]?.lines ?? [];
+  const lines = selected.map((line, index) => {
+    const result: CheckoutDiffContextResult["lines"][number] = {
+      oldLineNumber: region.oldStart + offset + index,
+      newLineNumber: region.newStart + offset + index,
+      content: line,
+    };
+    if (highlightedLines[index]?.tokens) result.tokens = highlightedLines[index].tokens;
+    return result;
+  });
+  const consumed = lines.length;
+  return {
+    revision,
+    region,
+    offset,
+    lines,
+    hasMore: offset + consumed < region.lineCount,
+    ...(consumed < requestedCount ? { truncated: true } : {}),
   };
 }
 

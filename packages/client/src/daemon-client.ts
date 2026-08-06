@@ -3824,6 +3824,39 @@ export class DaemonClient {
     return { file: payload.file };
   }
 
+  async getCheckoutDiffContext(
+    cwd: string,
+    input: {
+      compare: { mode: "uncommitted" | "base"; baseRef?: string; ignoreWhitespace?: boolean };
+      filePath: string;
+      expectedRevision?: string;
+      region: { oldStart: number; newStart: number; lineCount: number };
+      offset: number;
+      limit: number;
+    },
+    requestId?: string,
+  ) {
+    const payload =
+      await this.sendNamespacedCorrelatedSessionRequest<"checkout.diff.get_context.response">({
+        requestId,
+        message: {
+          type: "checkout.diff.get_context.request",
+          cwd,
+          compare: this.normalizeCheckoutDiffCompare(input.compare),
+          filePath: input.filePath,
+          ...(input.expectedRevision ? { expectedRevision: input.expectedRevision } : {}),
+          region: input.region,
+          offset: input.offset,
+          limit: input.limit,
+        },
+        timeout: 60_000,
+      });
+    if (payload.error) {
+      throw new Error(payload.error.message);
+    }
+    return payload;
+  }
+
   async checkoutPrCreate(
     cwd: string,
     input: { title?: string; body?: string; baseRef?: string },

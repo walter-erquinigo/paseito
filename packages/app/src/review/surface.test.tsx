@@ -32,6 +32,7 @@ const { theme, pressablePropsByLabel } = vi.hoisted(() => {
       opacity: { 50: 0.5 },
       fontSize: { xs: 11, sm: 13 },
       fontWeight: { normal: "400", medium: "500" },
+      fontFamily: { mono: "monospace" },
       lineHeight: { diff: 18 },
       colors: {
         accent: "#0a84ff",
@@ -109,6 +110,7 @@ vi.mock("lucide-react-native", () => {
   return {
     Check: createIcon("Check"),
     CircleDot: createIcon("CircleDot"),
+    Code2: createIcon("Code2"),
     Pencil: createIcon("Pencil"),
     Plus: createIcon("Plus"),
     Trash2: createIcon("Trash2"),
@@ -142,13 +144,22 @@ const COMMENT_LIST: ReviewDraftComment[] = [comment()];
 
 function buildReviewActions(overrides: Partial<InlineReviewActions> = {}): InlineReviewActions {
   return {
+    canSuggest: false,
     commentsByTarget: new Map(),
     editor: null,
+    suggestionsByTarget: new Map(),
+    suggestionEditor: null,
     onStartComment: vi.fn(),
     onEditComment: vi.fn(),
     onCancelEditor: vi.fn(),
     onSaveEditor: vi.fn(),
     onDeleteComment: vi.fn(),
+    onStartSuggestion: vi.fn(),
+    onCancelSuggestion: vi.fn(),
+    onEditSuggestion: vi.fn(),
+    onExtendSuggestion: vi.fn(),
+    onSaveSuggestion: vi.fn(),
+    onDeleteSuggestion: vi.fn(),
     ...overrides,
   };
 }
@@ -168,7 +179,7 @@ function comment(overrides: Partial<ReviewDraftComment> = {}): ReviewDraftCommen
 
 describe("useInlineReviewController", () => {
   beforeEach(() => {
-    useReviewDraftStore.setState({ drafts: {}, diffModeOverrides: {} });
+    useReviewDraftStore.setState({ drafts: {}, suggestions: {}, diffModeOverrides: {} });
   });
 
   afterEach(() => {
@@ -224,6 +235,33 @@ describe("useInlineReviewController", () => {
     act(() => result.current.onStartComment(reviewTarget));
     rerender({ reviewDraftKey: secondKey });
     expect(result.current.editor).toBeNull();
+  });
+
+  it("persists a contiguous multi-line suggestion with its source revision", () => {
+    const first = target({ lineNumber: 2, sourceRevision: "revision-1", content: "+old one" });
+    const second = target({ lineNumber: 3, sourceRevision: "revision-1", content: " old two" });
+    const reviewDraftKey = "review:suggestions";
+    const { result } = renderHook(() =>
+      useInlineReviewController({
+        reviewDraftKey,
+        availableTargets: [first, second],
+        suggestionsSupported: true,
+      }),
+    );
+
+    act(() => result.current.onStartSuggestion(first));
+    act(() => result.current.onExtendSuggestion("down"));
+    expect(result.current.suggestionEditor?.targets).toHaveLength(2);
+    act(() => result.current.onSaveSuggestion("new code", "Use the new API"));
+
+    expect(useReviewDraftStore.getState().suggestions[reviewDraftKey]?.[0]).toMatchObject({
+      startLine: 2,
+      endLine: 3,
+      originalLines: ["old one", "old two"],
+      replacement: "new code",
+      note: "Use the new API",
+      sourceRevision: "revision-1",
+    });
   });
 });
 
