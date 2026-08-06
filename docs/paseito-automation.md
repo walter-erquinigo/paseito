@@ -55,6 +55,10 @@ Each release publishes:
 - `provenance.json`, binding the upstream tag and commit, Paseito commit, workflow run,
   architectures, version, artifact digests, semantic decisions, and verification results.
 
+Linux daemon manifests retain the legacy singular `feature` field for old deployers and add a
+`features` list for capability-complete releases. New Paseito releases require the base selector,
+on-demand Changes context, and structured review-suggestion capabilities to be present together.
+
 ## Registered remote hosts
 
 Remote deployment is local and opt-in. The private mode-0600 registry at

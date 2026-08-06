@@ -117,11 +117,13 @@ import {
   InlineReviewThread,
   isInlineReviewEditorForTarget,
   type InlineReviewActions,
+  useReviewAttachmentSnapshot,
 } from "@/review";
 import { usePublishWorkingDiffAttachment, useWorkingDiff } from "@/git/use-working-diff";
 import { DiffTooLargeState } from "@/git/diff-too-large-state";
 import { ChangesBaseSelector } from "@/git/changes-base-selector";
 import { applyChangesBaseSelection } from "@/git/changes-base-selection";
+import { parseDiffContextMarker, type DiffContextRegion } from "@/git/diff-context-expansion";
 
 export type { GitActionId, GitAction, GitActions } from "@/git/policy";
 
@@ -365,6 +367,87 @@ function DiffGutterCell({
   );
 }
 
+function DiffContextControl({
+  region,
+  onExpand,
+}: {
+  region: DiffContextRegion;
+  onExpand: (region: DiffContextRegion, direction: "up" | "down" | "all") => void;
+}) {
+  const { t } = useTranslation();
+  const expandUp = useCallback(() => onExpand(region, "up"), [onExpand, region]);
+  const expandDown = useCallback(() => onExpand(region, "down"), [onExpand, region]);
+  const expandAll = useCallback(() => onExpand(region, "all"), [onExpand, region]);
+  return (
+    <View style={styles.contextControl} testID="diff-context-control">
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={t("workspace.git.diff.context.expandUp")}
+        onPress={expandUp}
+        style={styles.contextControlButton}
+      >
+        <Text style={styles.contextControlButtonText}>↑</Text>
+      </Pressable>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={t("workspace.git.diff.context.expandAll")}
+        onPress={expandAll}
+        style={styles.contextControlLabelButton}
+      >
+        <Text style={styles.contextControlText}>
+          {t("workspace.git.diff.context.hiddenLines", { count: region.lineCount })}
+        </Text>
+      </Pressable>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={t("workspace.git.diff.context.expandDown")}
+        onPress={expandDown}
+        style={styles.contextControlButton}
+      >
+        <Text style={styles.contextControlButtonText}>↓</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+function DiffCodeContent({
+  line,
+  visibleTokens,
+  textMetricsStyle,
+  wrapLines,
+  textStyle,
+  textTestID,
+  onExpandContext,
+}: {
+  line: DiffLine;
+  visibleTokens: HighlightToken[] | null | undefined;
+  textMetricsStyle: TextStyle;
+  wrapLines: boolean;
+  textStyle: StyleProp<TextStyle>;
+  textTestID?: string;
+  onExpandContext?: (region: DiffContextRegion, direction: "up" | "down" | "all") => void;
+}) {
+  const contextRegion = parseDiffContextMarker(line.content);
+  if (contextRegion && onExpandContext) {
+    return <DiffContextControl region={contextRegion} onExpand={onExpandContext} />;
+  }
+  if (line.type !== "header" && visibleTokens) {
+    return (
+      <HighlightedText
+        tokens={visibleTokens}
+        textMetricsStyle={textMetricsStyle}
+        wrapLines={wrapLines}
+        testID={textTestID}
+      />
+    );
+  }
+  return (
+    <Text style={textStyle} testID={textTestID}>
+      {formatDiffContentText(line.content)}
+    </Text>
+  );
+}
+
 function DiffTextLine({
   line,
   wrapLines,
@@ -375,6 +458,7 @@ function DiffTextLine({
   hoverTargetKey,
   onHoverTargetChange,
   textTestID,
+  onExpandContext,
 }: {
   line: DiffLine;
   wrapLines: boolean;
@@ -385,6 +469,7 @@ function DiffTextLine({
   hoverTargetKey?: string | null;
   onHoverTargetChange?: (key: string | null) => void;
   textTestID?: string;
+  onExpandContext?: (region: DiffContextRegion, direction: "up" | "down" | "all") => void;
 }) {
   const visibleTokens = hasVisibleDiffTokens(line.tokens) ? line.tokens : null;
   const rowMetricsStyle = useDiffRowMetricsStyle(textMetricsStyle);
@@ -416,18 +501,15 @@ function DiffTextLine({
       onHoverTargetChange={onHoverTargetChange}
       style={containerStyle}
     >
-      {line.type !== "header" && visibleTokens ? (
-        <HighlightedText
-          tokens={visibleTokens}
-          textMetricsStyle={textMetricsStyle}
-          wrapLines={wrapLines}
-          testID={textTestID}
-        />
-      ) : (
-        <Text style={textStyle} testID={textTestID}>
-          {formatDiffContentText(line.content)}
-        </Text>
-      )}
+      <DiffCodeContent
+        line={line}
+        visibleTokens={visibleTokens}
+        textMetricsStyle={textMetricsStyle}
+        wrapLines={wrapLines}
+        textStyle={textStyle}
+        textTestID={textTestID}
+        onExpandContext={onExpandContext}
+      />
     </LongPressableLine>
   );
 }
@@ -500,6 +582,7 @@ function DiffLineView({
   textMetricsStyle,
   reviewTarget,
   reviewActions,
+  onExpandContext,
 }: {
   line: DiffLine;
   lineNumber: number | null;
@@ -508,6 +591,7 @@ function DiffLineView({
   textMetricsStyle: TextStyle;
   reviewTarget?: ReviewableDiffTarget | null;
   reviewActions?: InlineReviewActions;
+  onExpandContext?: (region: DiffContextRegion, direction: "up" | "down" | "all") => void;
 }) {
   const [isLineHovered, setIsLineHovered] = useState(false);
   const visibleTokens = hasVisibleDiffTokens(line.tokens) ? line.tokens : null;
@@ -548,15 +632,14 @@ function DiffLineView({
         isLineHovered={isLineHovered}
         style={styles.lineNumberGutter}
       />
-      {line.type !== "header" && visibleTokens ? (
-        <HighlightedText
-          tokens={visibleTokens}
-          textMetricsStyle={textMetricsStyle}
-          wrapLines={wrapLines}
-        />
-      ) : (
-        <Text style={textStyle}>{formatDiffContentText(line.content)}</Text>
-      )}
+      <DiffCodeContent
+        line={line}
+        visibleTokens={visibleTokens}
+        textMetricsStyle={textMetricsStyle}
+        wrapLines={wrapLines}
+        textStyle={textStyle}
+        onExpandContext={onExpandContext}
+      />
     </LongPressableLine>
   );
 }
@@ -736,6 +819,25 @@ function InlineReviewRow({
   );
 }
 
+function SplitHeaderContent({
+  content,
+  side,
+  textStyle,
+  onExpandContext,
+}: {
+  content: string;
+  side: "left" | "right";
+  textStyle: StyleProp<TextStyle>;
+  onExpandContext?: (region: DiffContextRegion, direction: "up" | "down" | "all") => void;
+}) {
+  const contextRegion = parseDiffContextMarker(content);
+  if (!contextRegion) return <Text style={textStyle}>{content}</Text>;
+  if (side === "right" && onExpandContext) {
+    return <DiffContextControl region={contextRegion} onExpand={onExpandContext} />;
+  }
+  return null;
+}
+
 function SplitDiffColumn({
   rows,
   side,
@@ -744,6 +846,7 @@ function SplitDiffColumn({
   textMetricsStyle,
   reviewActions,
   showDivider = false,
+  onExpandContext,
 }: {
   rows: SplitDiffRow[];
   side: "left" | "right";
@@ -752,6 +855,7 @@ function SplitDiffColumn({
   textMetricsStyle: TextStyle;
   reviewActions?: InlineReviewActions;
   showDivider?: boolean;
+  onExpandContext?: (region: DiffContextRegion, direction: "up" | "down" | "all") => void;
 }) {
   const [scrollWidth, setScrollWidth] = useState(0);
   const [hoveredReviewTargetKey, setHoveredReviewTargetKey] = useState<string | null>(null);
@@ -786,7 +890,12 @@ function SplitDiffColumn({
             if (row.kind === "header") {
               return (
                 <View key={key} style={styles.splitHeaderRow}>
-                  <Text style={headerLineTextStyle}>{row.content}</Text>
+                  <SplitHeaderContent
+                    content={row.content}
+                    side={side}
+                    textStyle={headerLineTextStyle}
+                    onExpandContext={onExpandContext}
+                  />
                 </View>
               );
             }
@@ -875,7 +984,12 @@ function SplitDiffColumn({
             if (row.kind === "header") {
               return (
                 <View key={key} style={styles.splitHeaderRow}>
-                  <Text style={headerLineTextStyle}>{row.content}</Text>
+                  <SplitHeaderContent
+                    content={row.content}
+                    side={side}
+                    textStyle={headerLineTextStyle}
+                    onExpandContext={onExpandContext}
+                  />
                 </View>
               );
             }
@@ -1126,6 +1240,7 @@ export function DiffFileBody({
   codeFontSize,
   textMetricsStyle,
   reviewActions,
+  onExpandContext,
   onBodyHeightChange,
   testID,
 }: {
@@ -1135,6 +1250,11 @@ export function DiffFileBody({
   codeFontSize: number;
   textMetricsStyle: TextStyle;
   reviewActions?: InlineReviewActions;
+  onExpandContext?: (
+    filePath: string,
+    region: DiffContextRegion,
+    direction: "up" | "down" | "all",
+  ) => void;
   onBodyHeightChange?: (file: ParsedDiffFile, height: number) => void;
   testID?: string;
 }) {
@@ -1142,6 +1262,11 @@ export function DiffFileBody({
   const [bodyWidth, setBodyWidth] = useState(0);
   const [hoveredReviewTargetKey, setHoveredReviewTargetKey] = useState<string | null>(null);
   const { t } = useTranslation();
+  const handleExpandContext = useCallback(
+    (region: DiffContextRegion, direction: "up" | "down" | "all") =>
+      onExpandContext?.(file.path, region, direction),
+    [file.path, onExpandContext],
+  );
 
   const handleLayout = useCallback(
     (event: LayoutChangeEvent) => {
@@ -1200,6 +1325,7 @@ export function DiffFileBody({
                 wrapLines={wrapLines}
                 textMetricsStyle={textMetricsStyle}
                 reviewActions={reviewActions}
+                onExpandContext={onExpandContext ? handleExpandContext : undefined}
               />
               <SplitDiffColumn
                 rows={rows}
@@ -1208,6 +1334,7 @@ export function DiffFileBody({
                 wrapLines={wrapLines}
                 textMetricsStyle={textMetricsStyle}
                 reviewActions={reviewActions}
+                onExpandContext={onExpandContext ? handleExpandContext : undefined}
                 showDivider
               />
             </View>
@@ -1230,6 +1357,7 @@ export function DiffFileBody({
                       textMetricsStyle={textMetricsStyle}
                       reviewTarget={reviewTarget}
                       reviewActions={reviewActions}
+                      onExpandContext={onExpandContext ? handleExpandContext : undefined}
                     />
                     <InlineReviewRow
                       reviewTarget={reviewTarget}
@@ -1289,6 +1417,7 @@ export function DiffFileBody({
                       hoverTargetKey={reviewTarget?.key ?? null}
                       onHoverTargetChange={setHoveredReviewTargetKey}
                       textTestID={`diff-code-text-${index}`}
+                      onExpandContext={onExpandContext ? handleExpandContext : undefined}
                     />
                     <InlineReviewThreadContent
                       reviewTarget={reviewTarget}
@@ -1849,6 +1978,11 @@ interface SharedDiffViewProps {
         onAddToChat?: (path: string) => void;
         onCopyPath?: (path: string) => void;
         onDownload?: (path: string) => void;
+        onExpandContext?: (
+          filePath: string,
+          region: DiffContextRegion,
+          direction: "up" | "down" | "all",
+        ) => void;
         onExpandedPathsChange: (paths: string[]) => void;
         onCollapsedFoldersChange: (paths: string[]) => void;
       }
@@ -1859,6 +1993,11 @@ interface SharedDiffViewProps {
         focusPath?: string;
         focusRequestId?: number;
         onExpandedPathsChange: (paths: string[]) => void;
+        onExpandContext?: (
+          filePath: string,
+          region: DiffContextRegion,
+          direction: "up" | "down" | "all",
+        ) => void;
       }
     | {
         kind: "commit";
@@ -1903,6 +2042,7 @@ export function SharedDiffView({ files, displayPreferences, mode }: SharedDiffVi
     mode.kind === "working_tree" ? mode.workspaceFileDragScope : undefined;
   const onCopyPath = mode.kind === "working_tree" ? mode.onCopyPath : undefined;
   const onDownload = mode.kind === "working_tree" ? mode.onDownload : undefined;
+  const onExpandContext = mode.kind === "commit" ? undefined : mode.onExpandContext;
   const compressedTree = useMemo(() => compressSingleChildChains(buildDiffTree(files)), [files]);
   const allFolderPaths = useMemo(() => collectDirPaths(compressedTree), [compressedTree]);
   const allFolderPathSet = useMemo(() => new Set(allFolderPaths), [allFolderPaths]);
@@ -2235,6 +2375,7 @@ export function SharedDiffView({ files, displayPreferences, mode }: SharedDiffVi
           codeFontSize={codeFontSize}
           textMetricsStyle={textMetricsStyle}
           reviewActions={reviewActions}
+          onExpandContext={onExpandContext}
           onBodyHeightChange={handleBodyHeightChange}
           testID={`diff-file-${item.fileIndex}-body`}
         />
@@ -2259,6 +2400,7 @@ export function SharedDiffView({ files, displayPreferences, mode }: SharedDiffVi
       onAddToChat,
       onCopyPath,
       onDownload,
+      onExpandContext,
     ],
   );
 
@@ -2781,7 +2923,9 @@ export function GitDiffPane({
     diffTooLarge,
     isDiffLoading,
     reviewActions,
-    reviewAttachment,
+    reviewDraftKey,
+    contextExpansion,
+    contextExpansionSupported,
   } = useWorkingDiff({
     serverId,
     workspaceId: workspaceId ?? undefined,
@@ -2789,6 +2933,23 @@ export function GitDiffPane({
     ignoreWhitespace: changesPreferences.hideWhitespace,
     enabled: enabled !== false,
   });
+  const reviewAttachment = useReviewAttachmentSnapshot({
+    key: reviewDraftKey,
+    diffFiles: files,
+    cwd,
+    mode: diffMode,
+    baseRef,
+  });
+  const handleExpandContext = useCallback(
+    (filePath: string, region: DiffContextRegion, direction: "up" | "down" | "all") => {
+      void contextExpansion.expand(filePath, region, direction).catch((error) => {
+        toast.error(
+          error instanceof Error ? error.message : t("workspace.git.diff.context.failedToExpand"),
+        );
+      });
+    },
+    [contextExpansion, t, toast],
+  );
   usePublishWorkingDiffAttachment({
     serverId,
     workspaceId: workspaceId ?? undefined,
@@ -2875,6 +3036,7 @@ export function GitDiffPane({
       onAddToChat,
       onCopyPath: handleCopyPath,
       onDownload: handleDownloadPath,
+      onExpandContext: contextExpansionSupported ? handleExpandContext : undefined,
       onExpandedPathsChange: changesTree.updateExpandedPaths,
       onCollapsedFoldersChange: changesTree.updateCollapsedFolders,
     }),
@@ -2890,6 +3052,8 @@ export function GitDiffPane({
       onAddToChat,
       handleCopyPath,
       handleDownloadPath,
+      contextExpansionSupported,
+      handleExpandContext,
       changesTree.updateExpandedPaths,
       changesTree.updateCollapsedFolders,
     ],
@@ -3072,6 +3236,37 @@ export function GitDiffPane({
 }
 
 const styles = StyleSheet.create((theme) => ({
+  contextControl: {
+    minHeight: theme.lineHeight.diff,
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: theme.spacing[2],
+    backgroundColor: theme.colors.surface2,
+  },
+  contextControlButton: {
+    width: 24,
+    height: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: theme.borderRadius.base,
+  },
+  contextControlLabelButton: {
+    minHeight: 20,
+    paddingHorizontal: theme.spacing[2],
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: theme.borderRadius.base,
+  },
+  contextControlButtonText: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
+  },
+  contextControlText: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.xs,
+  },
   container: {
     flex: 1,
     minHeight: 0,

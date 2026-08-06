@@ -7,6 +7,7 @@ import {
 } from "./store";
 import {
   addCommentToState,
+  addSuggestionToState,
   clearReviewInState,
   deleteCommentFromState,
   type DiffModeOverride,
@@ -14,6 +15,7 @@ import {
   normalizePersistedState,
   resolveDiffMode,
   type ReviewDraftComment,
+  type ReviewDraftSuggestion,
   type ReviewDraftStoreState,
   serializeReviewDraftState,
   setDiffModeOverrideInState,
@@ -21,7 +23,7 @@ import {
 } from "./state";
 
 function emptyState(): ReviewDraftStoreState {
-  return { drafts: {}, diffModeOverrides: {} };
+  return { drafts: {}, suggestions: {}, diffModeOverrides: {} };
 }
 
 function makeOverride(
@@ -42,6 +44,32 @@ function makeComment(overrides: Partial<ReviewDraftComment> = {}): ReviewDraftCo
     ...overrides,
   };
 }
+
+function makeSuggestion(overrides: Partial<ReviewDraftSuggestion> = {}): ReviewDraftSuggestion {
+  return {
+    id: "suggestion-1",
+    filePath: "src/example.ts",
+    startLine: 41,
+    endLine: 42,
+    originalLines: ["old one", "old two"],
+    replacement: "new code",
+    note: "Simplify this",
+    sourceRevision: "revision-1",
+    createdAt: "2026-04-21T00:00:00.000Z",
+    updatedAt: "2026-04-21T00:00:00.000Z",
+    ...overrides,
+  };
+}
+
+describe("review suggestions", () => {
+  it("persists a structured multi-line suggestion", () => {
+    const state = addSuggestionToState(emptyState(), {
+      key: "review:key",
+      suggestion: makeSuggestion(),
+    });
+    expect(serializeReviewDraftState(state).suggestions["review:key"]).toEqual([makeSuggestion()]);
+  });
+});
 
 function makeFile(): ParsedDiffFile {
   return {
@@ -160,10 +188,19 @@ describe("normalizePersistedState", () => {
   });
 
   it("returns empty state for null, non-object, or malformed inputs", () => {
-    expect(normalizePersistedState(null)).toEqual({ drafts: {}, diffModeOverrides: {} });
-    expect(normalizePersistedState("nope")).toEqual({ drafts: {}, diffModeOverrides: {} });
+    expect(normalizePersistedState(null)).toEqual({
+      drafts: {},
+      suggestions: {},
+      diffModeOverrides: {},
+    });
+    expect(normalizePersistedState("nope")).toEqual({
+      drafts: {},
+      suggestions: {},
+      diffModeOverrides: {},
+    });
     expect(normalizePersistedState({ drafts: [] })).toEqual({
       drafts: {},
+      suggestions: {},
       diffModeOverrides: {},
     });
   });
@@ -181,7 +218,7 @@ describe("serializeReviewDraftState", () => {
 
     const serialized = serializeReviewDraftState(state);
 
-    expect(Object.keys(serialized)).toEqual(["drafts"]);
+    expect(Object.keys(serialized)).toEqual(["drafts", "suggestions"]);
     expect("activeModesByScope" in serialized).toBe(false);
     expect("diffModeOverrides" in serialized).toBe(false);
     expect(serialized.drafts["review:key"]).toHaveLength(1);

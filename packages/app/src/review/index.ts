@@ -7,6 +7,8 @@ export {
   resetReviewDraftStore,
   useClearReviewDraft,
   useReviewAttachmentSnapshot,
+  useReviewDraftComments,
+  useReviewDraftSuggestions,
   useResolvedDiffMode,
   useSetDiffModeOverride,
   addReviewDraftComment,
@@ -17,6 +19,7 @@ export {
   type ReviewDraftComment,
   type ReviewDraftMode,
   type ReviewDraftSide,
+  type ReviewDraftSuggestion,
 } from "./store";
 
 export {

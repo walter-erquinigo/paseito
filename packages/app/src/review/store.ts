@@ -6,19 +6,23 @@ import type { ComposerAttachment } from "@/attachments/types";
 import type { ParsedDiffFile } from "@/git/use-diff-query";
 import {
   addCommentToState,
+  addSuggestionToState,
   clearReviewInState,
   deleteCommentFromState,
+  deleteSuggestionFromState,
   type DiffModeOverride,
   expireStaleDiffModeOverridesInState,
   normalizePersistedState,
   resolveDiffMode,
   type ReviewDraftComment,
   type ReviewDraftMode,
+  type ReviewDraftSuggestion,
   type ReviewDraftSide,
   type ReviewDraftStoreState,
   serializeReviewDraftState,
   setDiffModeOverrideInState,
   updateCommentInState,
+  updateSuggestionInState,
 } from "@/review/state";
 import { generateMessageId } from "@/types/stream";
 import { buildNumberedDiffHunks, type NumberedDiffLine } from "@/utils/diff-layout";
@@ -29,12 +33,14 @@ export type {
   ReviewDraftComment,
   ReviewDraftMode,
   ReviewDraftSide,
+  ReviewDraftSuggestion,
 } from "@/review/state";
 
 // v2 dropped persisted activeModesByScope (diff mode overrides are in-memory only).
-const STORE_VERSION = 2;
+const STORE_VERSION = 3;
 const CONTEXT_RADIUS = 3;
 const EMPTY_REVIEW_DRAFT_COMMENTS: ReviewDraftComment[] = [];
+const EMPTY_REVIEW_DRAFT_SUGGESTIONS: ReviewDraftSuggestion[] = [];
 
 type ReviewAttachment = Extract<AgentAttachment, { type: "review" }>;
 type ReviewAttachmentContextLine = ReviewAttachment["comments"][number]["context"]["targetLine"];
@@ -57,6 +63,7 @@ export interface BuildReviewAttachmentSnapshotInput {
   mode: ReviewDraftMode;
   baseRef?: string | null;
   comments: readonly ReviewDraftComment[];
+  suggestions?: readonly ReviewDraftSuggestion[];
   diffFiles: readonly ParsedDiffFile[];
 }
 
@@ -73,6 +80,18 @@ interface ReviewDraftStoreActions {
     updatedAt?: string;
   }) => void;
   deleteComment: (input: { key: string; id: string }) => void;
+  addSuggestion: (input: {
+    key: string;
+    suggestion: Omit<ReviewDraftSuggestion, "id" | "createdAt" | "updatedAt">;
+  }) => ReviewDraftSuggestion;
+  updateSuggestion: (input: {
+    key: string;
+    id: string;
+    updates: Partial<
+      Pick<ReviewDraftSuggestion, "replacement" | "note" | "sourceRevision" | "originalLines">
+    >;
+  }) => void;
+  deleteSuggestion: (input: { key: string; id: string }) => void;
   clearReview: (input: { key: string }) => void;
 }
 
@@ -139,6 +158,7 @@ export const useReviewDraftStore = create<ReviewDraftStore>()(
   persist(
     (set) => ({
       drafts: {},
+      suggestions: {},
       diffModeOverrides: {},
       setDiffModeOverride: (input) => {
         set((state) => setDiffModeOverrideInState(state, input));
@@ -160,6 +180,30 @@ export const useReviewDraftStore = create<ReviewDraftStore>()(
       },
       deleteComment: (input) => {
         set((state) => deleteCommentFromState(state, input));
+      },
+      addSuggestion: ({ key, suggestion }) => {
+        const now = new Date().toISOString();
+        const nextSuggestion: ReviewDraftSuggestion = {
+          ...suggestion,
+          id: generateMessageId(),
+          createdAt: now,
+          updatedAt: now,
+        };
+        set((state) => addSuggestionToState(state, { key, suggestion: nextSuggestion }));
+        return nextSuggestion;
+      },
+      updateSuggestion: ({ key, id, updates }) => {
+        set((state) =>
+          updateSuggestionInState(state, {
+            key,
+            id,
+            updates,
+            updatedAt: new Date().toISOString(),
+          }),
+        );
+      },
+      deleteSuggestion: (input) => {
+        set((state) => deleteSuggestionFromState(state, input));
       },
       clearReview: (input) => {
         set((state) => clearReviewInState(state, input));
@@ -221,6 +265,13 @@ export function buildReviewAttachmentSnapshot(
   input: BuildReviewAttachmentSnapshotInput,
 ): ReviewComposerAttachment | null {
   const comments: ReviewAttachment["comments"] = [];
+  const currentRevisionByPath = new Map(
+    input.diffFiles.map((file) => [file.path, file.revision] as const),
+  );
+  const suggestions = (input.suggestions ?? []).filter(
+    (suggestion) => currentRevisionByPath.get(suggestion.filePath) === suggestion.sourceRevision,
+  );
+  const staleSuggestionCount = (input.suggestions?.length ?? 0) - suggestions.length;
 
   for (const draftComment of input.comments) {
     const target = findTarget({
@@ -256,7 +307,7 @@ export function buildReviewAttachmentSnapshot(
     });
   }
 
-  if (comments.length === 0) {
+  if (comments.length === 0 && suggestions.length === 0 && staleSuggestionCount === 0) {
     return null;
   }
 
@@ -267,18 +318,41 @@ export function buildReviewAttachmentSnapshot(
     mode: input.mode,
     baseRef: normalizeBaseRef(input.baseRef) || null,
     comments,
+    ...(suggestions.length > 0
+      ? {
+          suggestions: suggestions.map((suggestion) => {
+            const wireSuggestion: NonNullable<ReviewAttachment["suggestions"]>[number] = {
+              filePath: suggestion.filePath,
+              startLine: suggestion.startLine,
+              endLine: suggestion.endLine,
+              originalLines: suggestion.originalLines,
+              replacement: suggestion.replacement,
+              sourceRevision: suggestion.sourceRevision,
+            };
+            if (suggestion.note.trim()) wireSuggestion.note = suggestion.note.trim();
+            return wireSuggestion;
+          }),
+        }
+      : {}),
   };
 
   return {
     kind: "review",
     reviewDraftKey: input.reviewDraftKey,
-    commentCount: comments.length,
+    commentCount: comments.length + (input.suggestions?.length ?? 0),
+    ...(staleSuggestionCount > 0
+      ? { blockingReason: "A code suggestion is stale. Edit, rebase, or delete it before sending." }
+      : {}),
     attachment,
   };
 }
 
 export function useReviewDraftComments(key: string): ReviewDraftComment[] {
   return useReviewDraftStore((state) => state.drafts[key] ?? EMPTY_REVIEW_DRAFT_COMMENTS);
+}
+
+export function useReviewDraftSuggestions(key: string): ReviewDraftSuggestion[] {
+  return useReviewDraftStore((state) => state.suggestions[key] ?? EMPTY_REVIEW_DRAFT_SUGGESTIONS);
 }
 
 export function useSetDiffModeOverride(): ReviewDraftStoreActions["setDiffModeOverride"] {
@@ -311,7 +385,7 @@ export function getReviewDraftComments(key: string): ReviewDraftComment[] | unde
 }
 
 export function resetReviewDraftStore(): void {
-  useReviewDraftStore.setState({ drafts: {}, diffModeOverrides: {} });
+  useReviewDraftStore.setState({ drafts: {}, suggestions: {}, diffModeOverrides: {} });
 }
 
 export function useReviewDraftCommentsForAttachment(input: {
@@ -349,6 +423,7 @@ export function useReviewAttachmentSnapshot(input: {
   baseRef?: string | null;
 }): ReviewComposerAttachment | null {
   const comments = useReviewDraftComments(input.key);
+  const suggestions = useReviewDraftSuggestions(input.key);
   return useMemo(
     () =>
       buildReviewAttachmentSnapshot({
@@ -357,8 +432,9 @@ export function useReviewAttachmentSnapshot(input: {
         mode: input.mode,
         baseRef: input.baseRef,
         comments,
+        suggestions,
         diffFiles: input.diffFiles,
       }),
-    [comments, input.key, input.cwd, input.mode, input.baseRef, input.diffFiles],
+    [comments, suggestions, input.key, input.cwd, input.mode, input.baseRef, input.diffFiles],
   );
 }

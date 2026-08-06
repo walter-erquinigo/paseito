@@ -937,6 +937,16 @@ export const ReviewAttachmentCommentSchema = z.object({
   }),
 });
 
+export const ReviewAttachmentSuggestionSchema = z.object({
+  filePath: z.string(),
+  startLine: z.number().int().positive(),
+  endLine: z.number().int().positive(),
+  originalLines: z.array(z.string()).min(1).max(200),
+  replacement: z.string().max(65_536),
+  note: z.string().optional(),
+  sourceRevision: z.string(),
+});
+
 export const ReviewAttachmentSchema = z.object({
   type: z.literal("review"),
   mimeType: z.literal("application/paseo-review"),
@@ -944,6 +954,8 @@ export const ReviewAttachmentSchema = z.object({
   mode: z.enum(["uncommitted", "base"]),
   baseRef: z.string().nullable().optional(),
   comments: z.array(ReviewAttachmentCommentSchema),
+  // COMPAT(reviewSuggestionsV1): added in Paseito v0.2.5-paseito.4.
+  suggestions: z.array(ReviewAttachmentSuggestionSchema).optional(),
 });
 
 export const UploadedFileAttachmentSchema = z.object({
@@ -1627,6 +1639,12 @@ const CheckoutDiffCompareSchema = z.object({
   ignoreWhitespace: z.boolean().optional(),
 });
 
+const CheckoutDiffContextRegionSchema = z.object({
+  oldStart: z.number().int().positive(),
+  newStart: z.number().int().positive(),
+  lineCount: z.number().int().positive(),
+});
+
 export const CheckoutStatusRequestSchema = z.object({
   type: z.literal("checkout_status_request"),
   cwd: z.string(),
@@ -1644,6 +1662,18 @@ export const SubscribeCheckoutDiffRequestSchema = z.object({
 export const UnsubscribeCheckoutDiffRequestSchema = z.object({
   type: z.literal("unsubscribe_checkout_diff_request"),
   subscriptionId: z.string(),
+});
+
+export const CheckoutDiffGetContextRequestSchema = z.object({
+  type: z.literal("checkout.diff.get_context.request"),
+  cwd: z.string(),
+  compare: CheckoutDiffCompareSchema,
+  filePath: z.string(),
+  expectedRevision: z.string().optional(),
+  region: CheckoutDiffContextRegionSchema,
+  offset: z.number().int().nonnegative(),
+  limit: z.number().int().positive().max(5000),
+  requestId: z.string(),
 });
 
 export const CheckoutCommitRequestSchema = z.object({
@@ -2124,6 +2154,11 @@ const ParsedDiffFileSchema = z.object({
   deletions: z.number(),
   hunks: z.array(DiffHunkSchema),
   status: z.enum(["ok", "too_large", "binary"]).optional(),
+  // COMPAT(changesContextExpansion): added in Paseito v0.2.5-paseito.4,
+  // keep optional until every supported daemon reports file bounds and revisions.
+  oldLineCount: z.number().int().nonnegative().optional(),
+  newLineCount: z.number().int().nonnegative().optional(),
+  revision: z.string().optional(),
 });
 
 const FileExplorerEntrySchema = z.object({
@@ -2512,6 +2547,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   CheckoutStatusRequestSchema,
   SubscribeCheckoutDiffRequestSchema,
   UnsubscribeCheckoutDiffRequestSchema,
+  CheckoutDiffGetContextRequestSchema,
   CheckoutCommitRequestSchema,
   CheckoutMergeRequestSchema,
   CheckoutMergeFromBaseRequestSchema,
@@ -2830,6 +2866,12 @@ export const ServerInfoStatusPayloadSchema = z
         commitBaseClassification: z.boolean().optional(),
         // COMPAT(changesBaseSelector): added in Paseito v0.2.5-paseito.1, remove gate after 2027-02-04.
         changesBaseSelector: z.boolean().optional(),
+        // COMPAT(changesContextExpansion): added in Paseito v0.2.5-paseito.4,
+        // remove gate after 2027-02-05.
+        changesContextExpansion: z.boolean().optional(),
+        // COMPAT(reviewSuggestionsV1): added in Paseito v0.2.5-paseito.4,
+        // remove gate after 2027-02-05.
+        reviewSuggestionsV1: z.boolean().optional(),
         // COMPAT(providerRemoval): added in v0.1.105, drop the gate when floor >= v0.1.105.
         providerRemoval: z.boolean().optional(),
         // COMPAT(importSessionWorkspaceTarget): added in v0.1.110, remove gate after 2027-01-16.
@@ -4166,6 +4208,29 @@ export const CheckoutDiffUpdateSchema = z.object({
   payload: CheckoutDiffSubscriptionPayloadSchema,
 });
 
+export const CheckoutDiffGetContextResponseSchema = z.object({
+  type: z.literal("checkout.diff.get_context.response"),
+  payload: z.object({
+    cwd: z.string(),
+    filePath: z.string(),
+    revision: z.string(),
+    region: CheckoutDiffContextRegionSchema,
+    offset: z.number().int().nonnegative(),
+    lines: z.array(
+      z.object({
+        oldLineNumber: z.number().int().positive(),
+        newLineNumber: z.number().int().positive(),
+        content: z.string(),
+        tokens: z.array(HighlightTokenSchema).optional(),
+      }),
+    ),
+    hasMore: z.boolean(),
+    truncated: z.boolean().optional(),
+    error: CheckoutErrorSchema.nullable(),
+    requestId: z.string(),
+  }),
+});
+
 export const CheckoutCommitResponseSchema = z.object({
   type: z.literal("checkout_commit_response"),
   payload: z.object({
@@ -4593,6 +4658,8 @@ export const BranchSuggestionsResponseSchema = z.object({
           committerDate: z.number(),
           hasLocal: z.boolean().optional(),
           hasRemote: z.boolean().optional(),
+          // COMPAT(branchStackOrdering): added in Paseito v0.2.5-paseito.4.
+          stackOrder: z.number().int().nonnegative().optional(),
         }),
       )
       .optional(),
@@ -5276,6 +5343,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   CheckoutStatusUpdateSchema,
   SubscribeCheckoutDiffResponseSchema,
   CheckoutDiffUpdateSchema,
+  CheckoutDiffGetContextResponseSchema,
   CheckoutCommitResponseSchema,
   CheckoutMergeResponseSchema,
   CheckoutMergeFromBaseResponseSchema,
@@ -5610,6 +5678,8 @@ export type SubscribeCheckoutDiffRequest = z.infer<typeof SubscribeCheckoutDiffR
 export type UnsubscribeCheckoutDiffRequest = z.infer<typeof UnsubscribeCheckoutDiffRequestSchema>;
 export type SubscribeCheckoutDiffResponse = z.infer<typeof SubscribeCheckoutDiffResponseSchema>;
 export type CheckoutDiffUpdate = z.infer<typeof CheckoutDiffUpdateSchema>;
+export type CheckoutDiffGetContextRequest = z.infer<typeof CheckoutDiffGetContextRequestSchema>;
+export type CheckoutDiffGetContextResponse = z.infer<typeof CheckoutDiffGetContextResponseSchema>;
 export type CheckoutCommitRequest = z.infer<typeof CheckoutCommitRequestSchema>;
 export type CheckoutCommitResponse = z.infer<typeof CheckoutCommitResponseSchema>;
 export type CheckoutMergeRequest = z.infer<typeof CheckoutMergeRequestSchema>;

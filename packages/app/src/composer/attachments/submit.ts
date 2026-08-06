@@ -40,6 +40,9 @@ export function splitComposerAttachmentsForSubmit(
       : buildForgeAttachmentFromSearchItem;
 
   for (const attachment of attachments) {
+    if (attachment.kind === "review" && attachment.blockingReason) {
+      throw new Error(attachment.blockingReason);
+    }
     if (attachment.kind === "image") {
       images.push(attachment.metadata);
       continue;

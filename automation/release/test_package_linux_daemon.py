@@ -25,11 +25,11 @@ class PackageLinuxDaemonTests(unittest.TestCase):
 
     def test_manifest_binds_runtime_to_candidate(self) -> None:
         self.assertEqual(
-            manifest("0.2.5-paseito.3", "a" * 40, "0.2.5"),
+            manifest("0.2.5-paseito.4", "a" * 40, "0.2.5"),
             {
-                "schemaVersion": 1,
+                "schemaVersion": 2,
                 "product": "Paseito daemon",
-                "version": "0.2.5-paseito.3",
+                "version": "0.2.5-paseito.4",
                 "daemonVersion": "0.2.5",
                 "commit": "a" * 40,
                 "platform": "linux",
@@ -37,6 +37,11 @@ class PackageLinuxDaemonTests(unittest.TestCase):
                 "nodeMajor": 22,
                 "entrypoint": "node_modules/@getpaseo/cli/bin/paseito",
                 "feature": "changesBaseSelector",
+                "features": [
+                    "changesBaseSelector",
+                    "changesContextExpansion",
+                    "reviewSuggestionsV1",
+                ],
             },
         )
 

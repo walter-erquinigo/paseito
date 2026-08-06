@@ -9,11 +9,16 @@ import {
   useInlineReviewController,
   useResolvedDiffMode,
   useReviewAttachmentSnapshot,
+  useReviewDraftComments,
+  useReviewDraftSuggestions,
   useSetDiffModeOverride,
 } from "@/review";
 import { useCheckoutDiffQuery } from "@/git/use-diff-query";
 import { useCheckoutStatusQuery } from "@/git/use-status-query";
 import { useChangesBaseSelection } from "@/git/use-changes-base-selection";
+import { useSessionStore } from "@/stores/session-store";
+import { useDiffContextExpansion } from "@/git/use-diff-context-expansion";
+import { buildNumberedDiffHunks } from "@/utils/diff-layout";
 
 interface UseWorkingDiffOptions {
   serverId: string;
@@ -22,6 +27,14 @@ interface UseWorkingDiffOptions {
   ignoreWhitespace: boolean;
   enabled: boolean;
   queryScope?: string;
+}
+
+function collectCurrentSideReviewTargets(files: ReturnType<typeof useCheckoutDiffQuery>["files"]) {
+  return files.flatMap((file) =>
+    buildNumberedDiffHunks(file).flatMap((hunk) =>
+      hunk.lines.map((line) => line.newCell).filter((cell) => cell !== null),
+    ),
+  );
 }
 
 function resolveSelectedComparisonBaseRef(
@@ -95,21 +108,6 @@ export function useWorkingDiff({
   );
   const selectUncommitted = useCallback(() => selectDiffMode("uncommitted"), [selectDiffMode]);
   const selectBase = useCallback(() => selectDiffMode("base"), [selectDiffMode]);
-
-  const {
-    files,
-    payloadError: diffPayloadError,
-    diffTooLarge,
-    isLoading: isDiffLoading,
-  } = useCheckoutDiffQuery({
-    serverId,
-    cwd,
-    mode: diffMode,
-    baseRef: comparisonBaseRef,
-    ignoreWhitespace,
-    enabled: enabled && isGit,
-    queryScope,
-  });
   const reviewDraftKey = useMemo(
     () =>
       buildReviewDraftKey({
@@ -122,7 +120,60 @@ export function useWorkingDiff({
       }),
     [baseRef, cwd, diffMode, ignoreWhitespace, serverId, workspaceId],
   );
-  const reviewActions = useInlineReviewController({ reviewDraftKey });
+  const persistedComments = useReviewDraftComments(reviewDraftKey);
+  const persistedSuggestions = useReviewDraftSuggestions(reviewDraftKey);
+  const requestedContextLines = useMemo(
+    () => [
+      ...persistedComments
+        .filter((comment) => comment.side === "new")
+        .map((comment) => ({ filePath: comment.filePath, lineNumber: comment.lineNumber })),
+      ...persistedSuggestions.map((suggestion) => ({
+        filePath: suggestion.filePath,
+        lineNumber: suggestion.startLine,
+      })),
+    ],
+    [persistedComments, persistedSuggestions],
+  );
+
+  const {
+    files: sourceFiles,
+    payloadError: diffPayloadError,
+    diffTooLarge,
+    isLoading: isDiffLoading,
+  } = useCheckoutDiffQuery({
+    serverId,
+    cwd,
+    mode: diffMode,
+    baseRef: comparisonBaseRef,
+    ignoreWhitespace,
+    enabled: enabled && isGit,
+    queryScope,
+  });
+  const contextExpansionSupported = useSessionStore(
+    (state) => state.sessions[serverId]?.serverInfo?.features?.changesContextExpansion === true,
+  );
+  const suggestionsSupported = useSessionStore(
+    (state) => state.sessions[serverId]?.serverInfo?.features?.reviewSuggestionsV1 === true,
+  );
+  const contextExpansion = useDiffContextExpansion({
+    serverId,
+    cwd,
+    compare: {
+      mode: diffMode,
+      ...(diffMode === "base" && comparisonBaseRef ? { baseRef: comparisonBaseRef } : {}),
+      ignoreWhitespace,
+    },
+    files: sourceFiles,
+    supported: contextExpansionSupported,
+    requestedLines: requestedContextLines,
+  });
+  const files = contextExpansion.files;
+  const availableTargets = useMemo(() => collectCurrentSideReviewTargets(files), [files]);
+  const reviewActions = useInlineReviewController({
+    reviewDraftKey,
+    availableTargets,
+    suggestionsSupported,
+  });
   const reviewAttachment = useReviewAttachmentSnapshot({
     key: reviewDraftKey,
     diffFiles: files,
@@ -150,6 +201,10 @@ export function useWorkingDiff({
     isDiffLoading,
     reviewActions,
     reviewAttachment,
+    reviewDraftKey,
+    contextExpansion,
+    contextExpansionSupported,
+    suggestionsSupported,
   };
 }
 
