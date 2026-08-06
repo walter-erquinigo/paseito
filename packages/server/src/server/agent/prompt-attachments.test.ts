@@ -124,6 +124,30 @@ describe("prompt attachments", () => {
     );
   });
 
+  it("renders structured code suggestions for the destination agent", () => {
+    const rendered = renderPromptAttachmentAsText({
+      type: "review",
+      mimeType: "application/paseo-review",
+      cwd: "/tmp/repo",
+      mode: "base",
+      comments: [],
+      suggestions: [
+        {
+          filePath: "src/index.ts",
+          startLine: 42,
+          endLine: 43,
+          originalLines: ["const oldValue = 1;", "return oldValue;"],
+          replacement: "return newValue;",
+          note: "Use the new API.",
+          sourceRevision: "revision-1",
+        },
+      ],
+    });
+    expect(rendered).toContain("Suggested edit 1: src/index.ts:42-43");
+    expect(rendered).toContain("```suggestion\nreturn newValue;\n```");
+    expect(rendered).toContain("Note: Use the new API.");
+  });
+
   it("renders github_issue attachments as readable text", () => {
     expect(
       renderPromptAttachmentAsText({

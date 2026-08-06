@@ -66,10 +66,11 @@ def validate_local_workspace_resolution(stage: Path) -> None:
         if not isinstance(entry, dict) or not str(entry.get("resolved", "")).startswith("file:"):
             raise RuntimeError(f"{key} did not resolve from the verified candidate")
     feature_source = stage / "node_modules/@getpaseo/server/dist/server/server/websocket-server.js"
-    if not feature_source.is_file() or "changesBaseSelector" not in feature_source.read_text(
-        encoding="utf-8"
-    ):
-        raise RuntimeError("staged daemon does not advertise changesBaseSelector")
+    feature_text = feature_source.read_text(encoding="utf-8") if feature_source.is_file() else ""
+    required_features = ("changesBaseSelector", "changesContextExpansion", "reviewSuggestionsV1")
+    missing_features = [feature for feature in required_features if feature not in feature_text]
+    if missing_features:
+        raise RuntimeError(f"staged daemon does not advertise {', '.join(missing_features)}")
 
 
 def normalized_tar_info(info: tarfile.TarInfo) -> tarfile.TarInfo:
@@ -93,7 +94,7 @@ def write_bundle(stage: Path, output: Path) -> None:
 
 def manifest(version: str, commit: str, daemon_version: str) -> dict[str, Any]:
     return {
-        "schemaVersion": 1,
+        "schemaVersion": 2,
         "product": "Paseito daemon",
         "version": version,
         "daemonVersion": daemon_version,
@@ -103,6 +104,7 @@ def manifest(version: str, commit: str, daemon_version: str) -> dict[str, Any]:
         "nodeMajor": 22,
         "entrypoint": "node_modules/@getpaseo/cli/bin/paseito",
         "feature": "changesBaseSelector",
+        "features": ["changesBaseSelector", "changesContextExpansion", "reviewSuggestionsV1"],
     }
 
 

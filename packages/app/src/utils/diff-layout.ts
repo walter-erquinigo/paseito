@@ -22,6 +22,7 @@ export interface ReviewableDiffTarget {
   lineNumber: number;
   lineType: ReviewableLineType;
   content: string;
+  sourceRevision?: string;
 }
 
 export function buildReviewableDiffTargetKey(input: ReviewableDiffTargetKeyInput): string {
@@ -105,6 +106,7 @@ function toReviewTarget(cell: NumberedDiffCell): ReviewableDiffTarget {
     lineNumber: cell.lineNumber,
     lineType: cell.lineType,
     content: cell.content,
+    ...(cell.sourceRevision ? { sourceRevision: cell.sourceRevision } : {}),
   };
 }
 
@@ -147,6 +149,7 @@ export function buildNumberedDiffHunks(file: ParsedDiffFile): NumberedDiffHunk[]
         oldLineNumber,
         newLineNumber,
         side: "old",
+        sourceRevision: file.revision,
       });
       const newCell = buildNumberedCell({
         filePath: file.path,
@@ -157,6 +160,7 @@ export function buildNumberedDiffHunks(file: ParsedDiffFile): NumberedDiffHunk[]
         oldLineNumber,
         newLineNumber,
         side: "new",
+        sourceRevision: file.revision,
       });
 
       lines.push({
@@ -189,6 +193,7 @@ function buildNumberedCell(input: {
   oldLineNumber: number | null;
   newLineNumber: number | null;
   side: ReviewSide;
+  sourceRevision?: string;
 }): NumberedDiffCell | null {
   if (input.line.type === "header") {
     return null;
@@ -221,6 +226,7 @@ function buildNumberedCell(input: {
     lineNumber,
     lineType: input.line.type,
     content: input.line.content,
+    ...(input.sourceRevision ? { sourceRevision: input.sourceRevision } : {}),
     line: input.line,
   };
 }

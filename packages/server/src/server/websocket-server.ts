@@ -215,6 +215,9 @@ function createFallbackWorkspaceGitService(): WorkspaceGitService {
     getSnapshot: async (cwd: string) => createFallbackWorkspaceGitSnapshot(cwd),
     resolveForge: async () => null,
     getCheckoutDiff: async () => ({ diff: "" }),
+    getCheckoutDiffContext: async () => {
+      throw new Error("Git service unavailable");
+    },
     validateBranchRef: async () => ({ kind: "not-found" }),
     hasLocalBranch: async () => false,
     suggestBranchesForCwd: async () => [],
@@ -1600,6 +1603,10 @@ export class VoiceAssistantWebSocketServer {
         commitBaseClassification: true,
         // COMPAT(changesBaseSelector): added in Paseito v0.2.5-paseito.1, remove gate after 2027-02-04.
         changesBaseSelector: true,
+        // COMPAT(changesContextExpansion): added in Paseito v0.2.5-paseito.4, remove after 2027-02-05.
+        changesContextExpansion: true,
+        // COMPAT(reviewSuggestionsV1): added in Paseito v0.2.5-paseito.4, remove after 2027-02-05.
+        reviewSuggestionsV1: true,
         // COMPAT(providerRemoval): added in v0.1.105, drop the gate when floor >= v0.1.105.
         providerRemoval: true,
         // COMPAT(importSessionWorkspaceTarget): added in v0.1.110, remove gate after 2027-01-16.

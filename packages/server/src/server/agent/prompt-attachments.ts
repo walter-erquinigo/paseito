@@ -109,6 +109,21 @@ export function renderPromptAttachmentAsText(attachment: AgentAttachment): strin
           lines.push(`${prefix}${oldLn} ${newLn} ${REVIEW_LINE_MARKERS[line.type]}${line.content}`);
         }
       });
+      attachment.suggestions?.forEach((suggestion, index) => {
+        lines.push(
+          "",
+          `Suggested edit ${index + 1}: ${suggestion.filePath}:${suggestion.startLine}-${suggestion.endLine}`,
+          "Replace:",
+          "```",
+          ...suggestion.originalLines,
+          "```",
+          "With:",
+          "```suggestion",
+          suggestion.replacement,
+          "```",
+        );
+        if (suggestion.note) lines.push(`Note: ${suggestion.note}`);
+      });
       return lines.join("\n");
     }
     case "uploaded_file": {
