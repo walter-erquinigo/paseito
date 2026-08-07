@@ -95,6 +95,12 @@ export const ru: TranslationResources = {
       queue: "Очередь",
       send: "Отправлять",
     },
+    queue: {
+      steer: "Перенаправить",
+      steeringConversation: "Перенаправление активной работы",
+      steerHint: "Отправить как указание для активного запуска",
+      replaceFallbackHint: "Этот провайдер перезапустит активный запуск с этим сообщением",
+    },
     cancel: {
       cancelingAgent: "Отменяющий агент",
       stopAgent: "Остановить агент",
@@ -1809,11 +1815,12 @@ export const ru: TranslationResources = {
       defaultSend: {
         label: "Отправка по умолчанию",
         descriptions: {
-          interrupt: "Когда агент работает, Enter прерывает. Command/Ctrl+Enter ставит в очередь.",
+          steer:
+            "Когда агент работает, Enter перенаправляет его. Command/Ctrl+Enter ставит в очередь.",
           queue: "Когда агент работает, Enter ставит в очередь. Command/Ctrl+Enter отправляет.",
         },
         options: {
-          interrupt: "Прерывать",
+          steer: "Перенаправить",
           queue: "Очередь",
         },
       },

@@ -22,6 +22,23 @@ import {
   type HostRuntimeStorage,
 } from "./host-runtime";
 import { ReplicaCache } from "./replica-cache";
+import { useComposerQueueStore } from "@/composer/queue-store";
+
+vi.mock("@react-native-async-storage/async-storage", () => {
+  const values = new Map<string, string>();
+  return {
+    default: {
+      getItem: async (key: string) => values.get(key) ?? null,
+      setItem: async (key: string, value: string) => void values.set(key, value),
+      removeItem: async (key: string) => void values.delete(key),
+      clear: async () => void values.clear(),
+    },
+  };
+});
+
+// AsyncStorage is unavailable in this Node-only suite; production hydration is
+// covered by the queue-store tests.
+useComposerQueueStore.setState({ hasHydrated: true });
 
 class FakeDaemonClient {
   private state: ConnectionState = { status: "idle" };
@@ -1914,7 +1931,7 @@ describe("HostRuntimeStore", () => {
         ],
       ]),
     );
-    sessionStore.setQueuedMessages(
+    useComposerQueueStore.getState().write(
       host.serverId,
       new Map([
         ["legacy-snapshot", [{ id: "legacy-snapshot-message", text: "snapshot", attachments: [] }]],
@@ -2431,7 +2448,7 @@ describe("HostRuntimeStore", () => {
         ],
       ]),
     );
-    sessionStore.setQueuedMessages(
+    useComposerQueueStore.getState().write(
       host.serverId,
       new Map([
         [
@@ -2460,8 +2477,8 @@ describe("HostRuntimeStore", () => {
       ["buffered-transition", "buffered queued"],
     ]);
     expect(
-      Array.from(useSessionStore.getState().sessions[host.serverId]?.queuedMessages.values() ?? []),
-    ).toEqual([[], []]);
+      Object.values(useComposerQueueStore.getState().queuesByServer[host.serverId] ?? {}),
+    ).toEqual([]);
 
     store.syncHosts([]);
     useSessionStore.getState().clearSession(host.serverId);
@@ -2550,7 +2567,7 @@ describe("HostRuntimeStore", () => {
     });
     const sessionStore = useSessionStore.getState();
     sessionStore.initializeSession(host.serverId, fakeClient as unknown as DaemonClient, 1);
-    sessionStore.setQueuedMessages(
+    useComposerQueueStore.getState().write(
       host.serverId,
       new Map([
         [
@@ -2567,9 +2584,7 @@ describe("HostRuntimeStore", () => {
 
     await vi.waitFor(() => {
       expect(fakeClient.sentAgentMessages).toHaveLength(1);
-      expect(
-        useSessionStore.getState().sessions[host.serverId]?.queuedMessages.get("agent"),
-      ).toEqual([
+      expect(useComposerQueueStore.getState().read(host.serverId, "agent")).toEqual([
         { id: "first", text: "retry me", attachments: [] },
         { id: "second", text: "keep me behind", attachments: [] },
       ]);
@@ -2596,10 +2611,12 @@ describe("HostRuntimeStore", () => {
     });
     const sessionStore = useSessionStore.getState();
     sessionStore.initializeSession(host.serverId, fakeClient as unknown as DaemonClient, 1);
-    sessionStore.setQueuedMessages(
-      host.serverId,
-      new Map([["agent", [{ id: "first", text: "send once", attachments: [] }]]]),
-    );
+    useComposerQueueStore
+      .getState()
+      .write(
+        host.serverId,
+        new Map([["agent", [{ id: "first", text: "send once", attachments: [] }]]]),
+      );
 
     store.drainQueuedAgentMessage(host.serverId, "agent");
     store.drainQueuedAgentMessage(host.serverId, "agent");
@@ -2608,9 +2625,7 @@ describe("HostRuntimeStore", () => {
 
     send.resolve();
     await vi.waitFor(() => {
-      expect(
-        useSessionStore.getState().sessions[host.serverId]?.queuedMessages.get("agent"),
-      ).toEqual([]);
+      expect(useComposerQueueStore.getState().read(host.serverId, "agent")).toEqual([]);
     });
     useSessionStore.getState().clearSession(host.serverId);
   });
@@ -2637,7 +2652,7 @@ describe("HostRuntimeStore", () => {
       version: "0.1.105",
       features: { forgeSearch: false },
     });
-    sessionStore.setQueuedMessages(
+    useComposerQueueStore.getState().write(
       host.serverId,
       new Map([
         [

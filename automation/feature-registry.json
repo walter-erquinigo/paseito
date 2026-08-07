@@ -107,6 +107,28 @@
         ".agents/skills/paseito-upstream-sync",
         ".github/workflows/paseito-release.yml"
       ]
+    },
+    {
+      "id": "agent-message-delivery-control",
+      "permanent": false,
+      "intent": "Let users queue durable follow-up messages or explicitly steer an active agent run without conflating the two actions.",
+      "invariants": [
+        "Queue is the default for new and migrated Paseito installations; users can explicitly select Steer as their default.",
+        "Queued messages are persisted by server and agent across app restarts and disconnects, then drained in order when the agent becomes idle.",
+        "Every queued row exposes a visible Steer action; a failed selected send restores the message at its original queue position.",
+        "Codex and Claude use native steering, while unsupported providers and legacy daemons retain replacement behavior.",
+        "Legacy requests that omit activeRunBehavior continue to replace an active run; only an explicit steer request changes behavior."
+      ],
+      "contracts": [
+        "npx vitest run packages/protocol/src/messages.active-run-behavior.test.ts packages/client/src/daemon-client.test.ts packages/server/src/server/agent/agent-manager.test.ts packages/server/src/server/agent/providers/codex-app-server-agent.test.ts packages/server/src/server/agent/providers/claude/agent.test.ts packages/app/src/composer/actions.test.ts packages/app/src/composer/queue-store.test.ts packages/app/src/hooks/use-settings/storage.test.ts"
+      ],
+      "paths": [
+        "packages/app/src/composer",
+        "packages/app/src/hooks/use-settings",
+        "packages/client/src/daemon-client.ts",
+        "packages/protocol/src/messages.ts",
+        "packages/server/src/server/agent"
+      ]
     }
   ]
 }

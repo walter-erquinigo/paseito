@@ -97,6 +97,12 @@ export const fr: TranslationResources = {
       queue: "File d'attente",
       send: "Envoyer",
     },
+    queue: {
+      steer: "Rediriger",
+      steeringConversation: "Redirection du travail actif",
+      steerHint: "Envoyer maintenant comme instruction pour l'exécution active",
+      replaceFallbackHint: "Ce fournisseur redémarrera l'exécution active avec ce message",
+    },
     cancel: {
       cancelingAgent: "Agent d'annulation",
       stopAgent: "Agent d'arrêt",
@@ -1822,13 +1828,13 @@ export const fr: TranslationResources = {
       defaultSend: {
         label: "Envoi par défaut",
         descriptions: {
-          interrupt:
-            "Lorsque l'agent est en cours d'exécution, Entrée interrompt. Commande/Ctrl+Entrée met en file d'attente.",
+          steer:
+            "Lorsque l'agent est en cours d'exécution, Entrée le redirige. Commande/Ctrl+Entrée met en file d'attente.",
           queue:
             "Lorsque l'agent est en cours d'exécution, Entrée met en file d'attente. Commande/Ctrl+Entrée envoie.",
         },
         options: {
-          interrupt: "Interrompre",
+          steer: "Rediriger",
           queue: "File d'attente",
         },
       },

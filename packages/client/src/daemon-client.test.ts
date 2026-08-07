@@ -598,6 +598,47 @@ function useHeartbeatClock(): void {
   });
 }
 
+test("sendAgentMessage forwards explicit steering behavior", async () => {
+  const logger = createMockLogger();
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "clsk_steering_test",
+    logger,
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+
+  const connectPromise = client.connect();
+  mock.triggerOpen();
+  await connectPromise;
+
+  const sendPromise = client.sendAgentMessage("agent-1", "change direction", {
+    messageId: "message-1",
+    activeRunBehavior: "steer",
+  });
+  const request = parseSentFrame(mock.sent[0]);
+  expect(request).toMatchObject({
+    type: "send_agent_message_request",
+    agentId: "agent-1",
+    text: "change direction",
+    activeRunBehavior: "steer",
+  });
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "send_agent_message_response",
+      payload: {
+        requestId: request.requestId,
+        agentId: "agent-1",
+        accepted: true,
+        error: null,
+      },
+    }),
+  );
+  await expect(sendPromise).resolves.toBeUndefined();
+});
+
 test("dedupes in-flight checkout status requests per agentId", async () => {
   const logger = createMockLogger();
   const mock = createMockTransport();

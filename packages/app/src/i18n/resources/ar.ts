@@ -95,6 +95,12 @@ export const ar: TranslationResources = {
       queue: "طابور",
       send: "يرسل",
     },
+    queue: {
+      steer: "توجيه",
+      steeringConversation: "جارٍ توجيه العمل النشط",
+      steerHint: "أرسل الآن كتوجيه للتشغيل النشط",
+      replaceFallbackHint: "سيعيد هذا المزوّد تشغيل العمل النشط بهذه الرسالة",
+    },
     cancel: {
       cancelingAgent: "وكيل الإلغاء",
       stopAgent: "توقف الوكيل",
@@ -1774,12 +1780,11 @@ export const ar: TranslationResources = {
       defaultSend: {
         label: "إرسال افتراضي",
         descriptions: {
-          interrupt:
-            "عند تشغيل الوكيل، يوقف Enter التشغيل. Command/Ctrl+Enter يضيف إلى قائمة الانتظار.",
+          steer: "عند تشغيل الوكيل، يعيد Enter توجيهه. Command/Ctrl+Enter يضيف إلى قائمة الانتظار.",
           queue: "عند تشغيل الوكيل، يضيف Enter إلى قائمة الانتظار. Command/Ctrl+Enter يرسل.",
         },
         options: {
-          interrupt: "مقاطعة",
+          steer: "توجيه",
           queue: "طابور",
         },
       },

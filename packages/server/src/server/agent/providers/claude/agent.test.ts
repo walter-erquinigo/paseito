@@ -2,7 +2,7 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import { afterEach, describe, expect, test, vi } from "vitest";
-import type { SDKMessage } from "@anthropic-ai/claude-agent-sdk";
+import type { SDKMessage, SDKUserMessage } from "@anthropic-ai/claude-agent-sdk";
 
 import { createTestLogger } from "../../../../test-utils/test-logger.js";
 import * as executableUtils from "../../../../executable-resolution/executable-resolution.js";
@@ -1361,6 +1361,7 @@ describe("ClaudeAgentSession context window usage", () => {
   interface QueryFactoryForTurnsOptions {
     getContextUsage?: ReturnType<typeof vi.fn>;
     model?: string;
+    onPrompt?: (prompt: unknown) => void;
   }
 
   async function createSessionForTest(): Promise<TestClaudeSession> {
@@ -1418,7 +1419,8 @@ describe("ClaudeAgentSession context window usage", () => {
       }
 
       void (async () => {
-        for await (const _ of prompt) {
+        for await (const nextPrompt of prompt) {
+          options?.onPrompt?.(nextPrompt);
           const turnMessages = turns[turnIndex] ?? [];
           turnIndex += 1;
           for (const message of turnMessages) {
@@ -1463,6 +1465,31 @@ describe("ClaudeAgentSession context window usage", () => {
       };
     });
   }
+
+  test("steerTurn pushes a priority next user message into the existing input stream", async () => {
+    const capturedPrompts: SDKUserMessage[] = [];
+    const session = await createSessionForTurns([], {
+      onPrompt: (prompt) => capturedPrompts.push(prompt as SDKUserMessage),
+    });
+
+    try {
+      await session.startTurn("first prompt");
+      await vi.waitFor(() => expect(capturedPrompts).toHaveLength(1));
+
+      await expect(session.steerTurn?.("steered prompt")).resolves.toBeUndefined();
+      await vi.waitFor(() => expect(capturedPrompts).toHaveLength(2));
+      expect(capturedPrompts[1]).toMatchObject({
+        type: "user",
+        priority: "next",
+        message: {
+          role: "user",
+          content: [{ type: "text", text: "steered prompt" }],
+        },
+      });
+    } finally {
+      await session.close();
+    }
+  });
 
   function createInitMessage(sessionId = "session-1"): Record<string, unknown> {
     return {

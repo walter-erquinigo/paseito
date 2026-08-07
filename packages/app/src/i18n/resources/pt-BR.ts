@@ -95,6 +95,12 @@ export const ptBR: TranslationResources = {
       queue: "Fila",
       send: "Enviar",
     },
+    queue: {
+      steer: "Redirecionar",
+      steeringConversation: "Redirecionando o trabalho ativo",
+      steerHint: "Enviar agora como orientação para a execução ativa",
+      replaceFallbackHint: "Este provedor reiniciará a execução ativa com esta mensagem",
+    },
     cancel: {
       cancelingAgent: "Cancelando agente",
       stopAgent: "Parar agente",
@@ -1804,12 +1810,12 @@ export const ptBR: TranslationResources = {
       defaultSend: {
         label: "Envio padrão",
         descriptions: {
-          interrupt:
-            "Quando o agente está em execução, Enter interrompe. Command/Ctrl+Enter enfileira.",
+          steer:
+            "Quando o agente está em execução, Enter o redireciona. Command/Ctrl+Enter enfileira.",
           queue: "Quando o agente está em execução, Enter enfileira. Command/Ctrl+Enter envia.",
         },
         options: {
-          interrupt: "Interromper",
+          steer: "Redirecionar",
           queue: "Fila",
         },
       },
