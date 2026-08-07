@@ -1726,6 +1726,9 @@ export const ru: TranslationResources = {
       deleteLines: "Удалить выбранные строки",
       addLineAbove: "Добавить строку выше",
       addLineBelow: "Добавить строку ниже",
+      rangeHidden: "Разверните скрытые строки перед выбором этого диапазона",
+      rangeTooLarge: "Предложение может включать не более 200 строк",
+      rangeInvalid: "Выберите строки текущей версии одного файла и ревизии",
     },
   },
   settings: {

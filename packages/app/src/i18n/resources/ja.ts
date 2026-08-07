@@ -1708,6 +1708,9 @@ export const ja: TranslationResources = {
       deleteLines: "選択した行を削除",
       addLineAbove: "上の行を追加",
       addLineBelow: "下の行を追加",
+      rangeHidden: "この範囲を選択する前に非表示の行を展開してください",
+      rangeTooLarge: "提案に含められるのは最大200行です",
+      rangeInvalid: "同じファイルとリビジョンの現在側の行を選択してください",
     },
   },
   settings: {
