@@ -406,11 +406,13 @@ export function useReviewCommentCount(key: string): number {
 export function useResolvedDiffMode(input: {
   scopeKey: string;
   hasUncommittedChanges: boolean;
+  hasCommittedChanges: boolean;
 }): ReviewDraftMode {
   return useReviewDraftStore((state) =>
     resolveDiffMode({
       override: state.diffModeOverrides[input.scopeKey],
       hasUncommittedChanges: input.hasUncommittedChanges,
+      hasCommittedChanges: input.hasCommittedChanges,
     }),
   );
 }

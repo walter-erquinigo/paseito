@@ -27,6 +27,7 @@
       "invariants": [
         "The selection is scoped by repository root and current branch.",
         "On desktop, the base selector is beside the current branch selector and choosing a base switches Changes to Committed.",
+        "When a branch is ahead of its base, Changes defaults to the committed branch diff even if the working tree is dirty; an explicit Uncommitted selection is still honored.",
         "Diffs, review attachments and commit history use the selected validated base.",
         "Branch dropdowns rank the current ancestry stack from base to tip, then werquinigo/ branches, then remaining branches.",
         "Missing refs fall back safely, and hosts without the advertised capability show an explicit update-host state without a degraded fallback."
