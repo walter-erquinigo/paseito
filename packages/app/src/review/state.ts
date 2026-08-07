@@ -92,10 +92,14 @@ export function expireStaleDiffModeOverridesInState(
 export function resolveDiffMode(input: {
   override: DiffModeOverride | undefined;
   hasUncommittedChanges: boolean;
+  hasCommittedChanges: boolean;
 }): ReviewDraftMode {
-  const { override, hasUncommittedChanges } = input;
+  const { override, hasUncommittedChanges, hasCommittedChanges } = input;
   if (override && override.isDirtyAtSelection === hasUncommittedChanges) {
     return override.mode;
+  }
+  if (hasCommittedChanges) {
+    return "base";
   }
   return hasUncommittedChanges ? "uncommitted" : "base";
 }
