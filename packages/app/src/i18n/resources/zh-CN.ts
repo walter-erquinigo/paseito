@@ -1671,6 +1671,9 @@ export const zhCN: TranslationResources = {
       deleteLines: "删除所选行",
       addLineAbove: "添加上一行",
       addLineBelow: "添加下一行",
+      rangeHidden: "选择此范围前请先展开隐藏行",
+      rangeTooLarge: "建议最多可包含 200 行",
+      rangeInvalid: "请选择同一文件和修订版本的当前侧行",
     },
   },
   settings: {

@@ -22,7 +22,7 @@ import {
 
 void testI18n;
 
-const { theme, pressablePropsByLabel } = vi.hoisted(() => {
+const { theme, pressablePropsByLabel, electronMac } = vi.hoisted(() => {
   Object.assign(globalThis, { __DEV__: false });
   return {
     theme: {
@@ -48,6 +48,7 @@ const { theme, pressablePropsByLabel } = vi.hoisted(() => {
       },
     },
     pressablePropsByLabel: new Map<string, Record<string, unknown>>(),
+    electronMac: { value: false },
   };
 });
 
@@ -60,6 +61,8 @@ vi.mock("react-native", async (importOriginal) => {
       accessibilityLabel,
       children,
       onPress,
+      onPointerDown,
+      onPointerEnter,
       ...props
     }: {
       accessibilityLabel?: string;
@@ -67,10 +70,12 @@ vi.mock("react-native", async (importOriginal) => {
         | React.ReactNode
         | ((state: { hovered: boolean; pressed: boolean }) => React.ReactNode);
       onPress?: () => void;
+      onPointerDown?: (event: { nativeEvent: PointerEvent }) => void;
+      onPointerEnter?: (event: { nativeEvent: PointerEvent }) => void;
       [key: string]: unknown;
     }) => {
       if (accessibilityLabel) {
-        pressablePropsByLabel.set(accessibilityLabel, props);
+        pressablePropsByLabel.set(accessibilityLabel, { ...props, onPointerDown, onPointerEnter });
       }
       const resolvedChildren =
         typeof children === "function" ? children({ hovered: false, pressed: false }) : children;
@@ -81,6 +86,18 @@ vi.mock("react-native", async (importOriginal) => {
           "data-testid": typeof props.testID === "string" ? props.testID : undefined,
           disabled: props.disabled === true,
           onClick: onPress,
+          onPointerDown: (event: PointerEvent) =>
+            onPointerDown?.({
+              nativeEvent: {
+                button: event.button ?? 0,
+                buttons: event.buttons ?? 0,
+                shiftKey: event.shiftKey ?? false,
+              } as PointerEvent,
+            }),
+          onPointerEnter: (event: PointerEvent) =>
+            onPointerEnter?.({
+              nativeEvent: { buttons: event.buttons ?? 0 } as PointerEvent,
+            }),
           type: "button",
         },
         resolvedChildren,
@@ -99,7 +116,7 @@ vi.mock("react-native-unistyles", () => ({
 
 vi.mock("@/constants/platform", () => ({
   getIsElectron: () => false,
-  getIsElectronMac: () => false,
+  getIsElectronMac: () => electronMac.value,
   isNative: false,
   isWeb: true,
 }));
@@ -149,12 +166,20 @@ function buildReviewActions(overrides: Partial<InlineReviewActions> = {}): Inlin
     editor: null,
     suggestionsByTarget: new Map(),
     suggestionEditor: null,
+    selectedSuggestionTargetKeys: new Set(),
+    suggestionRangeError: null,
     onStartComment: vi.fn(),
     onEditComment: vi.fn(),
     onCancelEditor: vi.fn(),
     onSaveEditor: vi.fn(),
     onDeleteComment: vi.fn(),
     onStartSuggestion: vi.fn(),
+    onBeginSuggestionDrag: vi.fn(),
+    onUpdateSuggestionDrag: vi.fn(),
+    onShiftSuggestionRange: vi.fn(),
+    onPressReviewGutter: vi.fn(),
+    onCancelSuggestionRange: vi.fn(),
+    onClearSuggestionRangeError: vi.fn(),
     onCancelSuggestion: vi.fn(),
     onEditSuggestion: vi.fn(),
     onExtendSuggestion: vi.fn(),
@@ -183,6 +208,7 @@ describe("useInlineReviewController", () => {
   });
 
   afterEach(() => {
+    electronMac.value = false;
     cleanup();
     vi.clearAllMocks();
   });
@@ -263,10 +289,62 @@ describe("useInlineReviewController", () => {
       sourceRevision: "revision-1",
     });
   });
+
+  it("opens a prefilled editor for Shift-selected lines across expanded hunks", () => {
+    const first = target({ lineNumber: 20, sourceRevision: "revision-1", content: " first" });
+    const middle = target({
+      lineNumber: 21,
+      hunkIndex: 3,
+      sourceRevision: "revision-1",
+      content: " middle",
+    });
+    const last = target({
+      lineNumber: 22,
+      hunkIndex: 4,
+      sourceRevision: "revision-1",
+      content: "+last",
+    });
+    const { result } = renderHook(() =>
+      useInlineReviewController({
+        reviewDraftKey: "review:range",
+        availableTargets: [first, middle, last],
+        suggestionsSupported: true,
+      }),
+    );
+
+    act(() => result.current.onShiftSuggestionRange(first));
+    expect(result.current.selectedSuggestionTargetKeys).toEqual(new Set([first.key]));
+    act(() => result.current.onShiftSuggestionRange(last));
+
+    expect(result.current.suggestionEditor?.targets).toEqual([first, middle, last]);
+    expect(result.current.suggestionEditor?.replacement).toBe("first\nmiddle\nlast");
+    expect(result.current.selectedSuggestionTargetKeys).toEqual(
+      new Set([first.key, middle.key, last.key]),
+    );
+  });
+
+  it("reports hidden lines instead of creating an incomplete suggestion", () => {
+    const first = target({ lineNumber: 20, sourceRevision: "revision-1" });
+    const last = target({ lineNumber: 22, sourceRevision: "revision-1" });
+    const { result } = renderHook(() =>
+      useInlineReviewController({
+        reviewDraftKey: "review:hidden-range",
+        availableTargets: [first, last],
+        suggestionsSupported: true,
+      }),
+    );
+
+    act(() => result.current.onShiftSuggestionRange(first));
+    act(() => result.current.onShiftSuggestionRange(last));
+
+    expect(result.current.suggestionEditor).toBeNull();
+    expect(result.current.suggestionRangeError).toBe("hidden-lines");
+  });
 });
 
 describe("git diff inline review helpers", () => {
   afterEach(() => {
+    electronMac.value = false;
     cleanup();
     vi.clearAllMocks();
     pressablePropsByLabel.clear();
@@ -397,6 +475,39 @@ describe("git diff inline review helpers", () => {
 
     expect(queryByText("2")).toBeTruthy();
     expect(container.querySelector("[data-icon='Plus']")).toBeTruthy();
+  });
+
+  it("routes macOS Shift-click and gutter drag to suggestion range selection", () => {
+    electronMac.value = true;
+    const reviewTarget = target({ sourceRevision: "revision-1" });
+    const actions = buildReviewActions({ canSuggest: true });
+    render(
+      <InlineReviewGutterCell
+        reviewTarget={reviewTarget}
+        reviewActions={actions}
+        comments={EMPTY_COMMENTS}
+        isEditorOpen={false}
+        onStartComment={actions.onStartComment}
+      >
+        <span>2</span>
+      </InlineReviewGutterCell>,
+    );
+    const gutterProps = pressablePropsByLabel.get("Add review comment");
+    const onPointerDown = gutterProps?.onPointerDown as
+      | ((event: { nativeEvent: Partial<PointerEvent> }) => void)
+      | undefined;
+    const onPointerEnter = gutterProps?.onPointerEnter as
+      | ((event: { nativeEvent: Partial<PointerEvent> }) => void)
+      | undefined;
+
+    onPointerDown?.({ nativeEvent: { button: 0, buttons: 1, shiftKey: true } });
+    expect(actions.onShiftSuggestionRange).toHaveBeenCalledWith(reviewTarget);
+    expect(actions.onBeginSuggestionDrag).not.toHaveBeenCalled();
+
+    onPointerDown?.({ nativeEvent: { button: 0, buttons: 1, shiftKey: false } });
+    onPointerEnter?.({ nativeEvent: { buttons: 1 } });
+    expect(actions.onBeginSuggestionDrag).toHaveBeenCalledWith(reviewTarget);
+    expect(actions.onUpdateSuggestionDrag).toHaveBeenCalledWith(reviewTarget);
   });
 });
 
