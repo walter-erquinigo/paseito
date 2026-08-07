@@ -2,7 +2,7 @@ import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
 import type { MessagePayload } from "@/composer/types";
 import type { MessageInputKeyboardActionKind } from "@/keyboard/actions";
 
-export type SendBehavior = "interrupt" | "queue";
+export type SendBehavior = "steer" | "queue";
 
 interface ComposerSurfaceState {
   opacity: 0 | 1;

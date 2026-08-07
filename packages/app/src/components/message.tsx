@@ -62,7 +62,11 @@ import Svg, { Defs, LinearGradient as SvgLinearGradient, Rect, Stop } from "reac
 import { CODE_SURFACE_DATASET } from "@/styles/code-surface";
 import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
 import { MarkdownRenderer, type MarkdownStyles } from "@/components/markdown/renderer";
-import type { TodoEntry, UserMessageImageAttachment } from "@/types/stream";
+import type {
+  TodoEntry,
+  UserMessageDeliveryHint,
+  UserMessageImageAttachment,
+} from "@/types/stream";
 import type { AgentAttachment } from "@getpaseo/protocol/messages";
 import type { ToolCallDetail } from "@getpaseo/protocol/agent-types";
 import { buildToolCallPresentation } from "@/tool-calls/presentation";
@@ -133,6 +137,7 @@ interface UserMessageProps {
   isFirstInGroup?: boolean;
   isLastInGroup?: boolean;
   disableOuterSpacing?: boolean;
+  deliveryHint?: UserMessageDeliveryHint;
 }
 
 const MessageOuterSpacingContext = createContext(false);
@@ -399,6 +404,12 @@ const userMessageStylesheet = StyleSheet.create((theme) => ({
     color: theme.colors.foregroundMuted,
     fontSize: STREAM_METADATA_FONT_SIZE,
   },
+  deliveryHintLabel: {
+    alignSelf: "flex-end",
+    marginTop: theme.spacing[1],
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.xs,
+  },
 }));
 
 interface UserMessageImagePillProps {
@@ -431,6 +442,7 @@ export const UserMessage = memo(function UserMessage({
   isFirstInGroup = true,
   isLastInGroup = true,
   disableOuterSpacing,
+  deliveryHint,
 }: UserMessageProps) {
   const isCompact = useIsCompactFormFactor();
   const { t } = useTranslation();
@@ -554,6 +566,11 @@ export const UserMessage = memo(function UserMessage({
               accessibilityLabel={t("message.actions.copyMessage")}
             />
           </View>
+        ) : null}
+        {deliveryHint === "steering" ? (
+          <Text style={userMessageStylesheet.deliveryHintLabel}>
+            {t("composer.queue.steeringConversation")}
+          </Text>
         ) : null}
       </View>
       <AttachmentLightbox metadata={lightboxMetadata} onClose={handleLightboxClose} />

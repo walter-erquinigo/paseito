@@ -6350,6 +6350,7 @@ export class Session {
           agentId,
           prompt,
           messageId: msg.messageId,
+          activeRunBehavior: msg.activeRunBehavior,
           logger: this.sessionLogger,
         });
       } catch (error) {

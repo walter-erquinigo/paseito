@@ -91,6 +91,7 @@ import { useKeyboardActionHandler } from "@/hooks/use-keyboard-action-handler";
 import type { KeyboardActionDefinition } from "@/keyboard/keyboard-action-dispatcher";
 import type { MessageInputKeyboardActionKind } from "@/keyboard/actions";
 import { submitAgentInput } from "@/composer/submit";
+import { createComposerQueueWriter, useComposerQueueStore } from "@/composer/queue-store";
 import { ComposerKeyboardScopeProvider } from "@/composer/keyboard-scope";
 import { useAppSettings } from "@/hooks/use-settings";
 import { isWeb, isNative } from "@/constants/platform";
@@ -220,6 +221,7 @@ function buildAgentStateSelector(serverId: string, agentId: string) {
       totalCostUsd: agent?.lastUsage?.totalCostUsd ?? null,
       model: agent?.model ?? null,
       provider: agent?.provider ?? null,
+      supportsSteering: agent?.capabilities.supportsSteering === true,
     };
   };
 }
@@ -329,11 +331,18 @@ interface RenderQueueTrackArgs {
   handleSendQueuedNow: (id: string) => Promise<void>;
   editLabel: string;
   sendNowLabel: string;
+  steerHint: string;
 }
 
 function renderQueueTrack(args: RenderQueueTrackArgs): ReactElement | null {
-  const { queuedMessages, handleEditQueuedMessage, handleSendQueuedNow, editLabel, sendNowLabel } =
-    args;
+  const {
+    queuedMessages,
+    handleEditQueuedMessage,
+    handleSendQueuedNow,
+    editLabel,
+    sendNowLabel,
+    steerHint,
+  } = args;
   if (queuedMessages.length === 0) return null;
   return (
     <View style={styles.queueTrack}>
@@ -345,6 +354,7 @@ function renderQueueTrack(args: RenderQueueTrackArgs): ReactElement | null {
           onSendNow={handleSendQueuedNow}
           editLabel={editLabel}
           sendNowLabel={sendNowLabel}
+          steerHint={steerHint}
         />
       ))}
     </View>
@@ -541,6 +551,7 @@ interface QueuedMessageRowProps {
   onSendNow: (id: string) => void;
   editLabel: string;
   sendNowLabel: string;
+  steerHint: string;
 }
 
 function QueuedMessageRow({
@@ -549,6 +560,7 @@ function QueuedMessageRow({
   onSendNow,
   editLabel,
   sendNowLabel,
+  steerHint,
 }: QueuedMessageRowProps) {
   const handleEdit = useCallback(() => {
     onEdit(item.id);
@@ -570,14 +582,21 @@ function QueuedMessageRow({
         >
           <ThemedPencil size={ICON_SIZE.sm} uniProps={iconForegroundMapping} />
         </Pressable>
-        <Pressable
-          onPress={handleSendNow}
-          style={[styles.queueActionButton, styles.queueSendButton]}
-          accessibilityLabel={sendNowLabel}
-          accessibilityRole="button"
-        >
-          <ThemedArrowUp size={ICON_SIZE.sm} uniProps={iconAccentForegroundMapping} />
-        </Pressable>
+        <Tooltip delayDuration={0} enabledOnDesktop enabledOnMobile={false}>
+          <TooltipTrigger
+            onPress={handleSendNow}
+            style={[styles.queueActionButton, styles.queueSteerButton]}
+            accessibilityLabel={sendNowLabel}
+            accessibilityHint={steerHint}
+            accessibilityRole="button"
+          >
+            <ThemedArrowUp size={ICON_SIZE.sm} uniProps={iconAccentForegroundMapping} />
+            <Text style={styles.queueSteerText}>{sendNowLabel}</Text>
+          </TooltipTrigger>
+          <TooltipContent side="top" align="center" offset={8}>
+            <Text style={styles.tooltipText}>{steerHint}</Text>
+          </TooltipContent>
+        </Tooltip>
       </View>
     </View>
   );
@@ -1073,12 +1092,10 @@ export function Composer({
 
   const agentState = useSessionStore(useShallow(buildAgentStateSelector(serverId, agentId)));
 
-  const queuedMessagesRaw = useSessionStore((state) =>
-    state.sessions[serverId]?.queuedMessages?.get(agentId),
+  const queuedMessagesRaw = useComposerQueueStore(
+    (state) => state.queuesByServer[serverId]?.[agentId],
   );
   const queuedMessages = queuedMessagesRaw ?? EMPTY_ARRAY;
-
-  const setQueuedMessages = useSessionStore((state) => state.setQueuedMessages);
   const setAgentStreamTail = useSessionStore((state) => state.setAgentStreamTail);
   const setAgentStreamHead = useSessionStore((state) => state.setAgentStreamHead);
 
@@ -1204,7 +1221,13 @@ export function Composer({
   const { pickFiles } = useFilePicker();
   const agentIdRef = useRef(agentId);
   const sendAgentMessageRef = useRef<
-    ((agentId: string, text: string, attachments: ComposerAttachment[]) => Promise<void>) | null
+    | ((
+        agentId: string,
+        text: string,
+        attachments: ComposerAttachment[],
+        activeRunBehavior?: "steer" | "replace",
+      ) => Promise<void>)
+    | null
   >(null);
   const onSubmitMessageRef = useRef(onSubmitMessage);
 
@@ -1256,16 +1279,31 @@ export function Composer({
   }, [focusInput, onFocusInput]);
 
   const submitMessage = useCallback(
-    async (text: string, submitAttachments: ComposerAttachment[]) => {
+    async (
+      text: string,
+      submitAttachments: ComposerAttachment[],
+      activeRunBehavior?: "steer" | "replace",
+    ) => {
       onMessageSent?.();
       if (onSubmitMessageRef.current) {
-        await onSubmitMessageRef.current({ text, attachments: submitAttachments, cwd });
+        await onSubmitMessageRef.current({
+          text,
+          attachments: submitAttachments,
+          cwd,
+          activeRunBehavior,
+          forceSend: activeRunBehavior ? true : undefined,
+        });
         return;
       }
       if (!sendAgentMessageRef.current) {
         throw new Error(t("workspace.terminal.hostDisconnected"));
       }
-      await sendAgentMessageRef.current(agentIdRef.current, text, submitAttachments);
+      await sendAgentMessageRef.current(
+        agentIdRef.current,
+        text,
+        submitAttachments,
+        activeRunBehavior,
+      );
     },
     [cwd, onMessageSent, t],
   );
@@ -1279,6 +1317,7 @@ export function Composer({
       targetAgentId: string,
       text: string,
       sendAttachments: ComposerAttachment[],
+      activeRunBehavior?: "steer" | "replace",
     ) => {
       if (!client) {
         throw new Error(t("workspace.terminal.hostDisconnected"));
@@ -1299,6 +1338,8 @@ export function Composer({
         }),
         encodeImages,
         stream,
+        activeRunBehavior,
+        deliveryHint: activeRunBehavior === "steer" ? "steering" : undefined,
       });
       onAttentionPromptSend?.();
     };
@@ -1319,13 +1360,7 @@ export function Composer({
   const isAgentRunning = agentState.status === "running";
   const hasAgent = agentState.status !== null;
 
-  const queueWriter = useMemo<QueueWriter>(
-    () => ({
-      read: (id) => useSessionStore.getState().sessions[serverId]?.queuedMessages?.get(id) ?? [],
-      write: (updater) => setQueuedMessages(serverId, updater),
-    }),
-    [serverId, setQueuedMessages],
-  );
+  const queueWriter = useMemo<QueueWriter>(() => createComposerQueueWriter(serverId), [serverId]);
 
   const queueMessage = useCallback(
     (queuedMessage: string, queuedAttachments: ComposerAttachment[]) => {
@@ -1357,6 +1392,7 @@ export function Composer({
       outgoingMessage: string,
       outgoingAttachments: ComposerAttachment[],
       forceSend?: boolean,
+      activeRunBehavior?: "steer" | "replace",
     ) => {
       const result = await submitAgentInput({
         message: outgoingMessage,
@@ -1376,7 +1412,7 @@ export function Composer({
           if (submitBehavior !== "preserve-and-lock") {
             beginSubmit(submitAttachments);
           }
-          await submitMessage(submitText, submitAttachments);
+          await submitMessage(submitText, submitAttachments, activeRunBehavior);
         },
         clearDraft,
         setUserInput,
@@ -1425,7 +1461,12 @@ export function Composer({
       if (blurOnSubmit) {
         messageInputRef.current?.blur();
       }
-      void sendMessageWithContent(payload.text, outgoingAttachments, payload.forceSend);
+      void sendMessageWithContent(
+        payload.text,
+        outgoingAttachments,
+        payload.forceSend,
+        payload.activeRunBehavior,
+      );
     },
     [
       attachments,
@@ -1655,13 +1696,14 @@ export function Composer({
   const handleSendQueuedNow = useCallback(
     async (id: string) => {
       if (!sendAgentMessageRef.current && !onSubmitMessageRef.current) return;
-      // Reuse the regular send path; server-side send atomically interrupts any active run.
+      // Explicit steering redirects active work. Providers without native steering
+      // preserve the daemon's replacement fallback.
       const result = await sendQueuedComposerMessageNow({
         agentId,
         messageId: id,
         queue: queueWriter,
         submitMessage: ({ text, attachments: queuedAttachments }) =>
-          submitMessage(text, queuedAttachments),
+          submitMessage(text, queuedAttachments, "steer"),
         failedToSendMessage: t("composer.errors.failedToSend"),
       });
       if (result.status === "failed") {
@@ -2014,9 +2056,12 @@ export function Composer({
         handleEditQueuedMessage,
         handleSendQueuedNow,
         editLabel: t("composer.attachments.editQueuedMessage"),
-        sendNowLabel: t("composer.attachments.sendQueuedMessageNow"),
+        sendNowLabel: t("composer.queue.steer"),
+        steerHint: agentState.supportsSteering
+          ? t("composer.queue.steerHint")
+          : t("composer.queue.replaceFallbackHint"),
       }),
-    [handleEditQueuedMessage, handleSendQueuedNow, queuedMessages, t],
+    [agentState.supportsSteering, handleEditQueuedMessage, handleSendQueuedNow, queuedMessages, t],
   );
 
   const messageInputContainerRef = useRef<View>(null);
@@ -2267,8 +2312,17 @@ const styles = StyleSheet.create((theme: Theme) => ({
     justifyContent: "center",
     backgroundColor: theme.colors.surface2,
   },
-  queueSendButton: {
+  queueSteerButton: {
+    width: "auto",
+    paddingHorizontal: theme.spacing[3],
+    flexDirection: "row",
+    gap: theme.spacing[1],
     backgroundColor: theme.colors.accent,
+  },
+  queueSteerText: {
+    color: theme.colors.accentForeground,
+    fontSize: theme.fontSize.sm,
+    fontWeight: "600",
   },
   sendErrorText: {
     color: theme.colors.palette.red[500],

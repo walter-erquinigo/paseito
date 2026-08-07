@@ -1,7 +1,11 @@
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import type { AttachmentMetadata, WorkspaceFileComposerAttachment } from "@/attachments/types";
+import type {
+  AttachmentMetadata,
+  ComposerAttachment,
+  WorkspaceFileComposerAttachment,
+} from "@/attachments/types";
 import { appendWorkspaceFileAttachment } from "@/attachments/workspace-file";
 import {
   garbageCollectAttachments,
@@ -11,6 +15,7 @@ import {
 import { useCreateFlowStore } from "@/stores/create-flow-store";
 import { useSessionStore, type SessionState } from "@/stores/session-store";
 import { useWorkspaceAttachmentsStore } from "@/attachments/workspace-attachments-store";
+import { useComposerQueueStore } from "@/composer/queue-store";
 import {
   applyClearDraftRecord,
   collectReferencedAttachmentIdsFromState,
@@ -151,10 +156,10 @@ async function runAttachmentGc(): Promise<void> {
 
   const sessions = useSessionStore.getState().sessions;
   for (const session of Object.values(sessions)) {
-    collectQueuedMessageAttachmentIds(session, referencedIds);
     collectStreamUserImageIds(session.agentStreamTail, referencedIds);
     collectStreamUserImageIds(session.agentStreamHead, referencedIds);
   }
+  collectQueuedMessageAttachmentIds(referencedIds);
 
   // Browser-element screenshots live in the workspace attachment store, not in
   // drafts, so collect their ids here to keep them from being garbage collected
@@ -175,18 +180,22 @@ async function runAttachmentGc(): Promise<void> {
   }
 }
 
-function collectQueuedMessageAttachmentIds(
-  session: SessionState,
-  referencedIds: Set<string>,
-): void {
-  for (const queue of session.queuedMessages.values()) {
-    for (const queuedMessage of queue) {
-      for (const attachment of queuedMessage.attachments) {
-        if (attachment.kind === "image") {
-          referencedIds.add(attachment.metadata.id);
-        }
+function collectQueuedMessageAttachmentIds(referencedIds: Set<string>): void {
+  for (const queuesByAgent of Object.values(useComposerQueueStore.getState().queuesByServer)) {
+    for (const queue of Object.values(queuesByAgent)) {
+      for (const queuedMessage of queue) {
+        collectComposerImageAttachmentIds(queuedMessage.attachments, referencedIds);
       }
     }
+  }
+}
+
+function collectComposerImageAttachmentIds(
+  attachments: ComposerAttachment[],
+  referencedIds: Set<string>,
+): void {
+  for (const attachment of attachments) {
+    if (attachment.kind === "image") referencedIds.add(attachment.metadata.id);
   }
 }
 

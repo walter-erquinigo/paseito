@@ -177,7 +177,7 @@ describe("composer send behavior", () => {
   it("uses Enter to interrupt and Mod+Enter to queue when interrupt is selected", () => {
     const defaultAction = actions();
     runDefaultSendAction({
-      defaultSendBehavior: "interrupt",
+      defaultSendBehavior: "steer",
       isAgentRunning: true,
       onQueue: defaultAction.onQueue,
       handleSendMessage: defaultAction.handleSendMessage,
@@ -186,7 +186,7 @@ describe("composer send behavior", () => {
 
     const alternateAction = actions();
     runAlternateSendAction({
-      defaultSendBehavior: "interrupt",
+      defaultSendBehavior: "steer",
       isAgentRunning: true,
       onQueue: alternateAction.onQueue,
       handleSendMessage: alternateAction.handleSendMessage,

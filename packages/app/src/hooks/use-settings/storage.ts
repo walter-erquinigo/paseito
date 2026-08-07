@@ -7,8 +7,9 @@ import { THEME_TO_UNISTYLES, type ThemeName } from "@/styles/theme";
 export const APP_SETTINGS_KEY = "@paseo:app-settings";
 export const APP_SETTINGS_QUERY_KEY = ["app-settings"];
 const LEGACY_SETTINGS_KEY = "@paseo:settings";
+export const QUEUE_DEFAULT_MIGRATION_KEY = "@paseito:queue-default-migration-v1";
 
-export type SendBehavior = "interrupt" | "queue";
+export type SendBehavior = "steer" | "queue";
 export type ReleaseChannel = "stable" | "beta";
 export type ServiceUrlBehavior = "ask" | "in-app" | "external";
 export type WorkspaceTitleSource = "title" | "branch";
@@ -51,12 +52,15 @@ export interface Settings extends AppSettings {
   releaseChannel: ReleaseChannel;
 }
 
-type StoredAppSettings = Partial<AppSettings> & { compactToolCalls?: unknown };
+type StoredAppSettings = Omit<Partial<AppSettings>, "sendBehavior"> & {
+  sendBehavior?: unknown;
+  compactToolCalls?: unknown;
+};
 
 export const DEFAULT_CLIENT_SETTINGS: AppSettings = {
   theme: "auto",
   language: "system",
-  sendBehavior: "interrupt",
+  sendBehavior: "queue",
   serviceUrlBehavior: "ask",
   terminalScrollbackLines: DEFAULT_TERMINAL_SCROLLBACK_LINES,
   uiFontFamily: "",
@@ -111,9 +115,20 @@ export async function saveAppSettings(input: {
 
 export async function loadAppSettingsFromStorage(deps: SettingsDeps): Promise<AppSettings> {
   try {
+    const queueDefaultMigrationComplete =
+      (await deps.storage.getItem(QUEUE_DEFAULT_MIGRATION_KEY)) === "1";
     const stored = await deps.storage.getItem(APP_SETTINGS_KEY);
     if (stored) {
-      return normalizeAppSettings(JSON.parse(stored));
+      const parsed = JSON.parse(stored) as StoredAppSettings;
+      const next = normalizeAppSettings(parsed);
+      if (!queueDefaultMigrationComplete) {
+        // Paseito previously called immediate delivery "interrupt" and made it the default.
+        // Move existing installations to the safer queue default exactly once.
+        if (parsed.sendBehavior === "interrupt") next.sendBehavior = "queue";
+        await deps.storage.setItem(APP_SETTINGS_KEY, JSON.stringify(next));
+        await deps.storage.setItem(QUEUE_DEFAULT_MIGRATION_KEY, "1");
+      }
+      return next;
     }
 
     const legacyStored = await deps.storage.getItem(LEGACY_SETTINGS_KEY);
@@ -124,10 +139,12 @@ export async function loadAppSettingsFromStorage(deps: SettingsDeps): Promise<Ap
         ...pickAppSettingsFromLegacy(legacyParsed),
       } satisfies AppSettings;
       await deps.storage.setItem(APP_SETTINGS_KEY, JSON.stringify(next));
+      await deps.storage.setItem(QUEUE_DEFAULT_MIGRATION_KEY, "1");
       return next;
     }
 
     await deps.storage.setItem(APP_SETTINGS_KEY, JSON.stringify(DEFAULT_CLIENT_SETTINGS));
+    await deps.storage.setItem(QUEUE_DEFAULT_MIGRATION_KEY, "1");
     return DEFAULT_CLIENT_SETTINGS;
   } catch (error) {
     console.error("[AppSettings] Failed to load settings:", error);
@@ -188,6 +205,12 @@ function parseToolCallDetailLevel(stored: StoredAppSettings): ToolCallDetailLeve
   return null;
 }
 
+function parseSendBehavior(value: unknown): SendBehavior | null {
+  if (value === "steer" || value === "queue") return value;
+  if (value === "interrupt") return "steer";
+  return null;
+}
+
 function pickAppSettings(stored: StoredAppSettings): Partial<AppSettings> {
   const result: Partial<AppSettings> = {};
   if (typeof stored.theme === "string" && VALID_THEMES.has(stored.theme)) {
@@ -197,9 +220,8 @@ function pickAppSettings(stored: StoredAppSettings): Partial<AppSettings> {
   if (language !== null) {
     result.language = language;
   }
-  if (stored.sendBehavior === "interrupt" || stored.sendBehavior === "queue") {
-    result.sendBehavior = stored.sendBehavior;
-  }
+  const sendBehavior = parseSendBehavior(stored.sendBehavior);
+  if (sendBehavior !== null) result.sendBehavior = sendBehavior;
   if (
     typeof stored.serviceUrlBehavior === "string" &&
     VALID_SERVICE_URL_BEHAVIORS.has(stored.serviceUrlBehavior)

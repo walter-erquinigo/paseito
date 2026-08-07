@@ -8,13 +8,11 @@ import { getParentAgentIdFromLabels } from "@getpaseo/protocol/agent-labels";
 
 export type AgentUnarchiveController = Pick<AgentManager, "notifyAgentState" | "unarchiveSnapshot">;
 
-export type AgentRunController = Pick<
-  AgentManager,
-  "getAgent" | "tryRunOutOfBand" | "hasInFlightRun" | "replaceAgentRun" | "streamAgent"
->;
+export type AgentRunController = Pick<AgentManager, "getAgent" | "startAgentRun">;
 
 export interface StartAgentRunOptions {
   replaceRunning?: boolean;
+  activeRunBehavior?: "replace" | "steer";
   runOptions?: AgentRunOptions;
 }
 
@@ -35,26 +33,20 @@ export async function startAgentRun(
       promptType: typeof prompt === "string" ? "string" : "structured",
       hasRunOptions: Boolean(options?.runOptions),
       replaceRunning: Boolean(options?.replaceRunning),
+      activeRunBehavior: options?.activeRunBehavior,
     },
     "agent.session.start_stream.request",
   );
-  // Out-of-band commands (e.g. /goal pause) must run WITHOUT canceling an
-  // in-flight turn — replaceAgentRun would interrupt the running turn. The
-  // intercept lives at this layer so it covers every prompt entrypoint.
-  if (agentManager.tryRunOutOfBand(agentId, prompt)) {
-    return { outOfBand: true };
-  }
-  const shouldReplace = Boolean(options?.replaceRunning && agentManager.hasInFlightRun(agentId));
-  const runOptions = options?.runOptions;
-  const iterator = shouldReplace
-    ? await agentManager.replaceAgentRun(agentId, prompt, runOptions)
-    : agentManager.streamAgent(agentId, prompt, runOptions);
+  const dispatch = await agentManager.startAgentRun(agentId, prompt, options);
+  if (dispatch.outOfBand) return { outOfBand: true };
+  const iterator = dispatch.events;
   logger.trace(
     {
       agentId,
       provider: snapshot?.provider,
       providerSessionId: snapshot?.persistence?.sessionId ?? undefined,
-      shouldReplace,
+      replaceRunning: Boolean(options?.replaceRunning),
+      activeRunBehavior: options?.activeRunBehavior,
     },
     "agent.session.start_stream.iterator_returned",
   );
@@ -126,6 +118,7 @@ export interface SendPromptToAgentParams {
   /** Prompt to dispatch to the provider (may include image blocks or wrapped text). */
   prompt: AgentPromptInput;
   messageId?: string;
+  activeRunBehavior?: "replace" | "steer";
   runOptions?: AgentRunOptions;
   /** Optional mode to set on the agent before the run starts. */
   sessionMode?: string;
@@ -203,6 +196,7 @@ export async function sendPromptToAgent(
 
   return await startAgentRun(params.agentManager, params.agentId, params.prompt, params.logger, {
     replaceRunning: true,
+    activeRunBehavior: params.activeRunBehavior,
     runOptions,
   });
 }

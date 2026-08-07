@@ -1,13 +1,26 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { DaemonClient, FetchAgentsEntry } from "@getpaseo/client/internal/daemon-client";
 import type { AgentSnapshotPayload } from "@getpaseo/protocol/messages";
 import { PARENT_AGENT_ID_LABEL } from "@getpaseo/protocol/agent-labels";
 import type { AgentPermissionRequest } from "@getpaseo/protocol/agent-types";
 import { useSessionStore } from "@/stores/session-store";
+import { useComposerQueueStore } from "@/composer/queue-store";
 import { normalizeAgentSnapshot } from "@/utils/agent-snapshots";
 import { isAgentArchiving, setAgentArchiving } from "@/hooks/use-archive-agent";
 import { queryClient } from "@/data/query-client";
 import { applyAgentDirectoryDelta, replaceFetchedAgentDirectory } from "./agent-directory-sync";
+
+vi.mock("@react-native-async-storage/async-storage", () => {
+  const values = new Map<string, string>();
+  return {
+    default: {
+      getItem: async (key: string) => values.get(key) ?? null,
+      setItem: async (key: string, value: string) => void values.set(key, value),
+      removeItem: async (key: string) => void values.delete(key),
+      clear: async () => void values.clear(),
+    },
+  };
+});
 
 function createAgentPayload(
   input: Partial<Omit<AgentSnapshotPayload, "labels">> & {
@@ -129,10 +142,9 @@ describe("replaceFetchedAgentDirectory", () => {
     };
     store.setAgents(serverId, new Map([[agentId, agent]]));
     store.setAgentDetails(serverId, new Map([[agentId, agent]]));
-    store.setQueuedMessages(
-      serverId,
-      new Map([[agentId, [{ id: "queued", text: "next", attachments: [] }]]]),
-    );
+    useComposerQueueStore
+      .getState()
+      .write(serverId, new Map([[agentId, [{ id: "queued", text: "next", attachments: [] }]]]));
     store.setAgentTimelineCursor(
       serverId,
       new Map([[agentId, { epoch: "epoch", startSeq: 1, endSeq: 2 }]]),
@@ -150,7 +162,7 @@ describe("replaceFetchedAgentDirectory", () => {
     expect({
       agents: session?.agents.has(agentId),
       details: session?.agentDetails.has(agentId),
-      queued: session?.queuedMessages.has(agentId),
+      queued: useComposerQueueStore.getState().read(serverId, agentId).length > 0,
       cursor: session?.agentTimelineCursor.has(agentId),
       permissions: session?.pendingPermissions.size,
       initializing: session?.initializingAgents.has(agentId),
@@ -158,7 +170,7 @@ describe("replaceFetchedAgentDirectory", () => {
     }).toEqual({
       agents: false,
       details: false,
-      queued: false,
+      queued: true,
       cursor: false,
       permissions: 0,
       initializing: false,

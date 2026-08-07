@@ -4625,6 +4625,47 @@ test("replaceAgentRun does not emit idle or resolve waiters between interrupted 
   unsubscribe();
 });
 
+test("startAgentRun only steers an active run when explicitly requested", async () => {
+  const workdir = mkdtempSync(join(tmpdir(), "agent-manager-explicit-steer-"));
+  const storage = new AgentStorage(join(workdir, "agents"), logger);
+  const manager = new AgentManager({
+    clients: { codex: new TestAgentClient() },
+    registry: storage,
+    logger,
+    idFactory: () => "00000000-0000-4000-8000-000000000126",
+  });
+  const snapshot = await manager.createAgent({ provider: "codex", cwd: workdir }, undefined, {
+    workspaceId: undefined,
+  });
+  const replacementEvents = (async function* replacementEvents() {})();
+  const steeringEvents = (async function* steeringEvents() {})();
+  vi.spyOn(manager, "hasInFlightRun").mockReturnValue(true);
+  const replaceAgentRunSpy = vi
+    .spyOn(manager, "replaceAgentRun")
+    .mockResolvedValue(replacementEvents);
+  const canSteerSpy = vi.fn().mockReturnValue(true);
+  const steerAgentRunSpy = vi.fn().mockReturnValue(steeringEvents);
+  Reflect.set(manager, "canSteerActiveForegroundRun", canSteerSpy);
+  Reflect.set(manager, "steerAgentRun", steerAgentRunSpy);
+
+  const legacy = await manager.startAgentRun(snapshot.id, "legacy request", {
+    replaceRunning: true,
+  });
+  expect(legacy).toEqual({ outOfBand: false, events: replacementEvents });
+  expect(replaceAgentRunSpy).toHaveBeenCalledWith(snapshot.id, "legacy request", undefined);
+  expect(steerAgentRunSpy).not.toHaveBeenCalled();
+
+  replaceAgentRunSpy.mockClear();
+  const explicit = await manager.startAgentRun(snapshot.id, "new direction", {
+    replaceRunning: true,
+    activeRunBehavior: "steer",
+  });
+  expect(explicit).toEqual({ outOfBand: false, events: steeringEvents });
+  expect(canSteerSpy).toHaveBeenCalledWith(snapshot.id);
+  expect(steerAgentRunSpy).toHaveBeenCalledWith(snapshot.id, "new direction", undefined);
+  expect(replaceAgentRunSpy).not.toHaveBeenCalled();
+});
+
 test("replaceAgentRun stays running when a stale old terminal arrives before the replacement turn is current", async () => {
   const workdir = mkdtempSync(join(tmpdir(), "agent-manager-replace-stale-terminal-"));
   const storagePath = join(workdir, "agents");
