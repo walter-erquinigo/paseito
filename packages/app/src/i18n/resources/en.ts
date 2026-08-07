@@ -93,6 +93,12 @@ export const en = {
       queue: "Queue",
       send: "Send",
     },
+    queue: {
+      steer: "Steer",
+      steeringConversation: "Steering active work",
+      steerHint: "Send this now as guidance for the active run",
+      replaceFallbackHint: "This provider will restart the active run with this message",
+    },
     cancel: {
       cancelingAgent: "Canceling agent",
       stopAgent: "Stop agent",
@@ -1784,11 +1790,11 @@ export const en = {
       defaultSend: {
         label: "Default send",
         descriptions: {
-          interrupt: "When the agent is running, Enter interrupts. Command/Ctrl+Enter queues.",
+          steer: "When the agent is running, Enter steers it. Command/Ctrl+Enter queues.",
           queue: "When the agent is running, Enter queues. Command/Ctrl+Enter submits.",
         },
         options: {
-          interrupt: "Interrupt",
+          steer: "Steer",
           queue: "Queue",
         },
       },

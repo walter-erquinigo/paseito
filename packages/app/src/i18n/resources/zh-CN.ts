@@ -95,6 +95,12 @@ export const zhCN: TranslationResources = {
       queue: "排队",
       send: "发送",
     },
+    queue: {
+      steer: "引导",
+      steeringConversation: "正在引导当前工作",
+      steerHint: "立即发送，作为对当前运行的指导",
+      replaceFallbackHint: "此提供商将使用这条消息重新启动当前运行",
+    },
     cancel: {
       cancelingAgent: "正在取消 Agent",
       stopAgent: "停止 Agent",
@@ -1753,11 +1759,11 @@ export const zhCN: TranslationResources = {
       defaultSend: {
         label: "默认发送",
         descriptions: {
-          interrupt: "Agent 运行时，Enter 会中断。Command/Ctrl+Enter 会排队。",
+          steer: "Agent 运行时，Enter 会引导其调整。Command/Ctrl+Enter 会排队。",
           queue: "Agent 运行时，Enter 会排队。Command/Ctrl+Enter 会提交。",
         },
         options: {
-          interrupt: "中断",
+          steer: "引导",
           queue: "排队",
         },
       },

@@ -128,7 +128,7 @@ export interface MessageInputProps {
   isAgentRunning?: boolean;
   /** Controls what the default send action (Enter, send button, dictation) does
    *  when the agent is running. "interrupt" sends immediately, "queue" queues. */
-  defaultSendBehavior?: "interrupt" | "queue";
+  defaultSendBehavior?: "steer" | "queue";
   /** Callback for queue button when agent is running */
   onQueue?: (payload: MessagePayload) => void;
   /** Optional handler used when submit button is in loading state. */
@@ -785,6 +785,31 @@ function PrimaryAction({
   if (kind === "send") return <SendButtonTooltip {...sendButtonProps} />;
   return null;
 }
+
+function applyDictationTranscript(text: string, ctx: DictationTranscriptContext): void {
+  if (!text) return;
+  const shouldPad = ctx.value.length > 0 && !/\s$/.test(ctx.value);
+  const nextValue = `${ctx.value}${shouldPad ? " " : ""}${text}`;
+
+  if (!ctx.autoSend) {
+    ctx.onChangeText(nextValue);
+    return;
+  }
+
+  if (ctx.defaultSendBehavior === "queue" && ctx.isAgentRunning && ctx.onQueue) {
+    ctx.onQueue({ text: nextValue, attachments: ctx.attachments, cwd: ctx.cwd });
+    ctx.onChangeText("");
+    return;
+  }
+
+  ctx.onSubmit({
+    text: nextValue,
+    attachments: ctx.attachments,
+    cwd: ctx.cwd,
+    forceSend: ctx.isAgentRunning || undefined,
+    activeRunBehavior: ctx.isAgentRunning ? "steer" : undefined,
+  });
+}
 interface ToggleRealtimeVoiceContext {
   voice:
     | {
@@ -891,6 +916,7 @@ function sendMessageImpl(ctx: SendMessageContext): void {
     attachments: ctx.attachments,
     cwd: ctx.cwd,
     forceSend: ctx.isAgentRunning || undefined,
+    activeRunBehavior: ctx.isAgentRunning ? "steer" : undefined,
   });
   // When the host preserves and locks the composer (e.g. new-workspace creation),
   // the text stays put — collapsing the height would clip it. Keep it grown.
@@ -983,7 +1009,7 @@ interface SendButtonStateInput {
   isSubmitDisabled: boolean;
   isSubmitLoading: boolean;
   onSubmitLoadingPress: (() => void) | undefined;
-  defaultSendBehavior: "interrupt" | "queue";
+  defaultSendBehavior: "steer" | "queue";
   isAgentRunning: boolean;
 }
 
@@ -1033,7 +1059,7 @@ interface ResolvedMessageInputProps {
   voiceServerId: string | undefined;
   voiceAgentId: string | undefined;
   isAgentRunning: boolean;
-  defaultSendBehavior: "interrupt" | "queue";
+  defaultSendBehavior: "steer" | "queue";
   onQueue: ((payload: MessagePayload) => void) | undefined;
   onSubmitLoadingPress: (() => void) | undefined;
   onKeyPressCallback: ((event: { key: string; preventDefault: () => void }) => boolean) | undefined;
@@ -1079,7 +1105,7 @@ function resolveMessageInputProps(props: MessageInputProps): ResolvedMessageInpu
     voiceServerId: props.voiceServerId,
     voiceAgentId: props.voiceAgentId,
     isAgentRunning: props.isAgentRunning ?? false,
-    defaultSendBehavior: props.defaultSendBehavior ?? "interrupt",
+    defaultSendBehavior: props.defaultSendBehavior ?? "queue",
     onQueue: props.onQueue,
     onSubmitLoadingPress: props.onSubmitLoadingPress,
     onKeyPressCallback: props.onKeyPress,

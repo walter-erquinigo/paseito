@@ -322,6 +322,8 @@ const AgentCapabilityFlagsSchema: z.ZodType<AgentCapabilityFlags> = z
     supportsRewindFiles: z.boolean().optional().default(false),
     // COMPAT(rewind): added in v0.1.X, drop when floor >= v0.1.X.
     supportsRewindBoth: z.boolean().optional().default(false),
+    // COMPAT(steering): optional until every supported daemon advertises it.
+    supportsSteering: z.boolean().optional().default(false),
   })
   .catchall(z.boolean());
 
@@ -1200,6 +1202,7 @@ export const SendAgentMessageRequestSchema = z.object({
   agentId: z.string(),
   text: z.string(),
   messageId: z.string().optional(), // Client-provided ID for deduplication
+  activeRunBehavior: z.enum(["replace", "steer"]).optional(),
   images: z.array(ImageAttachmentSchema).optional(),
   attachments: AgentAttachmentsSchema,
 });

@@ -95,6 +95,12 @@ export const es: TranslationResources = {
       queue: "Cola",
       send: "Enviar",
     },
+    queue: {
+      steer: "Redirigir",
+      steeringConversation: "Redirigiendo el trabajo activo",
+      steerHint: "Enviar ahora como guía para la ejecución activa",
+      replaceFallbackHint: "Este proveedor reiniciará la ejecución activa con este mensaje",
+    },
     cancel: {
       cancelingAgent: "Agente de cancelación",
       stopAgent: "detener agente",
@@ -1818,13 +1824,13 @@ export const es: TranslationResources = {
       defaultSend: {
         label: "Envío predeterminado",
         descriptions: {
-          interrupt:
-            "Cuando el agente se está ejecutando, Enter interrumpe. Command/Ctrl+Enter pone en cola.",
+          steer:
+            "Cuando el agente se está ejecutando, Enter lo redirige. Command/Ctrl+Enter pone en cola.",
           queue:
             "Cuando el agente se está ejecutando, Enter pone en cola. Command/Ctrl+Enter envía.",
         },
         options: {
-          interrupt: "Interrumpir",
+          steer: "Redirigir",
           queue: "Cola",
         },
       },
