@@ -1609,6 +1609,9 @@ export const en = {
       deleteLines: "Delete selected lines",
       addLineAbove: "Add line above",
       addLineBelow: "Add line below",
+      rangeHidden: "Expand hidden lines before selecting this range",
+      rangeTooLarge: "Suggestions can include at most 200 lines",
+      rangeInvalid: "Select current-side lines from the same file and revision",
     },
   },
   settings: {

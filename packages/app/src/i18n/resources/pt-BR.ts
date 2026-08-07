@@ -1627,6 +1627,9 @@ export const ptBR: TranslationResources = {
       deleteLines: "Excluir linhas selecionadas",
       addLineAbove: "Adicionar linha acima",
       addLineBelow: "Adicionar linha abaixo",
+      rangeHidden: "Expanda as linhas ocultas antes de selecionar este intervalo",
+      rangeTooLarge: "As sugestões podem incluir no máximo 200 linhas",
+      rangeInvalid: "Selecione linhas atuais do mesmo arquivo e revisão",
     },
   },
   settings: {

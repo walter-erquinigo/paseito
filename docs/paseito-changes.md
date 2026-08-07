@@ -23,11 +23,17 @@ target region when the Changes view reopens.
 
 ## Suggested edits
 
-Starting a comment on a current-side added or context line exposes **Suggest edit**. A suggestion can
-grow to adjacent lines in the same displayed hunk, up to 200 lines, and contains replacement text
-plus an optional note. An empty replacement means deletion. Suggestions are persisted with their
-original source and file revision and are included in the review attachment sent to the destination
-agent. They never edit the checkout or post to GitHub/GitLab.
+Starting a comment on a current-side added or context line exposes **Suggest edit**. On macOS, drag
+across current-side line-number gutters or Shift-click two endpoints to select a contiguous range.
+The selected lines can cross manually expanded context and synthetic hunk boundaries, but every line
+must be loaded first. Omitted lines must be expanded before completing the selection. Escape or a
+click outside the diff cancels an unfinished Shift-click selection.
+
+Completing a range opens the editor below its final line with a copy of the original source ready to
+edit. A suggestion can contain up to 200 lines and includes replacement text plus an optional note.
+An empty replacement means deletion. Suggestions are persisted with their original source and file
+revision and are included in the review attachment sent to the destination agent. They never edit
+the checkout or post to GitHub/GitLab.
 
 When the file revision changes, the suggestion remains visible as stale. Sending is blocked until
 the reviewer edits it against the current lines or deletes it; Paseito never silently remaps it.

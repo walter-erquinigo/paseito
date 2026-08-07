@@ -66,7 +66,8 @@
       "permanent": false,
       "intent": "Let a reviewer send persisted, structured one- or multi-line replacement suggestions to the destination agent from Changes.",
       "invariants": [
-        "Suggestions target only contiguous current-side added or context lines in one displayed hunk.",
+        "On macOS, reviewers can drag or Shift-click current-side gutters to select up to 200 contiguous loaded lines, including manually expanded context across synthetic hunk boundaries.",
+        "Range selection opens the suggestion editor below the final line with the selected source prefilled; omitted lines must be expanded before selection.",
         "Replacement text may be empty, must differ from the original, and is bounded to 200 lines and 64 KiB.",
         "Suggestions are persisted with original lines and source revision; stale suggestions remain visible and block sending until updated or deleted.",
         "Suggestions are sent only to the destination agent and never mutate a checkout or forge review."

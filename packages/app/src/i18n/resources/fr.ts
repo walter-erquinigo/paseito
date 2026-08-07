@@ -1644,6 +1644,9 @@ export const fr: TranslationResources = {
       deleteLines: "Supprimer les lignes sélectionnées",
       addLineAbove: "Ajouter la ligne précédente",
       addLineBelow: "Ajouter la ligne suivante",
+      rangeHidden: "Développez les lignes masquées avant de sélectionner cette plage",
+      rangeTooLarge: "Les suggestions peuvent contenir au maximum 200 lignes",
+      rangeInvalid: "Sélectionnez des lignes actuelles du même fichier et de la même révision",
     },
   },
   settings: {

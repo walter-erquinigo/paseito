@@ -1598,6 +1598,9 @@ export const ar: TranslationResources = {
       deleteLines: "حذف الأسطر المحددة",
       addLineAbove: "إضافة السطر أعلاه",
       addLineBelow: "إضافة السطر أدناه",
+      rangeHidden: "وسّع الأسطر المخفية قبل تحديد هذا النطاق",
+      rangeTooLarge: "يمكن أن تتضمن الاقتراحات 200 سطر كحد أقصى",
+      rangeInvalid: "حدد أسطر الجانب الحالي من الملف والمراجعة نفسيهما",
     },
   },
   settings: {

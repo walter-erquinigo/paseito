@@ -228,6 +228,13 @@ const EMPTY_COMMENTS: readonly ReviewDraftComment[] = [];
 
 function noopStartComment(): void {}
 
+function isSuggestionTargetSelected(
+  reviewTarget: ReviewableDiffTarget | null | undefined,
+  reviewActions: InlineReviewActions | undefined,
+): boolean {
+  return Boolean(reviewTarget && reviewActions?.selectedSuggestionTargetKeys.has(reviewTarget.key));
+}
+
 const DIFF_LINE_HOVER_STYLE = isWeb ? ({ cursor: "auto" } as const) : null;
 
 function LongPressableLine({
@@ -323,11 +330,12 @@ function DiffGutterCell({
     () => [
       styles.gutterCell,
       lineTypeBackground(type),
+      isSuggestionTargetSelected(reviewTarget, reviewActions) && styles.suggestionSelectionLine,
       rowMetricsStyle,
       inlineUnistylesStyle({ width: gutterWidth }),
       style,
     ],
-    [type, rowMetricsStyle, gutterWidth, style],
+    [type, reviewActions, reviewTarget, rowMetricsStyle, gutterWidth, style],
   );
   const textStyle = useMemo(
     () => [
@@ -357,6 +365,7 @@ function DiffGutterCell({
       isLineHovered={isLineHovered}
       lineHeight={lineHeight}
       onStartComment={onStartComment}
+      reviewActions={reviewActions}
       style={containerStyle}
       actionTestID={actionTestID}
     >
@@ -475,8 +484,13 @@ function DiffTextLine({
   const rowMetricsStyle = useDiffRowMetricsStyle(textMetricsStyle);
 
   const containerStyle = useMemo(
-    () => [styles.textLineContainer, lineTypeBackground(line.type), rowMetricsStyle],
-    [line.type, rowMetricsStyle],
+    () => [
+      styles.textLineContainer,
+      lineTypeBackground(line.type),
+      isSuggestionTargetSelected(reviewTarget, reviewActions) && styles.suggestionSelectionLine,
+      rowMetricsStyle,
+    ],
+    [line.type, reviewActions, reviewTarget, rowMetricsStyle],
   );
   const textStyle = useMemo(
     () => [
@@ -535,8 +549,14 @@ function SplitTextLine({
   const rowMetricsStyle = useDiffRowMetricsStyle(textMetricsStyle);
 
   const containerStyle = useMemo(
-    () => [styles.textLineContainer, lineTypeBackground(line?.type), rowMetricsStyle],
-    [line?.type, rowMetricsStyle],
+    () => [
+      styles.textLineContainer,
+      lineTypeBackground(line?.type),
+      isSuggestionTargetSelected(line?.reviewTarget, reviewActions) &&
+        styles.suggestionSelectionLine,
+      rowMetricsStyle,
+    ],
+    [line?.reviewTarget, line?.type, reviewActions, rowMetricsStyle],
   );
   const textStyle = useMemo(
     () => [
@@ -598,8 +618,13 @@ function DiffLineView({
   const rowMetricsStyle = useDiffRowMetricsStyle(textMetricsStyle);
 
   const containerStyle = useMemo(
-    () => [styles.diffLineContainer, lineTypeBackground(line.type), rowMetricsStyle],
-    [line.type, rowMetricsStyle],
+    () => [
+      styles.diffLineContainer,
+      lineTypeBackground(line.type),
+      isSuggestionTargetSelected(reviewTarget, reviewActions) && styles.suggestionSelectionLine,
+      rowMetricsStyle,
+    ],
+    [line.type, reviewActions, reviewTarget, rowMetricsStyle],
   );
   const textStyle = useMemo(
     () => [
@@ -662,8 +687,14 @@ function SplitDiffLine({
   const rowMetricsStyle = useDiffRowMetricsStyle(textMetricsStyle);
 
   const containerStyle = useMemo(
-    () => [styles.diffLineContainer, lineTypeBackground(line?.type), rowMetricsStyle],
-    [line?.type, rowMetricsStyle],
+    () => [
+      styles.diffLineContainer,
+      lineTypeBackground(line?.type),
+      isSuggestionTargetSelected(line?.reviewTarget, reviewActions) &&
+        styles.suggestionSelectionLine,
+      rowMetricsStyle,
+    ],
+    [line?.reviewTarget, line?.type, reviewActions, rowMetricsStyle],
   );
   const textStyle = useMemo(
     () => [
@@ -2940,6 +2971,21 @@ export function GitDiffPane({
     mode: diffMode,
     baseRef,
   });
+  useEffect(() => {
+    const error = reviewActions.suggestionRangeError;
+    if (!error) return;
+    let messageKey:
+      | "review.suggestion.rangeInvalid"
+      | "review.suggestion.rangeHidden"
+      | "review.suggestion.rangeTooLarge" = "review.suggestion.rangeInvalid";
+    if (error === "hidden-lines") {
+      messageKey = "review.suggestion.rangeHidden";
+    } else if (error === "too-large") {
+      messageKey = "review.suggestion.rangeTooLarge";
+    }
+    toast.error(t(messageKey));
+    reviewActions.onClearSuggestionRangeError();
+  }, [reviewActions, reviewActions.suggestionRangeError, t, toast]);
   const handleExpandContext = useCallback(
     (filePath: string, region: DiffContextRegion, direction: "up" | "down" | "all") => {
       void contextExpansion.expand(filePath, region, direction).catch((error) => {
@@ -3683,6 +3729,9 @@ const styles = StyleSheet.create((theme) => ({
   },
   contextLineContainer: {
     backgroundColor: theme.colors.surface1,
+  },
+  suggestionSelectionLine: {
+    backgroundColor: "rgba(10, 132, 255, 0.22)",
   },
   contextLineText: {
     color: theme.colors.foregroundMuted,
