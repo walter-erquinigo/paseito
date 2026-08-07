@@ -9,6 +9,10 @@ attachments. It does not change merge, pull-request, or update targets. Branch s
 branches on the current first-parent stack first, ordered from the configured base toward the
 current tip. Other `werquinigo/` branches follow, then remaining branches by recency.
 
+When the current branch has commits ahead of its base, Changes opens on the committed branch diff
+even if the working tree is dirty. The **Uncommitted** option remains available and an explicit
+selection is honored for as long as the checkout's dirty state does not change.
+
 ## Hidden context
 
 Omitted regions between diff hunks can load 20 lines from either edge or request the whole remaining

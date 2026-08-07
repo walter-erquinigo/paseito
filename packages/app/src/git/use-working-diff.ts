@@ -47,6 +47,12 @@ function resolveSelectedComparisonBaseRef(
     : undefined;
 }
 
+function hasCommittedBranchChanges(
+  status: { aheadBehind?: { ahead: number } | null } | null,
+): boolean {
+  return (status?.aheadBehind?.ahead ?? 0) > 0;
+}
+
 export function useWorkingDiff({
   serverId,
   workspaceId,
@@ -69,6 +75,7 @@ export function useWorkingDiff({
     (isStatusError && statusError instanceof Error ? statusError.message : null);
   const recordedBaseRef = gitStatus?.baseRef ?? undefined;
   const hasUncommittedChanges = Boolean(gitStatus?.isDirty);
+  const hasCommittedChanges = hasCommittedBranchChanges(gitStatus);
   const currentBranchName =
     gitStatus?.currentBranch && gitStatus.currentBranch !== "HEAD" ? gitStatus.currentBranch : null;
   const baseSelection = useChangesBaseSelection({
@@ -95,6 +102,7 @@ export function useWorkingDiff({
   const diffMode = useResolvedDiffMode({
     scopeKey: reviewDraftScopeKey,
     hasUncommittedChanges,
+    hasCommittedChanges,
   });
   const setDiffModeOverride = useSetDiffModeOverride();
   const selectDiffMode = useCallback(
