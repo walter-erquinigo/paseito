@@ -162,6 +162,7 @@ import {
 import { ChatScheduleLoopSession } from "./session/chat/chat-schedule-loop-session.js";
 import { ProviderCatalogSession } from "./session/provider/provider-catalog-session.js";
 import { WorkspaceFilesSession } from "./session/files/workspace-files-session.js";
+import { WorkspaceLspSession } from "./session/lsp/workspace-lsp-session.js";
 import { AgentConfigSession } from "./session/agent-config/agent-config-session.js";
 import { ProjectConfigSession } from "./session/project-config/project-config-session.js";
 import { DaemonSession, type DaemonRuntimeConfig } from "./session/daemon/daemon-session.js";
@@ -674,6 +675,7 @@ export class Session {
   private readonly chatScheduleLoopSession: ChatScheduleLoopSession;
   private readonly providerCatalogSession: ProviderCatalogSession;
   private readonly workspaceFilesSession: WorkspaceFilesSession;
+  private readonly workspaceLspSession: WorkspaceLspSession;
   private readonly agentConfigSession: AgentConfigSession;
   private readonly projectConfigSession: ProjectConfigSession;
   private readonly daemonSession: DaemonSession;
@@ -765,6 +767,9 @@ export class Session {
       downloadTokenStore,
       paseoHome,
       logger: this.sessionLogger,
+    });
+    this.workspaceLspSession = new WorkspaceLspSession({
+      emit: (message) => this.emit(message),
     });
     this.agentManager = agentManager;
     this.agentStorage = agentStorage;
@@ -2193,6 +2198,8 @@ export class Session {
         return undefined;
       case "fs.file.write.request":
         return this.workspaceFilesSession.handleFileWriteRequest(msg);
+      case "workspace.lsp.request":
+        return this.workspaceLspSession.handleRequest(msg);
       case "project_icon_request":
         return this.workspaceFilesSession.handleProjectIconRequest(msg);
       case "project.icon.get.request":
@@ -6977,6 +6984,7 @@ export class Session {
 
     this.workspaceGitObserver.dispose();
     this.workspaceFilesSession.dispose();
+    this.workspaceLspSession.dispose();
   }
 }
 

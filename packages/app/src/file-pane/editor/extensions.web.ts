@@ -78,6 +78,17 @@ export function editorTheme(theme: EditorVisualTheme) {
         ".cm-selectionBackground, ::selection": {
           backgroundColor: theme.selection,
         },
+        ".cm-lsp-hover": {
+          maxWidth: "520px",
+          whiteSpace: "pre-wrap",
+          padding: "8px 10px",
+          border: `1px solid ${theme.border}`,
+          borderRadius: "6px",
+          backgroundColor: theme.background,
+          color: theme.foreground,
+          fontFamily: theme.monoFont,
+          fontSize: `${theme.codeFontSize}px`,
+        },
         "&.cm-focused": { outline: "none" },
       },
       { dark: theme.colorScheme === "dark" },

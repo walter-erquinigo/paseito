@@ -101,6 +101,8 @@ import type {
   PaseoConfigRevision,
   WorkspaceCreateRequest,
   WorkspaceRecoveryState,
+  WorkspaceLspRequest,
+  WorkspaceLspResult,
 } from "@getpaseo/protocol/messages";
 import type {
   AgentPermissionRequest,
@@ -4362,6 +4364,22 @@ export class DaemonClient {
       message: { type: "fs.file.write.request", ...input },
       responseType: "fs.file.write.response",
     });
+    return payload.result;
+  }
+
+  async requestWorkspaceLsp(
+    input: Omit<WorkspaceLspRequest, "type" | "requestId">,
+  ): Promise<WorkspaceLspResult> {
+    const payload = await this.sendCorrelatedSessionRequest({
+      message: { type: "workspace.lsp.request", ...input },
+      responseType: "workspace.lsp.response",
+    });
+    if (payload.error || !payload.result) {
+      throw new Error(payload.error ?? "Lens LSP broker returned no result");
+    }
+    if (payload.documentVersion !== input.documentVersion) {
+      throw new Error("Lens LSP broker returned a stale document version");
+    }
     return payload.result;
   }
 

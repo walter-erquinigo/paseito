@@ -190,6 +190,7 @@ jobs:
           test "$(jq -r .daemonVersion "$manifest")" = "$(jq -r .version packages/server/package.json)"
           test "$(jq -r .commit "$manifest")" = "${{ inputs.expected_sha }}"
           test "$(jq -r .feature "$manifest")" = changesBaseSelector
+          test "$(jq -r '.features | contains(["workspaceLsp"])' "$manifest")" = true
           entrypoint="$(jq -r .entrypoint "$manifest")"
           test -x "extracted/paseito-daemon/$entrypoint"
           node "extracted/paseito-daemon/$entrypoint" --version

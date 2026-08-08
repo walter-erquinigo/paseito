@@ -2333,6 +2333,93 @@ export const FileWriteRequestSchema = z.object({
   requestId: z.string(),
 });
 
+export const WorkspaceLspPositionSchema = z.object({
+  line: z.number().int().nonnegative(),
+  character: z.number().int().nonnegative(),
+});
+
+export const WorkspaceLspRangeSchema = z.object({
+  start: WorkspaceLspPositionSchema,
+  end: WorkspaceLspPositionSchema,
+});
+
+export const WorkspaceLspTextEditSchema = z.object({
+  range: WorkspaceLspRangeSchema,
+  newText: z.string(),
+});
+
+export const WorkspaceLspDiagnosticSchema = z.object({
+  severity: z.number().int().min(1).max(4),
+  message: z.string(),
+  range: WorkspaceLspRangeSchema,
+  code: z.union([z.string(), z.number()]).optional(),
+  source: z.string().optional(),
+});
+
+export const WorkspaceLspCompletionItemSchema = z.object({
+  label: z.string(),
+  kind: z.number().int().optional(),
+  detail: z.string().optional(),
+  documentation: z
+    .union([z.string(), z.object({ kind: z.string(), value: z.string() })])
+    .optional(),
+  sortText: z.string().optional(),
+  filterText: z.string().optional(),
+  insertText: z.string().optional(),
+  insertTextFormat: z.union([z.literal(1), z.literal(2)]).optional(),
+  textEdit: WorkspaceLspTextEditSchema.optional(),
+  additionalTextEdits: z.array(WorkspaceLspTextEditSchema).optional(),
+});
+
+export const WorkspaceLspLocationSchema = z.object({
+  uri: z.string(),
+  range: WorkspaceLspRangeSchema,
+});
+
+export const WorkspaceLspHoverSchema = z.object({
+  contents: z.union([
+    z.string(),
+    z.object({ kind: z.string(), value: z.string() }),
+    z.array(
+      z.union([
+        z.string(),
+        z.object({ language: z.string(), value: z.string() }),
+        z.object({ kind: z.string(), value: z.string() }),
+      ]),
+    ),
+  ]),
+  range: WorkspaceLspRangeSchema.optional(),
+});
+
+export const WorkspaceLspOperationSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("open"), content: z.string() }),
+  z.object({ kind: z.literal("change"), content: z.string() }),
+  z.object({ kind: z.literal("close") }),
+  z.object({ kind: z.literal("diagnostics") }),
+  z.object({ kind: z.literal("completion"), position: WorkspaceLspPositionSchema }),
+  z.object({ kind: z.literal("hover"), position: WorkspaceLspPositionSchema }),
+  z.object({ kind: z.literal("definition"), position: WorkspaceLspPositionSchema }),
+  z.object({
+    kind: z.literal("formatting"),
+    options: z.object({
+      tabSize: z.number().int().positive(),
+      insertSpaces: z.boolean(),
+      trimTrailingWhitespace: z.boolean().optional(),
+      insertFinalNewline: z.boolean().optional(),
+      trimFinalNewlines: z.boolean().optional(),
+    }),
+  }),
+]);
+
+export const WorkspaceLspRequestSchema = z.object({
+  type: z.literal("workspace.lsp.request"),
+  cwd: z.string(),
+  path: z.string(),
+  documentVersion: z.number().int().nonnegative(),
+  operation: WorkspaceLspOperationSchema,
+  requestId: z.string(),
+});
+
 export const ProjectIconRequestSchema = z.object({
   type: z.literal("project_icon_request"),
   cwd: z.string(),
@@ -2727,6 +2814,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   FileSubscribeRequestSchema,
   FileUnsubscribeRequestSchema,
   FileWriteRequestSchema,
+  WorkspaceLspRequestSchema,
   ProjectIconRequestSchema,
   ProjectIconGetRequestSchema,
   FileDownloadTokenRequestSchema,
@@ -2978,6 +3066,8 @@ export const ServerInfoStatusPayloadSchema = z
         workspaceRecovery: z.boolean().optional(),
         // COMPAT(workspaceFileEditing): added in v0.2.0, remove after 2027-01-18 once daemon floor >= v0.2.0.
         workspaceFileEditing: z.boolean().optional(),
+        // COMPAT(workspaceLsp): added in Paseito v0.2.5-paseito.11, remove after 2027-02-08.
+        workspaceLsp: z.boolean().optional(),
         // COMPAT(providerUsageList): added in v0.1.98, drop the gate when daemon floor >= v0.1.98.
         providerUsageList: z.boolean().optional(),
         // COMPAT(agentDetach): added in v0.1.98, remove gate after 2026-12-19 once daemon floor >= v0.1.98.
@@ -5019,6 +5109,29 @@ export const FileWriteResponseSchema = z.object({
   }),
 });
 
+export const WorkspaceLspResultSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("ack") }),
+  z.object({ kind: z.literal("diagnostics"), items: z.array(WorkspaceLspDiagnosticSchema) }),
+  z.object({
+    kind: z.literal("completion"),
+    isIncomplete: z.boolean(),
+    items: z.array(WorkspaceLspCompletionItemSchema),
+  }),
+  z.object({ kind: z.literal("hover"), hover: WorkspaceLspHoverSchema.nullable() }),
+  z.object({ kind: z.literal("definition"), locations: z.array(WorkspaceLspLocationSchema) }),
+  z.object({ kind: z.literal("formatting"), edits: z.array(WorkspaceLspTextEditSchema) }),
+]);
+
+export const WorkspaceLspResponseSchema = z.object({
+  type: z.literal("workspace.lsp.response"),
+  payload: z.object({
+    documentVersion: z.number().int().nonnegative(),
+    result: WorkspaceLspResultSchema.nullable(),
+    error: z.string().nullable(),
+    requestId: z.string(),
+  }),
+});
+
 export const FileUpdateSchema = z.object({
   type: z.literal("fs.file.update"),
   payload: z.object({
@@ -5614,6 +5727,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   FileSubscribeResponseSchema,
   FileUnsubscribeResponseSchema,
   FileWriteResponseSchema,
+  WorkspaceLspResponseSchema,
   FileUpdateSchema,
   ProjectIconResponseSchema,
   ProjectIconGetResponseSchema,
@@ -6040,6 +6154,14 @@ export type FileUnsubscribeResponse = z.infer<typeof FileUnsubscribeResponseSche
 export type FileWriteRequest = z.infer<typeof FileWriteRequestSchema>;
 export type FileWriteResponse = z.infer<typeof FileWriteResponseSchema>;
 export type FileWriteResult = z.infer<typeof FileWriteResultSchema>;
+export type WorkspaceLspRequest = z.infer<typeof WorkspaceLspRequestSchema>;
+export type WorkspaceLspResponse = z.infer<typeof WorkspaceLspResponseSchema>;
+export type WorkspaceLspResult = z.infer<typeof WorkspaceLspResultSchema>;
+export type WorkspaceLspDiagnostic = z.infer<typeof WorkspaceLspDiagnosticSchema>;
+export type WorkspaceLspCompletionItem = z.infer<typeof WorkspaceLspCompletionItemSchema>;
+export type WorkspaceLspLocation = z.infer<typeof WorkspaceLspLocationSchema>;
+export type WorkspaceLspHover = z.infer<typeof WorkspaceLspHoverSchema>;
+export type WorkspaceLspTextEdit = z.infer<typeof WorkspaceLspTextEditSchema>;
 export type FileUpdate = z.infer<typeof FileUpdateSchema>;
 export type ProjectIconRequest = z.infer<typeof ProjectIconRequestSchema>;
 export type ProjectIconResponse = z.infer<typeof ProjectIconResponseSchema>;

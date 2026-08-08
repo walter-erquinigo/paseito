@@ -25,6 +25,7 @@ export interface FileEditorFile {
 }
 
 export interface FileEditorSession {
+  prepareWrite?(content: string): Promise<string>;
   write(input: {
     content: string;
     expectedModifiedAt: string;
@@ -128,7 +129,13 @@ export class FileEditorModel {
     if (this.snapshot.status === "conflict") {
       status = "conflict";
     }
-    this.setSnapshot({ ...this.snapshot, status, content, modified, error: null });
+    this.setSnapshot({
+      ...this.snapshot,
+      status,
+      content,
+      modified,
+      error: null,
+    });
     if (status === "dirty") this.scheduleAutosave();
     else this.clearAutosave();
   }
@@ -220,7 +227,16 @@ export class FileEditorModel {
     const hasBom = this.hasBom;
     this.observedWhileSaving = null;
     this.setSnapshot({ ...this.snapshot, status: "saving", error: null });
-    const serializedContent = hasBom ? `\uFEFF${content}` : content;
+    let preparedContent = content;
+    if (this.session.prepareWrite) {
+      try {
+        preparedContent = (await this.session.prepareWrite(content)) ?? content;
+      } catch {
+        // Formatting is optional. Its failure must never block or alter a save.
+        preparedContent = content;
+      }
+    }
+    const serializedContent = hasBom ? `\uFEFF${preparedContent}` : preparedContent;
     let result: FileWriteResult;
     try {
       result = await this.session.write({
@@ -239,7 +255,11 @@ export class FileEditorModel {
     }
     if (this.disposed || sequence !== this.saveSequence) return;
     if (result.status === "error") {
-      this.setSnapshot({ ...this.snapshot, status: "error", error: result.error });
+      this.setSnapshot({
+        ...this.snapshot,
+        status: "error",
+        error: result.error,
+      });
       return;
     }
     if (result.status === "conflict") {
@@ -257,14 +277,18 @@ export class FileEditorModel {
       revision: result.revision,
     };
     const pending = this.takeObservedWhileSaving();
-    this.persistedContent = content;
-    if (pending && !observationMatchesWrite(pending, content, hasBom)) {
+    this.persistedContent = preparedContent;
+    const currentContent =
+      this.snapshot.content === content ? preparedContent : this.snapshot.content;
+    if (pending && !observationMatchesWrite(pending, preparedContent, hasBom)) {
       const pendingVersion = observationVersion(pending);
       this.observed = pending;
       this.setSnapshot({
         ...this.snapshot,
         status: "conflict",
-        modified: this.snapshot.content !== this.persistedContent,
+        content: currentContent,
+        lineSeparator: detectLineSeparator(currentContent),
+        modified: currentContent !== this.persistedContent,
         version: writtenVersion,
         observedVersion: pendingVersion,
         error: null,
@@ -273,10 +297,12 @@ export class FileEditorModel {
     }
     const settledVersion = pending?.status === "ready" ? pending.file.version : writtenVersion;
     this.observed = pending ?? { status: "unsettled", version: writtenVersion };
-    const modified = this.snapshot.content !== this.persistedContent;
+    const modified = currentContent !== this.persistedContent;
     this.setSnapshot({
       ...this.snapshot,
       status: modified ? "dirty" : "clean",
+      content: currentContent,
+      lineSeparator: detectLineSeparator(currentContent),
       modified,
       version: settledVersion,
       observedVersion: settledVersion,

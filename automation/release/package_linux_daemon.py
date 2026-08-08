@@ -72,6 +72,7 @@ def validate_local_workspace_resolution(stage: Path) -> None:
         "changesContextExpansion",
         "reviewSuggestionsV1",
         "fileReviewV1",
+        "workspaceLsp",
     )
     missing_features = [feature for feature in required_features if feature not in feature_text]
     if missing_features:
@@ -114,6 +115,7 @@ def manifest(version: str, commit: str, daemon_version: str) -> dict[str, Any]:
             "changesContextExpansion",
             "reviewSuggestionsV1",
             "fileReviewV1",
+            "workspaceLsp",
         ],
     }
 

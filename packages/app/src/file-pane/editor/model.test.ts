@@ -35,6 +35,7 @@ class FileSession implements FileEditorSession {
   nextWrite: FileWriteResult | Error | null = null;
   private pendingWrite: Promise<FileWriteResult> | null = null;
   private resolvePendingWrite: ((result: FileWriteResult) => void) | null = null;
+  prepareWrite?: (content: string) => Promise<string>;
 
   constructor(file: FileEditorFile) {
     this.file = file;
@@ -141,6 +142,36 @@ describe("FileEditorModel", () => {
     model.edit("saved");
     await model.save();
     expect(model.getSnapshot()).toMatchObject({ status: "clean", modified: false });
+  });
+
+  test("formats once before writing and adopts the formatted buffer", async () => {
+    const { model, session } = makeModel();
+    session.prepareWrite = async (content) => `${content.trim()}\n`;
+    model.edit("formatted   ");
+
+    await model.save();
+
+    expect(session.writes).toEqual([
+      { content: "formatted\n", expectedModifiedAt: "2026-07-18T00:00:00.000Z" },
+    ]);
+    expect(model.getSnapshot()).toMatchObject({
+      status: "clean",
+      content: "formatted\n",
+      modified: false,
+    });
+  });
+
+  test("saves unchanged when optional formatting fails", async () => {
+    const { model, session } = makeModel();
+    session.prepareWrite = async () => {
+      throw new Error("formatter unavailable");
+    };
+    model.edit("keep me");
+
+    await model.save();
+
+    expect(session.writes[0]?.content).toBe("keep me");
+    expect(model.getSnapshot()).toMatchObject({ status: "clean", content: "keep me" });
   });
 
   test("adopts a precise revision for otherwise unchanged initial metadata", () => {
