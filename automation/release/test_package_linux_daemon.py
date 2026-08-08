@@ -41,6 +41,7 @@ class PackageLinuxDaemonTests(unittest.TestCase):
                     "changesBaseSelector",
                     "changesContextExpansion",
                     "reviewSuggestionsV1",
+                    "fileReviewV1",
                 ],
             },
         )

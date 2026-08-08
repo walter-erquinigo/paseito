@@ -57,7 +57,8 @@ Each release publishes:
 
 Linux daemon manifests retain the legacy singular `feature` field for old deployers and add a
 `features` list for capability-complete releases. New Paseito releases require the base selector,
-on-demand Changes context, and structured review-suggestion capabilities to be present together.
+on-demand Changes context, structured review suggestions, and branch-file review-state capabilities
+to be present together.
 
 ## Registered remote hosts
 
