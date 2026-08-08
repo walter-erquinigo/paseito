@@ -1578,6 +1578,8 @@ export class VoiceAssistantWebSocketServer {
         changesContextExpansion: true,
         // COMPAT(reviewSuggestionsV1): added in Paseito v0.2.5-paseito.4, remove after 2027-02-05.
         reviewSuggestionsV1: true,
+        // COMPAT(fileReviewV1): added in Paseito v0.2.5-paseito.8, remove after 2027-02-07.
+        fileReviewV1: true,
         // COMPAT(providerRemoval): added in v0.1.105, drop the gate when floor >= v0.1.105.
         providerRemoval: true,
         // COMPAT(importSessionWorkspaceTarget): added in v0.1.110, remove gate after 2027-01-16.

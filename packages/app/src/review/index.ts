@@ -36,3 +36,11 @@ export {
   type InlineReviewActions,
   type InlineReviewEditorState,
 } from "./surface";
+
+export {
+  buildFileReviewScopeKey,
+  useFileReviews,
+  type FileReviewActions,
+  type FileReviewRecord,
+  type FileReviewSnapshot,
+} from "./file-review";

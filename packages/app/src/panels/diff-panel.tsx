@@ -11,6 +11,7 @@ import { useToast } from "@/contexts/toast-context";
 import { useCheckoutGitActionsStore } from "@/git/actions-store";
 import {
   DiffFilesToolbar,
+  FileReviewBulkToggle,
   DiffLayoutToggle,
   DiffModeMenu,
   DiffOptionsMenu,
@@ -201,16 +202,34 @@ function WorkingDiffPanel() {
   const toggleExpandAll = useCallback(() => {
     setExpandedPaths(allFilesExpanded ? [] : null);
   }, [allFilesExpanded]);
+  const toggleAllFileReviews = useCallback(() => {
+    const allReviewed =
+      workingDiff.fileReviews.reviewableCount > 0 &&
+      workingDiff.fileReviews.reviewedCount === workingDiff.fileReviews.reviewableCount;
+    if (allReviewed) {
+      workingDiff.fileReviews.clearAll();
+      return;
+    }
+    workingDiff.fileReviews.markAll();
+    setExpandedPaths([]);
+  }, [workingDiff.fileReviews]);
   const mode = useMemo(
     () => ({
       kind: "working_tab" as const,
       expandedPaths,
       reviewActions: workingDiff.reviewActions,
+      fileReviews: workingDiff.fileReviews,
       focusPath: target.focusPath,
       focusRequestId: target.focusRequestId,
       onExpandedPathsChange: setExpandedPaths,
     }),
-    [expandedPaths, target.focusPath, target.focusRequestId, workingDiff.reviewActions],
+    [
+      expandedPaths,
+      target.focusPath,
+      target.focusRequestId,
+      workingDiff.fileReviews,
+      workingDiff.reviewActions,
+    ],
   );
 
   const baseRefLabel = workingDiff.baseRef?.replace(/^refs\/(heads|remotes)\//, "") ?? "";
@@ -233,6 +252,13 @@ function WorkingDiffPanel() {
               onToggle={panelPreferences.toggleLayout}
             />
           ) : null}
+          <FileReviewBulkToggle
+            fileReviews={workingDiff.fileReviews}
+            isMobile={panelPreferences.isCompact}
+            visible={workingDiff.files.length > 0}
+            testID="working-diff-toggle-file-reviews"
+            onToggle={toggleAllFileReviews}
+          />
           {workingDiff.files.length > 0 ? (
             <DiffFilesToolbar
               allFileDiffsExpanded={allFilesExpanded}

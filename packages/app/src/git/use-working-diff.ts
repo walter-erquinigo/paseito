@@ -7,6 +7,7 @@ import {
   buildReviewDraftKey,
   buildReviewDraftScopeKey,
   useInlineReviewController,
+  useFileReviews,
   useResolvedDiffMode,
   useReviewAttachmentSnapshot,
   useReviewDraftComments,
@@ -53,6 +54,35 @@ function hasCommittedBranchChanges(
   return (status?.aheadBehind?.ahead ?? 0) > 0;
 }
 
+function getGitStatus(status: ReturnType<typeof useCheckoutStatusQuery>["status"]) {
+  return status?.isGit === true ? status : null;
+}
+
+function isNotGitStatus(status: ReturnType<typeof useCheckoutStatusQuery>["status"]): boolean {
+  return status?.isGit === false && !status.error;
+}
+
+function getStatusErrorMessage(input: {
+  status: ReturnType<typeof useCheckoutStatusQuery>["status"];
+  isStatusError: boolean;
+  statusError: unknown;
+}): string | null {
+  if (input.status?.error?.message) return input.status.error.message;
+  return input.isStatusError && input.statusError instanceof Error
+    ? input.statusError.message
+    : null;
+}
+
+function getCurrentBranchName(gitStatus: ReturnType<typeof getGitStatus>): string | null {
+  const branch = gitStatus?.currentBranch;
+  return branch && branch !== "HEAD" ? branch : null;
+}
+
+function getFileReviewRepositoryRoot(gitStatus: ReturnType<typeof getGitStatus>): string | null {
+  if (!gitStatus) return null;
+  return gitStatus.mainRepoRoot ?? gitStatus.repoRoot;
+}
+
 export function useWorkingDiff({
   serverId,
   workspaceId,
@@ -67,17 +97,14 @@ export function useWorkingDiff({
     isError: isStatusError,
     error: statusError,
   } = useCheckoutStatusQuery({ serverId, cwd });
-  const gitStatus = status && status.isGit ? status : null;
+  const gitStatus = getGitStatus(status);
   const isGit = Boolean(gitStatus);
-  const notGit = status !== null && !status.isGit && !status.error;
-  const statusErrorMessage =
-    status?.error?.message ??
-    (isStatusError && statusError instanceof Error ? statusError.message : null);
+  const notGit = isNotGitStatus(status);
+  const statusErrorMessage = getStatusErrorMessage({ status, isStatusError, statusError });
   const recordedBaseRef = gitStatus?.baseRef ?? undefined;
   const hasUncommittedChanges = Boolean(gitStatus?.isDirty);
   const hasCommittedChanges = hasCommittedBranchChanges(gitStatus);
-  const currentBranchName =
-    gitStatus?.currentBranch && gitStatus.currentBranch !== "HEAD" ? gitStatus.currentBranch : null;
+  const currentBranchName = getCurrentBranchName(gitStatus);
   const baseSelection = useChangesBaseSelection({
     serverId,
     cwd,
@@ -163,6 +190,9 @@ export function useWorkingDiff({
   const suggestionsSupported = useSessionStore(
     (state) => state.sessions[serverId]?.serverInfo?.features?.reviewSuggestionsV1 === true,
   );
+  const fileReviewSupported = useSessionStore(
+    (state) => state.sessions[serverId]?.serverInfo?.features?.fileReviewV1 === true,
+  );
   const contextExpansion = useDiffContextExpansion({
     serverId,
     cwd,
@@ -176,6 +206,13 @@ export function useWorkingDiff({
     requestedLines: requestedContextLines,
   });
   const files = contextExpansion.files;
+  const fileReviews = useFileReviews({
+    serverId,
+    repositoryRoot: getFileReviewRepositoryRoot(gitStatus),
+    branch: currentBranchName,
+    files,
+    supported: fileReviewSupported,
+  });
   const availableTargets = useMemo(() => collectCurrentSideReviewTargets(files), [files]);
   const reviewActions = useInlineReviewController({
     reviewDraftKey,
@@ -213,6 +250,7 @@ export function useWorkingDiff({
     contextExpansion,
     contextExpansionSupported,
     suggestionsSupported,
+    fileReviews,
   };
 }
 

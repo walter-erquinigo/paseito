@@ -406,6 +406,9 @@ describe("checkout git utilities", () => {
         isDeleted: false,
         additions: 1,
         deletions: 0,
+        oldLineCount: 0,
+        newLineCount: 1,
+        contentRevision: "ce013625030ba8dba906f756967f9e9ca394464a",
         hunks: [
           {
             oldStart: 0,
@@ -1456,6 +1459,7 @@ const x = 1;
     const entry = diff.structured?.find((file) => file.path === "tracked-blob.bin");
     expect(entry).toBeTruthy();
     expect(entry?.status).toBe("binary");
+    expect(entry?.contentRevision).toMatch(/^[a-f0-9]{40,64}$/);
     expect(diff.diff).toContain("# tracked-blob.bin: binary diff omitted");
   });
 
@@ -1471,6 +1475,7 @@ const x = 1;
     const entry = diff.structured?.find((file) => file.path === "blob.bin");
     expect(entry).toBeTruthy();
     expect(entry?.status).toBe("binary");
+    expect(entry?.contentRevision).toMatch(/^[a-f0-9]{40,64}$/);
     expect(diff.diff).toContain("# blob.bin: binary diff omitted");
   });
 
@@ -1486,6 +1491,7 @@ const x = 1;
     const entry = diff.structured?.find((file) => file.path === "untracked-large.txt");
     expect(entry).toBeTruthy();
     expect(entry?.status).toBe("too_large");
+    expect(entry?.contentRevision).toMatch(/^[a-f0-9]{40,64}$/);
     expect(diff.diff).toContain("# untracked-large.txt: diff too large omitted");
   });
 
