@@ -47,9 +47,10 @@ branch, and exact file path, while the daemon-provided content revision determin
 is still valid. Amending or rebasing a branch therefore preserves checks for identical branch-side
 content regardless of the selected comparison base or diff mode.
 
-Marking a file reviewed collapses it. If its content revision changes, Paseito clears the visible
-check and reopens the file once; returning to the reviewed content restores the check. The toolbar
-shows reviewed progress and can mark and collapse, or clear, every file in the current diff. The same
-records are used by Committed and Uncommitted views, but are not committed, synchronized, sent to an
-agent, or posted to a forge. Older daemons expose an update-host message instead of attempting to
-infer content identity from patch text.
+Marking a file reviewed collapses it, and marking that file unreviewed expands it. If its content
+revision changes, Paseito clears the visible check and reopens the file once; returning to the
+reviewed content restores the check. The toolbar shows reviewed progress and can mark and collapse,
+or clear without expanding, every file in the current diff. The same records are used by Committed
+and Uncommitted views, but are not committed, synchronized, sent to an agent, or posted to a forge.
+Older daemons expose an update-host message instead of attempting to infer content identity from
+patch text.

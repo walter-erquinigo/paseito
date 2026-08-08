@@ -89,7 +89,7 @@
       "invariants": [
         "Review state is private local app data scoped by host, main repository, branch and exact file path, independent of commit SHA, comparison base and diff mode.",
         "Every reviewable diff entry has a daemon-provided content revision, including untracked, binary, oversized and deleted files.",
-        "Marking a file reviewed collapses it; newly changed reviewed content is unchecked and reopened, while identical amended content keeps its check.",
+        "Marking a file reviewed collapses it; marking that file unreviewed expands it; newly changed reviewed content is unchecked and reopened, while identical amended content keeps its check.",
         "Committed and Uncommitted views share per-branch checks, and a bulk control marks or clears the active diff.",
         "The feature is capability-gated and never infers unreliable content identity from an older daemon."
       ],

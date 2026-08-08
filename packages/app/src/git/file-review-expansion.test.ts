@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { collapseReviewedFile, expandInvalidatedFiles } from "./file-review-expansion";
+import {
+  collapseReviewedFile,
+  expandInvalidatedFiles,
+  expandUnreviewedFile,
+} from "./file-review-expansion";
 
 describe("file review expansion", () => {
   it("collapses only the file that was marked reviewed", () => {
@@ -13,6 +17,13 @@ describe("file review expansion", () => {
       "src/a.ts",
       "src/b.ts",
       "src/c.ts",
+    ]);
+  });
+
+  it("expands a file when it is marked unreviewed", () => {
+    expect(expandUnreviewedFile(new Set(["src/a.ts"]), "src/b.ts")).toEqual([
+      "src/a.ts",
+      "src/b.ts",
     ]);
   });
 });
