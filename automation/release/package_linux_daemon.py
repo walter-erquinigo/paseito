@@ -67,7 +67,12 @@ def validate_local_workspace_resolution(stage: Path) -> None:
             raise RuntimeError(f"{key} did not resolve from the verified candidate")
     feature_source = stage / "node_modules/@getpaseo/server/dist/server/server/websocket-server.js"
     feature_text = feature_source.read_text(encoding="utf-8") if feature_source.is_file() else ""
-    required_features = ("changesBaseSelector", "changesContextExpansion", "reviewSuggestionsV1")
+    required_features = (
+        "changesBaseSelector",
+        "changesContextExpansion",
+        "reviewSuggestionsV1",
+        "fileReviewV1",
+    )
     missing_features = [feature for feature in required_features if feature not in feature_text]
     if missing_features:
         raise RuntimeError(f"staged daemon does not advertise {', '.join(missing_features)}")
@@ -104,7 +109,12 @@ def manifest(version: str, commit: str, daemon_version: str) -> dict[str, Any]:
         "nodeMajor": 22,
         "entrypoint": "node_modules/@getpaseo/cli/bin/paseito",
         "feature": "changesBaseSelector",
-        "features": ["changesBaseSelector", "changesContextExpansion", "reviewSuggestionsV1"],
+        "features": [
+            "changesBaseSelector",
+            "changesContextExpansion",
+            "reviewSuggestionsV1",
+            "fileReviewV1",
+        ],
     }
 
 
