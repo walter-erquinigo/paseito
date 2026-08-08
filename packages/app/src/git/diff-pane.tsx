@@ -34,11 +34,15 @@ import {
   Columns2,
   FolderTree,
   List,
+  ListChecks,
   ListChevronsDownUp,
   ListChevronsUpDown,
   Maximize2,
   Pilcrow,
   RotateCw,
+  Square,
+  SquareCheckBig,
+  Upload,
   WrapText,
 } from "lucide-react-native";
 import { type ParsedDiffFile, type DiffLine, type HighlightToken } from "@/git/use-diff-query";
@@ -116,6 +120,7 @@ import {
   InlineReviewThread,
   isInlineReviewEditorForTarget,
   type InlineReviewActions,
+  type FileReviewActions,
   useReviewAttachmentSnapshot,
 } from "@/review";
 import { usePublishWorkingDiffAttachment, useWorkingDiff } from "@/git/use-working-diff";
@@ -123,6 +128,7 @@ import { DiffTooLargeState } from "@/git/diff-too-large-state";
 import { ChangesBaseSelector } from "@/git/changes-base-selector";
 import { applyChangesBaseSelection } from "@/git/changes-base-selection";
 import { parseDiffContextMarker, type DiffContextRegion } from "@/git/diff-context-expansion";
+import { collapseReviewedFile, expandInvalidatedFiles } from "@/git/file-review-expansion";
 
 export type { GitActionId, GitAction, GitActions } from "@/git/policy";
 
@@ -223,6 +229,8 @@ interface DiffFileSectionProps {
   onCopyPath?: (path: string) => void;
   onDownload?: (path: string) => void;
   onHeaderHeightChange?: (path: string, height: number) => void;
+  fileReviews?: FileReviewActions;
+  onToggleReviewed?: (path: string) => void;
   testID?: string;
 }
 
@@ -1059,6 +1067,63 @@ function SplitDiffColumn({
   );
 }
 
+function DiffFileReviewToggle({
+  file,
+  fileName,
+  fileReviews,
+  testID,
+  onToggleReviewed,
+}: {
+  file: ParsedDiffFile;
+  fileName: string;
+  fileReviews?: FileReviewActions;
+  testID?: string;
+  onToggleReviewed?: (path: string) => void;
+}) {
+  const { t } = useTranslation();
+  const isReviewed = fileReviews?.reviewedPaths.has(file.path) === true;
+  const accessibilityState = useMemo(() => ({ checked: isReviewed }), [isReviewed]);
+  const toggleReviewed = useCallback(
+    (event: { stopPropagation: () => void }) => {
+      event.stopPropagation();
+      onToggleReviewed?.(file.path);
+    },
+    [file.path, onToggleReviewed],
+  );
+  if (!fileReviews?.available || !file.contentRevision) return null;
+
+  const actionLabel = isReviewed
+    ? t("workspace.git.diff.markUnreviewed")
+    : t("workspace.git.diff.markReviewed");
+  return (
+    <Tooltip delayDuration={300}>
+      <TooltipTrigger asChild>
+        <Pressable
+          accessibilityRole="checkbox"
+          accessibilityState={accessibilityState}
+          accessibilityLabel={
+            isReviewed
+              ? t("workspace.git.diff.markFileUnreviewed", { file: fileName })
+              : t("workspace.git.diff.markFileReviewed", { file: fileName })
+          }
+          testID={testID ? `${testID}-reviewed` : undefined}
+          style={styles.fileReviewButton}
+          onPress={toggleReviewed}
+        >
+          {isReviewed ? (
+            <ThemedSquareCheckBig size={16} uniProps={reviewedIconColorMapping} />
+          ) : (
+            <ThemedSquare size={16} uniProps={foregroundMutedIconColorMapping} />
+          )}
+        </Pressable>
+      </TooltipTrigger>
+      <TooltipContent side="bottom">
+        <Text style={styles.tooltipText}>{actionLabel}</Text>
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
 const DiffFileHeader = memo(function DiffFileHeader({
   file,
   workspaceFileDragScope,
@@ -1072,6 +1137,8 @@ const DiffFileHeader = memo(function DiffFileHeader({
   onCopyPath,
   onDownload,
   onHeaderHeightChange,
+  fileReviews,
+  onToggleReviewed,
   testID,
 }: DiffFileSectionProps) {
   const dragSourceRef = useWorkspaceFileDragSource({
@@ -1195,6 +1262,13 @@ const DiffFileHeader = memo(function DiffFileHeader({
         {file.isDeleted && <FileChangeIcon change="deleted" />}
       </View>
       <View style={styles.fileHeaderRight}>
+        <DiffFileReviewToggle
+          file={file}
+          fileName={fileName}
+          fileReviews={fileReviews}
+          testID={testID}
+          onToggleReviewed={onToggleReviewed}
+        />
         <DiffStat
           additions={file.additions}
           deletions={file.deletions}
@@ -1469,6 +1543,7 @@ type PressableStyleFn = (
 ) => StyleProp<ViewStyle>;
 
 const foregroundMutedIconColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
+const reviewedIconColorMapping = (theme: Theme) => ({ color: theme.colors.success });
 
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
 const ThemedAlignJustify = withUnistyles(AlignJustify);
@@ -1481,6 +1556,9 @@ const ThemedFolderTree = withUnistyles(FolderTree);
 const ThemedList = withUnistyles(List);
 const ThemedMaximize2 = withUnistyles(Maximize2);
 const ThemedChevronDown = withUnistyles(ChevronDown);
+const ThemedSquare = withUnistyles(Square);
+const ThemedSquareCheckBig = withUnistyles(SquareCheckBig);
+const ThemedListChecks = withUnistyles(ListChecks);
 const DIFF_OPTIONS_WHITESPACE_ICON = (
   <ThemedPilcrow size={14} uniProps={foregroundMutedIconColorMapping} />
 );
@@ -1725,6 +1803,69 @@ export function DiffFilesToolbar({
         </TooltipContent>
       </Tooltip>
     </View>
+  );
+}
+
+export function FileReviewBulkToggle({
+  fileReviews,
+  isMobile,
+  visible = true,
+  testID,
+  onToggle,
+}: {
+  fileReviews: FileReviewActions;
+  isMobile: boolean;
+  visible?: boolean;
+  testID?: string;
+  onToggle: () => void;
+}) {
+  const { t } = useTranslation();
+  const allReviewed =
+    fileReviews.reviewableCount > 0 && fileReviews.reviewedCount === fileReviews.reviewableCount;
+  const disabled = !fileReviews.available || fileReviews.reviewableCount === 0;
+  let label = allReviewed
+    ? t("workspace.git.diff.clearAllReviewed")
+    : t("workspace.git.diff.markAllReviewed");
+  if (!fileReviews.supported) label = t("workspace.git.diff.reviewUpdateHost");
+  else if (!fileReviews.available) label = t("workspace.git.diff.reviewBranchRequired");
+  const accessibilityState = useMemo(() => ({ disabled }), [disabled]);
+  const toggleStyle = useCallback(
+    ({ hovered, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
+      styles.expandAllButton,
+      (Boolean(hovered) || pressed || allReviewed) && styles.toggleButtonSelected,
+      disabled && styles.fileReviewButtonDisabled,
+    ],
+    [allReviewed, disabled],
+  );
+  if (!visible) return null;
+
+  return (
+    <Tooltip delayDuration={300}>
+      <TooltipTrigger asChild>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={label}
+          accessibilityState={accessibilityState}
+          disabled={disabled}
+          testID={testID}
+          style={toggleStyle}
+          onPress={onToggle}
+        >
+          <ThemedListChecks
+            size={isMobile ? 18 : 14}
+            uniProps={allReviewed ? reviewedIconColorMapping : foregroundMutedIconColorMapping}
+          />
+          {fileReviews.supported && fileReviews.available ? (
+            <Text style={styles.fileReviewProgress}>
+              {fileReviews.reviewedCount}/{fileReviews.reviewableCount}
+            </Text>
+          ) : null}
+        </Pressable>
+      </TooltipTrigger>
+      <TooltipContent side="bottom">
+        <Text style={styles.tooltipText}>{label}</Text>
+      </TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -1984,6 +2125,7 @@ interface SharedDiffViewProps {
         expandedPaths: string[];
         collapsedFolders: string[];
         reviewActions?: InlineReviewActions;
+        fileReviews: FileReviewActions;
         onFilePress?: (path: string) => void;
         workspaceFileDragScope?: { serverId: string; workspaceId: string };
         onOpenFile?: (path: string) => void;
@@ -2002,6 +2144,7 @@ interface SharedDiffViewProps {
         kind: "working_tab";
         expandedPaths: string[] | null;
         reviewActions: InlineReviewActions;
+        fileReviews: FileReviewActions;
         focusPath?: string;
         focusRequestId?: number;
         onExpandedPathsChange: (paths: string[]) => void;
@@ -2046,6 +2189,7 @@ export function SharedDiffView({ files, displayPreferences, mode }: SharedDiffVi
   const stickyHeaders = mode.kind !== "commit";
   const interactive = mode.kind !== "commit";
   const reviewActions = mode.kind === "commit" ? undefined : mode.reviewActions;
+  const fileReviews = mode.kind === "commit" ? undefined : mode.fileReviews;
   const onFilePress = mode.kind === "working_tree" ? mode.onFilePress : undefined;
   const focusPath = mode.kind === "working_tab" ? mode.focusPath : undefined;
   const focusRequestId = mode.kind === "working_tab" ? mode.focusRequestId : undefined;
@@ -2321,6 +2465,21 @@ export function SharedDiffView({ files, displayPreferences, mode }: SharedDiffVi
     [computeHeaderOffset, expandedPaths, mode],
   );
 
+  const handleToggleReviewed = useCallback(
+    (path: string) => {
+      if (mode.kind === "commit" || !fileReviews) return;
+      const isNowReviewed = fileReviews.toggle(path);
+      if (!isNowReviewed) return;
+      mode.onExpandedPathsChange(collapseReviewedFile(expandedPaths, path));
+    },
+    [expandedPaths, fileReviews, mode],
+  );
+
+  useEffect(() => {
+    if (mode.kind === "commit" || !fileReviews || fileReviews.invalidatedPaths.length === 0) return;
+    mode.onExpandedPathsChange(expandInvalidatedFiles(expandedPaths, fileReviews.invalidatedPaths));
+  }, [expandedPaths, fileReviews, mode]);
+
   const handleToggleFolder = useCallback(
     (dirPath: string) => {
       if (mode.kind !== "working_tree") {
@@ -2386,6 +2545,8 @@ export function SharedDiffView({ files, displayPreferences, mode }: SharedDiffVi
             onCopyPath={onCopyPath}
             onDownload={onDownload}
             onHeaderHeightChange={handleHeaderHeightChange}
+            fileReviews={fileReviews}
+            onToggleReviewed={fileReviews ? handleToggleReviewed : undefined}
             testID={`diff-file-${item.fileIndex}`}
           />
         );
@@ -2411,8 +2572,10 @@ export function SharedDiffView({ files, displayPreferences, mode }: SharedDiffVi
       handleHeaderHeightChange,
       handleToggleExpanded,
       handleToggleFolder,
+      handleToggleReviewed,
       layout,
       reviewActions,
+      fileReviews,
       workspaceFileDragScope,
       textMetricsStyle,
       viewMode,
@@ -2453,6 +2616,7 @@ export function SharedDiffView({ files, displayPreferences, mode }: SharedDiffVi
       viewMode,
       wrapLines,
       reviewActions,
+      fileReviews,
       workspaceFileDragScope,
     }),
     [
@@ -2461,6 +2625,7 @@ export function SharedDiffView({ files, displayPreferences, mode }: SharedDiffVi
       heightVersion,
       layout,
       reviewActions,
+      fileReviews,
       typographyKey,
       viewMode,
       workspaceFileDragScope,
@@ -2953,6 +3118,7 @@ export function GitDiffPane({
     reviewDraftKey,
     contextExpansion,
     contextExpansionSupported,
+    fileReviews,
   } = useWorkingDiff({
     serverId,
     workspaceId: workspaceId ?? undefined,
@@ -3041,6 +3207,16 @@ export function GitDiffPane({
     changesTabOpen,
     onViewModeChange: handleViewModeChange,
   });
+  const handleToggleAllFileReviews = useCallback(() => {
+    const allReviewed =
+      fileReviews.reviewableCount > 0 && fileReviews.reviewedCount === fileReviews.reviewableCount;
+    if (allReviewed) {
+      fileReviews.clearAll();
+      return;
+    }
+    fileReviews.markAll();
+    changesTree.updateExpandedPaths([]);
+  }, [changesTree, fileReviews]);
   const sharedDisplayPreferences = useMemo(
     () => ({
       layout: effectiveLayout,
@@ -3072,6 +3248,7 @@ export function GitDiffPane({
       expandedPaths: changesTree.expandedPaths,
       collapsedFolders: changesTree.collapsedFolders,
       reviewActions,
+      fileReviews,
       onFilePress: onChangesFilePress,
       workspaceFileDragScope: workspaceId ? { serverId, workspaceId } : undefined,
       onOpenFile,
@@ -3087,6 +3264,7 @@ export function GitDiffPane({
       changesTree.expandedPaths,
       changesTree.collapsedFolders,
       reviewActions,
+      fileReviews,
       onChangesFilePress,
       serverId,
       workspaceId,
@@ -3212,6 +3390,13 @@ export function GitDiffPane({
                   onToggle={handleToggleLayout}
                 />
               ) : null}
+              <FileReviewBulkToggle
+                fileReviews={fileReviews}
+                isMobile={isMobile}
+                visible={files.length > 0}
+                testID="changes-toggle-file-reviews"
+                onToggle={handleToggleAllFileReviews}
+              />
               {files.length > 0 ? (
                 <DiffViewModeToggle
                   viewMode={viewMode}
@@ -3532,6 +3717,20 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     gap: theme.spacing[1],
     flexShrink: 0,
+  },
+  fileReviewButton: {
+    width: 24,
+    height: 24,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: theme.borderRadius.base,
+  },
+  fileReviewButtonDisabled: {
+    opacity: 0.45,
+  },
+  fileReviewProgress: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.xs,
   },
   fileIcon: {
     width: WORKSPACE_TREE_ICON_SIZE,

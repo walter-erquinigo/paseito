@@ -3,6 +3,7 @@ import {
   CheckoutDiffGetContextRequestSchema,
   CheckoutDiffGetContextResponseSchema,
   ReviewAttachmentSchema,
+  SubscribeCheckoutDiffResponseSchema,
 } from "./messages";
 
 describe("checkout diff context protocol", () => {
@@ -61,5 +62,42 @@ describe("checkout diff context protocol", () => {
         ],
       }).suggestions,
     ).toHaveLength(1);
+  });
+
+  it("accepts legacy diff files and opaque content revisions", () => {
+    const response = {
+      type: "subscribe_checkout_diff_response" as const,
+      payload: {
+        subscriptionId: "subscription-1",
+        cwd: "/repo",
+        files: [
+          {
+            path: "src/a.ts",
+            isNew: false,
+            isDeleted: false,
+            additions: 1,
+            deletions: 0,
+            hunks: [],
+          },
+          {
+            path: "src/b.ts",
+            isNew: false,
+            isDeleted: true,
+            additions: 0,
+            deletions: 1,
+            hunks: [],
+            contentRevision: "deleted:v1",
+          },
+        ],
+        error: null,
+        requestId: "request-1",
+      },
+    };
+
+    const parsed = SubscribeCheckoutDiffResponseSchema.parse(response);
+    expect(parsed.payload.files.map((file) => file.contentRevision)).toEqual([
+      undefined,
+      "deleted:v1",
+    ]);
   });
 });

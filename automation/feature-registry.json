@@ -83,6 +83,27 @@
       ]
     },
     {
+      "id": "branch-file-review-state",
+      "permanent": false,
+      "intent": "Let reviewers mark branch files reviewed while preserving checks only for identical branch-side content.",
+      "invariants": [
+        "Review state is private local app data scoped by host, main repository, branch and exact file path, independent of commit SHA, comparison base and diff mode.",
+        "Every reviewable diff entry has a daemon-provided content revision, including untracked, binary, oversized and deleted files.",
+        "Marking a file reviewed collapses it; newly changed reviewed content is unchecked and reopened, while identical amended content keeps its check.",
+        "Committed and Uncommitted views share per-branch checks, and a bulk control marks or clears the active diff.",
+        "The feature is capability-gated and never infers unreliable content identity from an older daemon."
+      ],
+      "contracts": [
+        "npx vitest run packages/app/src/review/file-review.test.ts packages/app/src/git/file-review-expansion.test.ts packages/server/src/utils/checkout-git.context.test.ts packages/server/src/utils/checkout-git.test.ts"
+      ],
+      "paths": [
+        "packages/app/src/review/file-review.ts",
+        "packages/app/src/git/diff-pane.tsx",
+        "packages/protocol/src/messages.ts",
+        "packages/server/src/utils/checkout-git.ts"
+      ]
+    },
+    {
       "id": "local-semantic-maintenance",
       "permanent": true,
       "intent": "Use local Codex reconciliation, fail-closed verification, provenance-bound installation, migration and daily reporting.",
