@@ -839,6 +839,15 @@ export const ja: TranslationResources = {
         baseSelectorMissing: "ブランチ {{baseRef}} は存在しません",
         baseSelectorError: "比較ブランチを変更できませんでした",
         baseSelectorUpdateHost: "ベースブランチを選択するにはホストを更新してください",
+        markReviewed: "レビュー済みにする",
+        markUnreviewed: "未レビューにする",
+        markFileReviewed: "{{file}}をレビュー済みにする",
+        markFileUnreviewed: "{{file}}を未レビューにする",
+        markAllReviewed: "すべてのファイルをレビュー済みにする",
+        clearAllReviewed: "レビュー済みをすべて解除",
+        reviewUpdateHost: "ファイルをレビュー済みにするにはホストを更新してください",
+        reviewBranchRequired:
+          "ファイルをレビュー済みにするにはブランチをチェックアウトしてください",
         context: {
           hiddenLines: "非表示の {{count}} 行",
           expandUp: "上の20行を表示",

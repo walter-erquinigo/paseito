@@ -1,6 +1,6 @@
 # Paseito Changes extensions
 
-Paseito adds three capability-gated review features to the Changes view.
+Paseito adds four capability-gated review features to the Changes view.
 
 ## Comparison and branch ordering
 
@@ -39,3 +39,17 @@ When the file revision changes, the suggestion remains visible as stale. Sending
 the reviewer edits it against the current lines or deletes it; Paseito never silently remaps it.
 Older daemons continue to support ordinary diffs and comments but do not expose context expansion or
 suggestions.
+
+## Reviewed files
+
+Each file header can be marked reviewed. The private local record is scoped by host, main repository,
+branch, and exact file path, while the daemon-provided content revision determines whether the check
+is still valid. Amending or rebasing a branch therefore preserves checks for identical branch-side
+content regardless of the selected comparison base or diff mode.
+
+Marking a file reviewed collapses it. If its content revision changes, Paseito clears the visible
+check and reopens the file once; returning to the reviewed content restores the check. The toolbar
+shows reviewed progress and can mark and collapse, or clear, every file in the current diff. The same
+records are used by Committed and Uncommitted views, but are not committed, synchronized, sent to an
+agent, or posted to a forge. Older daemons expose an update-host message instead of attempting to
+infer content identity from patch text.

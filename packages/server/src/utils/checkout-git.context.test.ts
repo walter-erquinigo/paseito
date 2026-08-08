@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -73,5 +73,39 @@ describe("checkout diff context", () => {
         limit: 1,
       }),
     ).rejects.toThrow("stay within");
+  });
+
+  it("keeps the content revision when worktree content moves into an amended commit", async () => {
+    const cwd = initRepo();
+    execFileSync("git", ["switch", "-c", "feature"], { cwd });
+    const uncommitted = await getCheckoutDiff(cwd, {
+      mode: "uncommitted",
+      includeStructured: true,
+    });
+    const uncommittedRevision = uncommitted.structured?.[0]?.contentRevision;
+
+    execFileSync("git", ["add", "sample.ts"], { cwd });
+    execFileSync("git", ["commit", "-m", "change sample"], { cwd });
+    const committed = await getCheckoutDiff(cwd, {
+      mode: "base",
+      baseRef: "main",
+      includeStructured: true,
+    });
+
+    expect(uncommittedRevision).toMatch(/^[a-f0-9]{40,64}$/);
+    expect(committed.structured?.[0]?.contentRevision).toBe(uncommittedRevision);
+  });
+
+  it("uses a stable tombstone revision for deleted files", async () => {
+    const cwd = initRepo();
+    unlinkSync(join(cwd, "sample.ts"));
+
+    const diff = await getCheckoutDiff(cwd, { mode: "uncommitted", includeStructured: true });
+
+    expect(diff.structured?.[0]).toMatchObject({
+      path: "sample.ts",
+      isDeleted: true,
+      contentRevision: "deleted:v1",
+    });
   });
 });

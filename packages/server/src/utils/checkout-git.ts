@@ -3314,6 +3314,7 @@ async function resolveCheckoutDiffRefs(
 
 const CHECKOUT_DIFF_CONTEXT_MAX_LINES = 5_000;
 const CHECKOUT_DIFF_CONTEXT_MAX_BYTES = 1024 * 1024;
+const DELETED_CONTENT_REVISION = "deleted:v1";
 
 function splitContentLines(content: string | null): string[] {
   if (content === null || content.length === 0) {
@@ -3332,6 +3333,52 @@ function countContentLines(content: string | null): number {
 
 function hashFileContent(content: string): string {
   return createHash("sha256").update(content).digest("hex");
+}
+
+async function resolveDiffContentRevision(
+  cwd: string,
+  refs: CheckoutDiffRefs,
+  file: ParsedDiffFile,
+): Promise<string> {
+  if (file.isDeleted) {
+    return DELETED_CONTENT_REVISION;
+  }
+  if (refs.targetRef) {
+    const { stdout } = await runGitCommand(["rev-parse", `${refs.targetRef}:${file.path}`], {
+      cwd,
+      envOverlay: READ_ONLY_GIT_ENV,
+    });
+    return stdout.trim();
+  }
+
+  const absolutePath = resolve(cwd, file.path);
+  const metadata = await statFile(absolutePath);
+  if (metadata.isDirectory()) {
+    const { stdout } = await runGitCommand(["-C", absolutePath, "rev-parse", "HEAD"], {
+      cwd,
+      envOverlay: READ_ONLY_GIT_ENV,
+    });
+    return stdout.trim();
+  }
+
+  const { stdout } = await runGitCommand(
+    ["hash-object", "--filters", `--path=${file.path}`, "--", file.path],
+    { cwd, envOverlay: READ_ONLY_GIT_ENV },
+  );
+  return stdout.trim();
+}
+
+async function attachContentRevisions(
+  cwd: string,
+  refs: CheckoutDiffRefs,
+  files: ParsedDiffFile[],
+): Promise<ParsedDiffFile[]> {
+  return Promise.all(
+    files.map(async (file) => ({
+      ...file,
+      contentRevision: await resolveDiffContentRevision(cwd, refs, file),
+    })),
+  );
 }
 
 async function resolveContextFileContent(
@@ -3588,7 +3635,11 @@ export async function getCheckoutDiff(
   }
 
   if (compare.includeStructured) {
-    return { diff: diffText, structured: structured.files };
+    const files = await attachContentRevisions(cwd, effectiveRefsForDiff, structured.files);
+    if (Buffer.byteLength(JSON.stringify(files), "utf8") > CHECKOUT_DIFF_MAX_STRUCTURED_BYTES) {
+      return { diff: "", structured: [], diffTooLarge: true };
+    }
+    return { diff: diffText, structured: files };
   }
   return { diff: diffText };
 }
