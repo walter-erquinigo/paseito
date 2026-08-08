@@ -90,6 +90,7 @@ class RemoteDeploymentTests(unittest.TestCase):
         self.assertIn('select(.time >= $since and .msg == "relay_control_connected")', REMOTE_INSTALL)
         self.assertNotIn("journalctl --user-unit", REMOTE_INSTALL)
         self.assertIn("changesBaseSelector", REMOTE_INSTALL)
+        self.assertIn("fileReviewV1", REMOTE_INSTALL)
         self.assertGreaterEqual(REMOTE_INSTALL.count("ensure_idle"), 3)
 
     def test_vpn_upload_has_a_bounded_slow_link_allowance(self) -> None:
