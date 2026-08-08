@@ -1,4 +1,5 @@
 import { Text, View } from "react-native";
+import { useCallback } from "react";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
@@ -6,6 +7,14 @@ import { SegmentedControl } from "@/components/ui/segmented-control";
 import type { Theme } from "@/styles/theme";
 import { FileConflictAlert, type FileConflictAlertState } from "./conflict-alert";
 import type { FileEditorStatus } from "./editor/model";
+import type { EditorLspStatus } from "./editor/lsp-session";
+import type { WorkspaceLspLanguage } from "./editor/lsp-preferences";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const ThemedSpinner = withUnistyles(LoadingSpinner);
 const spinnerMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
@@ -19,6 +28,7 @@ export function FilePanelBar({
   cursor,
   vimMode,
   conflict,
+  lsp,
 }: {
   size: number;
   lineCount?: number;
@@ -28,6 +38,14 @@ export function FilePanelBar({
   cursor?: { line: number; column: number };
   vimMode?: string | null;
   conflict?: FileConflictAlertState;
+  lsp?: {
+    enabled: boolean;
+    formatOnSave: boolean;
+    language: WorkspaceLspLanguage;
+    status: EditorLspStatus;
+    onEnabledChange(enabled: boolean): void;
+    onFormatOnSaveChange(enabled: boolean): void;
+  };
 }) {
   const { t } = useTranslation();
   const previewModes = [
@@ -106,10 +124,66 @@ export function FilePanelBar({
             options={previewModes}
           />
         ) : null}
+        {lsp ? <FileLspMenu {...lsp} /> : null}
       </View>
       {conflict ? <FileConflictAlert state={conflict} /> : null}
     </View>
   );
+}
+
+function FileLspMenu({
+  enabled,
+  formatOnSave,
+  language,
+  status,
+  onEnabledChange,
+  onFormatOnSaveChange,
+}: NonNullable<Parameters<typeof FilePanelBar>[0]["lsp"]>) {
+  const statusLabel = lspStatusLabel(enabled, status);
+  const toggleEnabled = useCallback(() => onEnabledChange(!enabled), [enabled, onEnabledChange]);
+  const toggleFormatOnSave = useCallback(
+    () => onFormatOnSaveChange(!formatOnSave),
+    [formatOnSave, onFormatOnSaveChange],
+  );
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        style={styles.lspTrigger}
+        accessibilityLabel="Language server settings"
+        testID="file-lsp-menu"
+      >
+        <Text style={status === "unavailable" && enabled ? styles.error : styles.secondary}>
+          {statusLabel}
+        </Text>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" width={240}>
+        <DropdownMenuItem
+          selected={enabled}
+          closeOnSelect={false}
+          onSelect={toggleEnabled}
+          testID="file-lsp-workspace-toggle"
+        >
+          Enable LSP for this workspace
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          selected={formatOnSave}
+          disabled={!enabled}
+          closeOnSelect={false}
+          onSelect={toggleFormatOnSave}
+          testID="file-lsp-format-toggle"
+        >
+          Format {language === "cpp" ? "C/C++" : "Python"} on save
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function lspStatusLabel(enabled: boolean, status: EditorLspStatus): string {
+  if (!enabled) return "LSP off";
+  if (status === "ready") return "LSP";
+  if (status === "connecting") return "LSP…";
+  return "LSP unavailable";
 }
 
 function formatFileSize(size: number): string {
@@ -153,6 +227,12 @@ const styles = StyleSheet.create((theme) => ({
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[2],
+  },
+  lspTrigger: {
+    minHeight: 24,
+    justifyContent: "center",
+    paddingHorizontal: theme.spacing[2],
+    borderRadius: theme.borderRadius.sm,
   },
   vim: {
     color: theme.colors.foregroundMuted,

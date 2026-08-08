@@ -2,7 +2,9 @@ import { Text, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import type { HighlightStyle } from "@getpaseo/highlight";
 import type { WorkspaceFileLocation } from "@/workspace/file-open";
+import type { WorkspaceLspLocation } from "@getpaseo/protocol/messages";
 import type { FileEditorModel } from "./model";
+import type { EditorLspSession } from "./lsp-session";
 
 export function FileEditorView(_props: {
   model: FileEditorModel;
@@ -10,6 +12,8 @@ export function FileEditorView(_props: {
   location: WorkspaceFileLocation;
   navigationRevision: number;
   vimEnabled: boolean;
+  lspSession: EditorLspSession | null;
+  onOpenDefinition(location: WorkspaceLspLocation): void;
   theme: {
     background: string;
     foreground: string;

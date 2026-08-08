@@ -9,6 +9,7 @@ import React, {
   useSyncExternalStore,
 } from "react";
 import type { DaemonClient, FileReadResult } from "@getpaseo/client/internal/daemon-client";
+import type { WorkspaceLspLocation } from "@getpaseo/protocol/messages";
 import { Image as RNImage, ScrollView as RNScrollView, Text, View } from "react-native";
 import { StyleSheet, UnistylesRuntime, withUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
@@ -27,7 +28,7 @@ import { persistAttachmentFromBytes } from "@/attachments/service";
 import { createPreviewAttachmentId, getFileNameFromPath } from "@/attachments/utils";
 import { explorerFileFromReadResult } from "@/file-explorer/read-result";
 import { resolveFilePreviewReadTarget } from "@/file-explorer/preview-target";
-import type { WorkspaceFileLocation } from "@/workspace/file-open";
+import { resolveWorkspaceFilePaths, type WorkspaceFileLocation } from "@/workspace/file-open";
 import { useRetainedPanelActive } from "@/components/retained-panel";
 import { useAppActivelyVisible } from "@/hooks/use-app-visible";
 import { isFileQueryEnabled } from "@/components/file-pane-enabled";
@@ -44,6 +45,9 @@ import type { LiveFileModel } from "./live-file/model";
 import { confirmDialog } from "@/utils/confirm-dialog";
 import { usePublishPanelInstanceAttributes } from "@/panels/panel-instance-attributes";
 import type { Theme } from "@/styles/theme";
+import { usePaneContext } from "@/panels/pane-context";
+import { EditorLspSession, type EditorLspStatus } from "./editor/lsp-session";
+import { lspLanguageForFile, useWorkspaceLspPreferences } from "./editor/lsp-preferences";
 
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
 const foregroundMutedColorMapping = (theme: Theme) => ({
@@ -423,6 +427,10 @@ export function FilePane({
   const supportsEditing = useSessionStore(
     (state) => state.sessions[serverId]?.serverInfo?.features?.workspaceFileEditing === true,
   );
+  // COMPAT(workspaceLsp): added in Paseito v0.2.5-paseito.9, remove after 2027-02-08.
+  const supportsLsp = useSessionStore(
+    (state) => state.sessions[serverId]?.serverInfo?.features?.workspaceLsp === true,
+  );
   const normalizedWorkspaceRoot = useMemo(() => workspaceRoot.trim(), [workspaceRoot]);
   const normalizedFilePath = useMemo(() => trimNonEmpty(location.path), [location.path]);
   const readTarget = useMemo(
@@ -499,6 +507,7 @@ export function FilePane({
       onPreviewModeChange={canTogglePreviewMode ? setPreviewMode : undefined}
       lineCount={lineCount}
       editable={editable}
+      supportsLsp={supportsLsp}
       disconnectedMessage={t("workspace.terminal.hostDisconnected")}
       errorMessage={errorMessage}
       isLoading={liveFile.isFetching}
@@ -546,6 +555,7 @@ function FilePanePresentation({
   onPreviewModeChange,
   lineCount,
   editable,
+  supportsLsp,
   disconnectedMessage,
   errorMessage,
   isLoading,
@@ -567,6 +577,7 @@ function FilePanePresentation({
   onPreviewModeChange?: (mode: "preview" | "source") => void;
   lineCount?: number;
   editable: boolean;
+  supportsLsp: boolean;
   disconnectedMessage: string;
   errorMessage: string | null;
   isLoading: boolean;
@@ -590,6 +601,7 @@ function FilePanePresentation({
       <EditableFilePane
         key={`${serverId}:${readTarget.cwd}:${readTarget.path}`}
         client={client}
+        serverId={serverId}
         cwd={readTarget.cwd}
         path={readTarget.path}
         preview={preview as TextExplorerFile}
@@ -603,6 +615,7 @@ function FilePanePresentation({
         isMobile={isMobile}
         location={location}
         navigationRevision={navigationRevision}
+        supportsLsp={supportsLsp}
       />
     );
   }
@@ -645,6 +658,7 @@ function FilePanePresentation({
 
 function EditableFilePane({
   client,
+  serverId,
   cwd,
   path,
   preview,
@@ -658,8 +672,10 @@ function EditableFilePane({
   isMobile,
   location,
   navigationRevision,
+  supportsLsp,
 }: {
   client: DaemonClient;
+  serverId: string;
   cwd: string;
   path: string;
   preview: TextExplorerFile;
@@ -673,13 +689,32 @@ function EditableFilePane({
   isMobile: boolean;
   location: WorkspaceFileLocation;
   navigationRevision: number;
+  supportsLsp: boolean;
 }) {
   const { settings } = useAppSettings();
   const { t } = useTranslation();
   const [cursor, setCursor] = useState({ line: 1, column: 1 });
   const [vimMode, setVimMode] = useState<string | null>(settings.vimKeybindings ? "NORMAL" : null);
+  const language = lspLanguageForFile(filename);
+  const lspPreferences = useWorkspaceLspPreferences({ serverId, cwd, language });
+  const [lspStatus, setLspStatus] = useState<EditorLspStatus>("connecting");
+  const lspSession = useMemo(
+    () =>
+      supportsLsp && language && lspPreferences.enabled
+        ? new EditorLspSession({ client, cwd, path, onStatus: setLspStatus })
+        : null,
+    [client, cwd, language, lspPreferences.enabled, path, supportsLsp],
+  );
+  const lspSessionRef = useRef(lspSession);
+  const formatOnSaveRef = useRef(lspPreferences.formatOnSave);
+  lspSessionRef.current = lspSession;
+  formatOnSaveRef.current = lspPreferences.formatOnSave;
   const session = useMemo(
     () => ({
+      async prepareWrite(content: string) {
+        const activeLsp = lspSessionRef.current;
+        return activeLsp && formatOnSaveRef.current ? activeLsp.format(content) : content;
+      },
       write(input: { content: string; expectedModifiedAt: string; expectedRevision?: string }) {
         return client.writeFile({ cwd, path, ...input });
       },
@@ -709,6 +744,7 @@ function EditableFilePane({
     return () => model.disconnectFileObservations();
   }, [liveFile, model]);
   const snapshot = useSyncExternalStore(model.subscribe, model.getSnapshot, model.getSnapshot);
+  const { openFileInWorkspace } = usePaneContext();
   const suspendPendingSave = useCallback(() => model.suspendAutosave(), [model]);
   usePublishPanelInstanceAttributes({ modified: snapshot.modified, suspendPendingSave });
   const theme = UnistylesRuntime.getTheme();
@@ -740,6 +776,14 @@ function EditableFilePane({
   );
 
   useEffect(() => () => model.dispose(), [model]);
+  useEffect(() => {
+    if (!lspSession) {
+      setLspStatus("connecting");
+      return;
+    }
+    void lspSession.open(model.getSnapshot().content);
+    return () => lspSession.dispose();
+  }, [lspSession, model]);
 
   const handleReload = useCallback(() => {
     if (!snapshot.modified) {
@@ -765,6 +809,29 @@ function EditableFilePane({
     retrying: retryingRead,
   });
   const handleVimModeChange = useCallback((nextMode: string | null) => setVimMode(nextMode), []);
+  const handleOpenDefinition = useCallback(
+    (definition: WorkspaceLspLocation) => {
+      let absolutePath: string;
+      try {
+        const url = new URL(definition.uri);
+        if (url.protocol !== "file:") return;
+        absolutePath = decodeURIComponent(url.pathname).replace(/^\/([A-Za-z]:\/)/, "$1");
+      } catch {
+        return;
+      }
+      const paths = resolveWorkspaceFilePaths({ path: absolutePath, workspaceRoot: cwd });
+      if (!paths?.relativePath) return;
+      openFileInWorkspace({
+        disposition: "main",
+        location: {
+          path: paths.relativePath,
+          lineStart: definition.range.start.line + 1,
+          lineEnd: definition.range.end.line + 1,
+        },
+      });
+    },
+    [cwd, openFileInWorkspace],
+  );
   const renderedPreview = useMemo<ExplorerFile>(
     () => ({
       ...preview,
@@ -776,6 +843,28 @@ function EditableFilePane({
     [preview, snapshot.content, snapshot.version],
   );
   const showSource = mode !== "preview";
+  const lspBar = useMemo(
+    () =>
+      supportsLsp && language
+        ? {
+            enabled: lspPreferences.enabled,
+            formatOnSave: lspPreferences.formatOnSave,
+            language,
+            status: lspStatus,
+            onEnabledChange: lspPreferences.setEnabled,
+            onFormatOnSaveChange: lspPreferences.setFormatOnSave,
+          }
+        : undefined,
+    [
+      language,
+      lspPreferences.enabled,
+      lspPreferences.formatOnSave,
+      lspPreferences.setEnabled,
+      lspPreferences.setFormatOnSave,
+      lspStatus,
+      supportsLsp,
+    ],
+  );
 
   return (
     <View style={styles.container} testID="workspace-file-pane">
@@ -788,6 +877,7 @@ function EditableFilePane({
         cursor={showSource ? cursor : undefined}
         vimMode={showSource ? vimMode : null}
         conflict={conflict}
+        lsp={lspBar}
         mode={mode}
         onModeChange={onModeChange}
       />
@@ -799,6 +889,8 @@ function EditableFilePane({
           navigationRevision={navigationRevision}
           vimEnabled={settings.vimKeybindings}
           theme={visualTheme}
+          lspSession={lspSession}
+          onOpenDefinition={handleOpenDefinition}
           onCursorChange={setCursor}
           onVimModeChange={handleVimModeChange}
         />

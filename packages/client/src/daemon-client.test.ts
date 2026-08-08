@@ -331,7 +331,9 @@ test("sets the complete viewed timeline subscription only when the daemon suppor
   clients.push(supportedClient, legacyClient);
 
   const supportedConnect = supportedClient.connect();
-  supportedTransport.triggerOpen({ features: { selectiveAgentTimeline: true } });
+  supportedTransport.triggerOpen({
+    features: { selectiveAgentTimeline: true },
+  });
   await supportedConnect;
   const legacyConnect = legacyClient.connect();
   legacyTransport.triggerOpen();
@@ -1757,7 +1759,9 @@ test("a candidate measurement that times out under a heartbeat tick does not cou
   );
   await session.advance(5_500);
   await expect(measurementError).resolves.toEqual(
-    expect.objectContaining({ message: "Latency measurement timed out (5000ms)" }),
+    expect.objectContaining({
+      message: "Latency measurement timed out (5000ms)",
+    }),
   );
 
   // The measurement timeout must not have been recorded as a liveness failure: a
@@ -2792,7 +2796,9 @@ test("sends project.remove.request", async () => {
     }),
   );
 
-  await expect(removePromise).resolves.toEqual({ removedWorkspaceIds: ["ws-main"] });
+  await expect(removePromise).resolves.toEqual({
+    removedWorkspaceIds: ["ws-main"],
+  });
 });
 
 test("sends worktree base-ref fields in create_paseo_worktree_request", async () => {
@@ -3210,7 +3216,10 @@ test("getCheckoutDiff uses one-shot subscription protocol", async () => {
   mock.triggerOpen();
   await connectPromise;
 
-  const promise = client.getCheckoutDiff("/tmp/project", { mode: "base", baseRef: "main" });
+  const promise = client.getCheckoutDiff("/tmp/project", {
+    mode: "base",
+    baseRef: "main",
+  });
 
   expect(mock.sent).toHaveLength(1);
   const subscribeRequest = parseSentFrame(mock.sent[0]);
@@ -3897,7 +3906,10 @@ test("resubscribes checkout diff streams after reconnect", async () => {
   const internal = client as unknown as {
     checkoutDiffSubscriptions: Map<
       string,
-      { cwd: string; compare: { mode: "uncommitted" | "base"; baseRef?: string } }
+      {
+        cwd: string;
+        compare: { mode: "uncommitted" | "base"; baseRef?: string };
+      }
     >;
   };
   internal.checkoutDiffSubscriptions.set("checkout-sub-1", {
@@ -5605,6 +5617,66 @@ test("sends provider.usage.list.request and resolves provider.usage.list.respons
       },
     ],
   });
+});
+
+test("correlates workspace LSP responses and rejects stale document versions", async () => {
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "clsk_lsp_test",
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+  const connectPromise = client.connect();
+  mock.triggerOpen();
+  await connectPromise;
+
+  const response = client.requestWorkspaceLsp({
+    cwd: "/repo",
+    path: "main.cpp",
+    documentVersion: 3,
+    operation: { kind: "hover", position: { line: 0, character: 2 } },
+  });
+  const request = parseSentFrame(mock.sent[0]);
+  expect(request).toMatchObject({
+    type: "workspace.lsp.request",
+    cwd: "/repo",
+    path: "main.cpp",
+    documentVersion: 3,
+  });
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "workspace.lsp.response",
+      payload: {
+        documentVersion: 3,
+        result: { kind: "hover", hover: null },
+        error: null,
+        requestId: request.requestId,
+      },
+    }),
+  );
+  await expect(response).resolves.toEqual({ kind: "hover", hover: null });
+
+  const stale = client.requestWorkspaceLsp({
+    cwd: "/repo",
+    path: "main.cpp",
+    documentVersion: 4,
+    operation: { kind: "diagnostics" },
+  });
+  const staleRequest = parseSentFrame(mock.sent[1]);
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "workspace.lsp.response",
+      payload: {
+        documentVersion: 3,
+        result: { kind: "diagnostics", items: [] },
+        error: null,
+        requestId: staleRequest.requestId,
+      },
+    }),
+  );
+  await expect(stale).rejects.toThrow("stale document version");
 });
 
 test("sends close_items_request and resolves close_items_response", async () => {

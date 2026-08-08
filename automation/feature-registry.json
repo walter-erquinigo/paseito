@@ -104,6 +104,28 @@
       ]
     },
     {
+      "id": "lens-shared-editor-lsp",
+      "permanent": false,
+      "intent": "Add C/C++ and Python editor intelligence by attaching to the language server already owned by Lens without creating a second server fleet.",
+      "invariants": [
+        "Paseito only attaches to the Lens-owned per-workspace broker and disables only LSP when Lens is absent; it never auto-starts another Lens service.",
+        "LSP is opt-in per host and workspace, while format-on-save is separately opt-in per workspace and language.",
+        "Diagnostics, automatic and manual completion, hover and definition use exact in-memory document versions; stale responses are rejected.",
+        "Formatting has a 1.5-second deadline and any failure saves the original buffer unchanged in one write.",
+        "The UI is capability-gated and isolated in a reconfigurable CodeMirror compartment so ordinary editing remains independent."
+      ],
+      "contracts": [
+        "npx vitest run packages/app/src/file-pane/editor/lsp-session.test.ts packages/app/src/file-pane/editor/model.test.ts packages/client/src/daemon-client.test.ts packages/protocol/src/messages.workspace-lsp.test.ts packages/server/src/server/session/lsp/workspace-lsp-session.test.ts"
+      ],
+      "paths": [
+        "packages/app/src/file-pane/editor",
+        "packages/client/src/daemon-client.ts",
+        "packages/protocol/src/messages.ts",
+        "packages/server/src/server/session/lsp",
+        "docs/paseito-lsp.md"
+      ]
+    },
+    {
       "id": "local-semantic-maintenance",
       "permanent": true,
       "intent": "Use local Codex reconciliation, fail-closed verification, provenance-bound installation, migration and daily reporting.",

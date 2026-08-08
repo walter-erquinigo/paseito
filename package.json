@@ -1,6 +1,6 @@
 {
   "name": "paseito",
-  "version": "0.2.5-paseito.10",
+  "version": "0.2.5-paseito.11",
   "private": true,
   "description": "Paseito: an independently runnable macOS fork of Paseo",
   "keywords": [

@@ -5,8 +5,11 @@ import { getLanguageForFile } from "@getpaseo/highlight";
 import { getCM, vim } from "@replit/codemirror-vim";
 import { isRenderedMarkdownFile } from "@/components/file-pane-render-mode";
 import type { WorkspaceFileLocation } from "@/workspace/file-open";
+import type { WorkspaceLspLocation } from "@getpaseo/protocol/messages";
 import type { FileEditorModel } from "./model";
 import { editorBaseExtensions, editorTheme, type EditorVisualTheme } from "./extensions.web";
+import type { EditorLspSession } from "./lsp-session";
+import { editorLspExtensions } from "./lsp-extension.web";
 
 interface FileEditorViewProps {
   model: FileEditorModel;
@@ -15,6 +18,8 @@ interface FileEditorViewProps {
   navigationRevision: number;
   vimEnabled: boolean;
   theme: EditorVisualTheme;
+  lspSession: EditorLspSession | null;
+  onOpenDefinition(location: WorkspaceLspLocation): void;
   onCursorChange(position: { line: number; column: number }): void;
   onVimModeChange(mode: string | null): void;
 }
@@ -23,6 +28,7 @@ const languageCompartment = new Compartment();
 const wrappingCompartment = new Compartment();
 const themeCompartment = new Compartment();
 const vimCompartment = new Compartment();
+const lspCompartment = new Compartment();
 
 function wrappingForFile(filename: string) {
   return isRenderedMarkdownFile(filename) ? EditorView.lineWrapping : [];
@@ -35,6 +41,8 @@ export function FileEditorView({
   navigationRevision,
   vimEnabled,
   theme,
+  lspSession,
+  onOpenDefinition,
   onCursorChange,
   onVimModeChange,
 }: FileEditorViewProps) {
@@ -58,6 +66,7 @@ export function FileEditorView({
           languageCompartment.of(getLanguageForFile(values.filename)?.extension ?? []),
           wrappingCompartment.of(wrappingForFile(values.filename)),
           themeCompartment.of(editorTheme(values.theme)),
+          lspCompartment.of([]),
           EditorView.updateListener.of((update) => {
             if (
               update.docChanged &&
@@ -139,6 +148,14 @@ export function FileEditorView({
     onVimModeChange("NORMAL");
     return () => cm.off("vim-mode-change", handleModeChange);
   }, [onVimModeChange, vimEnabled]);
+
+  useEffect(() => {
+    viewRef.current?.dispatch({
+      effects: lspCompartment.reconfigure(
+        lspSession ? editorLspExtensions({ session: lspSession, onOpenDefinition }) : [],
+      ),
+    });
+  }, [lspSession, onOpenDefinition]);
 
   return (
     <div
