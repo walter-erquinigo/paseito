@@ -128,7 +128,11 @@ import { DiffTooLargeState } from "@/git/diff-too-large-state";
 import { ChangesBaseSelector } from "@/git/changes-base-selector";
 import { applyChangesBaseSelection } from "@/git/changes-base-selection";
 import { parseDiffContextMarker, type DiffContextRegion } from "@/git/diff-context-expansion";
-import { collapseReviewedFile, expandInvalidatedFiles } from "@/git/file-review-expansion";
+import {
+  collapseReviewedFile,
+  expandInvalidatedFiles,
+  expandUnreviewedFile,
+} from "@/git/file-review-expansion";
 
 export type { GitActionId, GitAction, GitActions } from "@/git/policy";
 
@@ -2476,8 +2480,11 @@ export function SharedDiffView({ files, displayPreferences, mode }: SharedDiffVi
     (path: string) => {
       if (mode.kind === "commit" || !fileReviews) return;
       const isNowReviewed = fileReviews.toggle(path);
-      if (!isNowReviewed) return;
-      mode.onExpandedPathsChange(collapseReviewedFile(expandedPaths, path));
+      mode.onExpandedPathsChange(
+        isNowReviewed
+          ? collapseReviewedFile(expandedPaths, path)
+          : expandUnreviewedFile(expandedPaths, path),
+      );
     },
     [expandedPaths, fileReviews, mode],
   );
