@@ -69,7 +69,11 @@
               }
             }
           },
-          "residualWork": { "type": "array", "items": { "type": "string" } }
+          "residualWork": {
+            "type": "array",
+            "description": "Only unfinished follow-up work; empty when reconciliation is complete.",
+            "items": { "type": "string" }
+          }
         }
       }
     }
