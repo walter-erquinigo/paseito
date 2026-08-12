@@ -14,8 +14,10 @@ from zoneinfo import ZoneInfo
 
 API = "https://api.github.com"
 REPOSITORY = "walter-erquinigo/paseito"
+REPORT_HOUR = 8
 FAILURE_TITLES = {
     "Paseito local semantic sync is blocked",
+    "Paseito local publication preparation is blocked",
     "Paseito automated release is blocked",
     "Paseito daily email delivery is blocked",
 }
@@ -23,7 +25,7 @@ FAILURE_TITLES = {
 
 def report_date(now: datetime, force: bool = False) -> str | None:
     local = now.astimezone(ZoneInfo("America/New_York"))
-    if not force and local.hour < 7:
+    if not force and local.hour < REPORT_HOUR:
         return None
     return local.date().isoformat()
 

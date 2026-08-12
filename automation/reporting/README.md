@@ -20,7 +20,7 @@ python3 automation/launchagents/install_launchagents.py
 python3 automation/reporting/local_smtp_report.py --force
 ```
 
-The reporting agent runs hourly. The first run at or after 07:00 America/New_York sends the report;
+The reporting agent runs hourly. The first run at or after 08:00 America/New_York sends the report;
 a private date key suppresses duplicates. A sleeping Mac catches up after waking. Delivery failures
 are retried hourly and recorded in a persistent GitHub issue without SMTP details or credentials.
 

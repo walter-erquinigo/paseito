@@ -18,8 +18,12 @@ upstream commit represented by the branch.
 
 ## Local semantic release invariant
 
-At 18:00 America/New_York each day, a macOS LaunchAgent refreshes
-a controller-owned checkout and prepares a disposable candidate against the exact peeled stable
+At 07:00 America/New_York each day, a macOS LaunchAgent first inspects the enrolled source checkout.
+Dirty changes are given to a sandboxed Codex preparation pass, rejected if intent is ambiguous or
+credential-like material is present, and committed and fast-forward pushed only after focused tests,
+formatting, typechecking, and linting pass. Existing unpushed commits receive the same deterministic
+checks. The publisher then refreshes a controller-owned checkout and prepares a disposable candidate
+against the exact peeled stable
 `vMAJOR.MINOR.PATCH` upstream commit. A private success date prevents duplicate checks; failures retry
 hourly. The controller owns
 Git's mechanical rebase, staging, and commit operations; local Codex resolves each paused conflict
@@ -81,11 +85,17 @@ required for another attempt.
 ## Installer and local watcher
 
 `automation/launchagents/install_launchagents.py` installs two user LaunchAgents. The semantic
-watcher launches at the top of every hour and gates itself at 18:00 America/New_York, including DST changes, while local email reporting
+watcher launches at the top of every hour and gates itself at 07:00 America/New_York, including DST
+changes, while local email reporting
 uses its separate daily gate. The small sync watcher updates a marked private control checkout under
 `~/Library/Application Support/PaseitoAutomation`, runs the semantic controller from that checkout,
 and relies on the user's existing Codex and GitHub CLI sessions. No token is copied into a plist or
 candidate checkout. Only fixed-field sanitized status is dispatched to GitHub.
+
+The source checkout and semantic controller are separate on purpose. After promotion rewrites the
+published branch, the watcher records a private pending sync, creates a recoverable backup ref, and
+uses `git reset --keep` to align the source branch without discarding concurrent uncommitted edits.
+Unexpected branch divergence or overlapping edits stop the run for manual review.
 
 The installer never stops Paseito. When the app is running, it installs the verified update, keeps
 the previous known-good app, writes a pending-restart marker, and displays a notification. Failures
@@ -110,7 +120,7 @@ best-effort surface because application identity can require reauthentication.
 
 ## Daily report
 
-The local reporting agent checks hourly. `zoneinfo` selects the first run at or after 07:00 New York,
+The local reporting agent checks hourly. `zoneinfo` selects the first run at or after 08:00 New York,
 and a mode-0600 local date key suppresses duplicates while allowing catch-up after sleep. The report
 includes the latest semantic classifications, independent review, deterministic build, publication,
 local installation, the most recent result for every registered remote host, and any unresolved
