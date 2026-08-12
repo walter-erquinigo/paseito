@@ -19,6 +19,7 @@ FORK_URL = "https://github.com/walter-erquinigo/paseito.git"
 SCHEDULE_ZONE = ZoneInfo("America/New_York")
 SCHEDULE_HOUR = 7
 LOCAL_FAILURE_TITLE = "Paseito local publication preparation is blocked"
+AUTOMATION_PATH = f"{Path.home()}/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 
 
 def scheduled_date(now: datetime, force: bool = False) -> str | None:
@@ -208,7 +209,7 @@ def main() -> int:
         result = subprocess.run(
             [sys.executable, str(control / "automation/release/semantic_sync.py"), "--control-repo", str(control), "--state-root", str(state_root)],
             cwd=control,
-            env={**os.environ, "PATH": "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"},
+            env={**os.environ, "PATH": AUTOMATION_PATH},
             check=False,
         )
         sync_source_checkout(source_repo, state_root)

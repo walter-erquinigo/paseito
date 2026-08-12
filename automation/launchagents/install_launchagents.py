@@ -9,6 +9,8 @@ import plistlib
 import subprocess
 from pathlib import Path
 
+AUTOMATION_PATH = f"{Path.home()}/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+
 
 def agent(
     label: str,
@@ -30,7 +32,7 @@ def agent(
         "RunAtLoad": run_at_load,
         "ProcessType": "Background",
         "EnvironmentVariables": {
-            "PATH": "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+            "PATH": AUTOMATION_PATH
         },
         "StandardOutPath": str(log_root / f"{label}.out.log"),
         "StandardErrorPath": str(log_root / f"{label}.err.log"),
