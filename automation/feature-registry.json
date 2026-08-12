@@ -168,24 +168,29 @@
     {
       "id": "markdown-preview-source-links",
       "permanent": false,
-      "intent": "Open source locations from a Markdown file preview in a reusable split pane to the left without replacing the preview.",
+      "intent": "Open source locations from a Markdown file preview in an existing review surface or a reusable split pane without replacing the preview.",
       "invariants": [
         "Preview prose and inline code auto-link whitespace-delimited relative or absolute file paths only when a line location is present; fenced code and unrelated prose remain plain.",
         "Colon path suffixes use path:start-end for a 1-based line range and reserve only a final :column segment for a column; preview and assistant-message parsing share this rule, while #Lx-Ly and lines x-y remain supported ranges.",
-        "Ordinary clicks open source mode in an existing pane immediately to the left when available, or create a left split when none exists; preview links never create or target a right pane.",
+        "A full Changes tab accepts a current-side location it can render, preserving the requested range and column while expanding omitted context when supported.",
+        "When no full Changes tab is open, a visible inline Changes explorer accepts the same current-side navigation without creating a source file tab.",
+        "Locations unavailable in a visible Changes surface open source mode in an existing pane immediately to the left when available, or create a left split when none exists; preview links never create a source pane on the right.",
         "The editor clamps invalid positions, centers and focuses the requested 1-based line and column, and missing files leave the Markdown preview visible while showing the existing file-not-found toast.",
         "Explicit Markdown links retain their displayed text, web URLs stay external, and absolute readable files outside the active workspace are supported."
       ],
       "contracts": [
-        "npx vitest run packages/app/src/assistant-file-links/parse.test.ts packages/app/src/file-pane/markdown-file-links.test.ts packages/app/src/workspace/file-open/index.test.ts packages/app/src/screens/workspace/workspace-pane-state.test.ts packages/app/src/workspace-tabs/identity.test.ts --bail=1",
+        "npx vitest run packages/app/src/assistant-file-links/parse.test.ts packages/app/src/file-pane/markdown-file-links.test.ts packages/app/src/workspace/file-open/index.test.ts packages/app/src/workspace/markdown-changes-navigation.test.ts packages/app/src/screens/workspace/workspace-pane-state.test.ts packages/app/src/workspace-tabs/identity.test.ts --bail=1",
         "npm run test:e2e --workspace=@getpaseo/app -- e2e/markdown-preview-file-links.spec.ts"
       ],
       "paths": [
         "packages/app/src/assistant-file-links",
+        "packages/app/src/git/diff-pane.tsx",
         "packages/app/src/file-pane",
         "packages/app/src/screens/workspace/workspace-pane-state.ts",
         "packages/app/src/screens/workspace/workspace-screen.tsx",
-        "packages/app/src/workspace/file-open"
+        "packages/app/src/workspace/file-open",
+        "packages/app/src/workspace/markdown-changes-navigation.ts",
+        "packages/app/e2e/markdown-preview-file-links.spec.ts"
       ]
     },
     {

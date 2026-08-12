@@ -2,8 +2,13 @@ import { describe, expect, it } from "vitest";
 import type { ParsedDiffFile } from "@getpaseo/protocol/messages";
 import {
   canNavigateToCurrentLine,
+  clearInlineWorkingDiffNavigationSnapshot,
   createWorkingDiffNavigationTarget,
+  getInlineWorkingDiffNavigationSnapshot,
+  publishInlineWorkingDiffNavigationSnapshot,
   resolveMarkdownChangesNavigation,
+  resolveMarkdownInlineChangesNavigation,
+  type InlineWorkingDiffNavigationSnapshot,
   type WorkingDiffNavigationSnapshot,
 } from "./markdown-changes-navigation";
 import type { WorkspaceTab } from "@/workspace-tabs/model";
@@ -77,6 +82,48 @@ describe("Markdown Changes navigation", () => {
   it("routes an omitted current-side line only when context expansion is supported", () => {
     expect(canNavigateToCurrentLine(diffFile(), 20, true)).toBe(true);
     expect(canNavigateToCurrentLine(diffFile(), 20, false)).toBe(false);
+  });
+
+  it("routes a range to the visible inline Changes surface when no full Changes tab exists", () => {
+    const inlineSnapshot: InlineWorkingDiffNavigationSnapshot = {
+      files: [diffFile()],
+      isLoading: false,
+      contextExpansionSupported: true,
+      navigate: () => undefined,
+    };
+    expect(
+      resolveMarkdownInlineChangesNavigation({
+        workspaceRoot: "/repo",
+        location: { path: "/repo/src/example.ts", lineStart: 10, lineEnd: 11, column: 7 },
+        snapshot: inlineSnapshot,
+      }),
+    ).toEqual({
+      kind: "working_diff",
+      focusPath: "src/example.ts",
+      focusRequestId: expect.any(Number),
+      focusLineStart: 10,
+      focusLineEnd: 11,
+      focusColumn: 7,
+    });
+  });
+
+  it("keeps inline Changes registration owner-safe", () => {
+    const workspaceKey = "server:workspace";
+    const firstOwner = {};
+    const secondOwner = {};
+    const first: InlineWorkingDiffNavigationSnapshot = {
+      files: [diffFile()],
+      isLoading: false,
+      contextExpansionSupported: true,
+      navigate: () => undefined,
+    };
+    const second = { ...first, files: [diffFile({ path: "src/second.ts" })] };
+    publishInlineWorkingDiffNavigationSnapshot(workspaceKey, firstOwner, first);
+    publishInlineWorkingDiffNavigationSnapshot(workspaceKey, secondOwner, second);
+    clearInlineWorkingDiffNavigationSnapshot(workspaceKey, firstOwner);
+    expect(getInlineWorkingDiffNavigationSnapshot(workspaceKey)).toBe(second);
+    clearInlineWorkingDiffNavigationSnapshot(workspaceKey, secondOwner);
+    expect(getInlineWorkingDiffNavigationSnapshot(workspaceKey)).toBeNull();
   });
 
   it("falls back when the Changes tab or its current snapshot is absent", () => {

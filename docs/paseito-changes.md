@@ -123,13 +123,15 @@ On desktop, clicking a preview source location first checks for an already-open 
 When that tab's active working comparison contains the workspace-relative file and can render the
 requested current-side line, Paseito focuses the existing tab, expands the file, loads omitted
 context when supported, and highlights the requested line or range. Unwrapped diffs also reveal the
-requested column horizontally. Binary, oversized, deleted-only, invalid, unsupported hidden-context,
-outside-workspace, unchanged, or otherwise unavailable targets instead open source mode in the pane
-immediately to the left, reusing it when present or creating a left split when necessary. A closed
-Changes tab is never created by a preview link.
+requested column horizontally. When no full Changes tab is open, the same navigation reuses a
+visible inline **Changes** explorer, focusing its review surface without opening a file tab. Binary,
+oversized, deleted-only, invalid, unsupported hidden-context, outside-workspace, unchanged, or
+otherwise unavailable targets instead open source mode in the pane immediately to the left, reusing
+it when present or creating a left split when necessary. A closed Changes surface is never created
+by a preview link.
 
 The Markdown preview stays visible when source mode is used, and links never create or target a pane
 on its right. The editor focuses and centers the requested 1-based location, clamping positions beyond
 the document or line end. Compact layouts retain this source-opening behavior. A missing target leaves
-the preview intact and shows the existing file-not-found notification. Commit diffs and inline Changes
-panels are not Markdown navigation targets.
+the preview intact and shows the existing file-not-found notification. Commit diffs and inline
+Changes panels that are not currently visible are not Markdown navigation targets.
