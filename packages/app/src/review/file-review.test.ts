@@ -102,4 +102,26 @@ describe("file review state", () => {
       expect(serialized).toContain('"reviewedRevision":"revision-1"');
     });
   });
+
+  it("persists line review fingerprints through the existing local store", async () => {
+    useFileReviewStore.getState().replaceRecords({
+      scope: {
+        "src/a.ts": {
+          reviewedRevision: "",
+          lastSeenRevision: "revision-2",
+          reviewedAt: REVIEWED_AT,
+          reviewedLines: [{ fingerprint: '["new","add","+value","",""]', occurrence: 0 }],
+          lastSeenDiffSignature: "signature-2",
+          lastSeenFingerprintCounts: { '["new","add","+value","",""]': 1 },
+        },
+      },
+    });
+
+    await vi.waitFor(async () => {
+      const serialized = await AsyncStorage.getItem("@paseo:file-review-store");
+      expect(serialized).toContain('"reviewedLines"');
+      expect(serialized).toContain('\\\"+value\\\"');
+      expect(serialized).toContain('"lastSeenDiffSignature":"signature-2"');
+    });
+  });
 });

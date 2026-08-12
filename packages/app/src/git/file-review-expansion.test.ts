@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   collapseReviewedFile,
+  expandOnlyUnreviewedFiles,
   expandInvalidatedFiles,
   expandUnreviewedFile,
+  revealFileAncestorFolders,
 } from "./file-review-expansion";
 
 describe("file review expansion", () => {
@@ -25,5 +27,29 @@ describe("file review expansion", () => {
       "src/a.ts",
       "src/b.ts",
     ]);
+  });
+
+  it("expands every incomplete file and collapses every reviewed file", () => {
+    expect(
+      expandOnlyUnreviewedFiles(
+        ["src/a.ts", "src/b.ts", "src/c.ts"],
+        new Set(["src/a.ts", "src/c.ts"]),
+      ),
+    ).toEqual(["src/b.ts"]);
+  });
+
+  it("collapses every file when review is complete", () => {
+    expect(
+      expandOnlyUnreviewedFiles(["src/a.ts", "src/b.ts"], new Set(["src/a.ts", "src/b.ts"])),
+    ).toEqual([]);
+  });
+
+  it("opens only the tree folders needed to reveal incomplete files", () => {
+    expect(
+      revealFileAncestorFolders(
+        ["src", "src/complete", "src/incomplete", "tests"],
+        ["src/incomplete/example.ts"],
+      ),
+    ).toEqual(["src/complete", "tests"]);
   });
 });

@@ -162,6 +162,7 @@ const COMMENT_LIST: ReviewDraftComment[] = [comment()];
 function buildReviewActions(overrides: Partial<InlineReviewActions> = {}): InlineReviewActions {
   return {
     canSuggest: false,
+    composerMode: null,
     commentsByTarget: new Map(),
     editor: null,
     suggestionsByTarget: new Map(),
@@ -174,6 +175,7 @@ function buildReviewActions(overrides: Partial<InlineReviewActions> = {}): Inlin
     onSaveEditor: vi.fn(),
     onDeleteComment: vi.fn(),
     onStartSuggestion: vi.fn(),
+    onSwitchSuggestionToComment: vi.fn(),
     onBeginSuggestionDrag: vi.fn(),
     onUpdateSuggestionDrag: vi.fn(),
     onShiftSuggestionRange: vi.fn(),
@@ -290,6 +292,38 @@ describe("useInlineReviewController", () => {
     });
   });
 
+  it("switches between comment and code-change drafts without losing either draft", () => {
+    const reviewTarget = target({ sourceRevision: "revision-1" });
+    const { result } = renderHook(() =>
+      useInlineReviewController({
+        reviewDraftKey: "review:composer-tabs",
+        availableTargets: [reviewTarget],
+        suggestionsSupported: true,
+      }),
+    );
+
+    act(() => result.current.onStartComment(reviewTarget));
+    act(() => result.current.onStartSuggestion(reviewTarget, "Should this be optional?"));
+    expect(result.current.composerMode).toBe("suggestion");
+    expect(result.current.editor?.body).toBe("Should this be optional?");
+    expect(result.current.suggestionEditor?.note).toBe("Should this be optional?");
+
+    act(() => result.current.onSwitchSuggestionToComment("changed code", "Explain why"));
+    expect(result.current.composerMode).toBe("comment");
+    expect(result.current.editor?.body).toBe("Explain why");
+    expect(result.current.suggestionEditor).toMatchObject({
+      replacement: "changed code",
+      note: "Explain why",
+    });
+
+    act(() => result.current.onStartSuggestion(reviewTarget, "Explain why"));
+    expect(result.current.composerMode).toBe("suggestion");
+    expect(result.current.suggestionEditor).toMatchObject({
+      replacement: "changed code",
+      note: "Explain why",
+    });
+  });
+
   it("opens a prefilled editor for Shift-selected lines across expanded hunks", () => {
     const first = target({ lineNumber: 20, sourceRevision: "revision-1", content: " first" });
     const middle = target({
@@ -375,6 +409,7 @@ describe("git diff inline review helpers", () => {
     const rightComment = comment();
     const actions = buildReviewActions({
       commentsByTarget: groupInlineReviewCommentsByTarget([rightComment]),
+      composerMode: "comment",
       editor: { target: rightTarget, commentId: null, body: "" },
     });
 
@@ -386,7 +421,7 @@ describe("git diff inline review helpers", () => {
 
     expect(rowState?.left).toBeNull();
     expect(rowState?.right?.comments).toEqual([rightComment]);
-    expect(rowState?.height).toBe(210);
+    expect(rowState?.height).toBe(246);
   });
 
   it("pins no-wrap review threads to the visible diff viewport", () => {
@@ -540,6 +575,25 @@ describe("InlineReviewEditor", () => {
     expect(onCancel).toHaveBeenCalledTimes(1);
   });
 
+  it("switches to the code-change tab with the current comment body", () => {
+    const onSuggestEdit = vi.fn();
+    const { getByLabelText, getByTestId } = render(
+      <InlineReviewEditor
+        initialBody=""
+        onCancel={vi.fn()}
+        onSave={vi.fn()}
+        onSuggestEdit={onSuggestEdit}
+        testID="editor"
+      />,
+    );
+
+    fireEvent.change(getByTestId("editor-input"), {
+      target: { value: "Should this be optional?" },
+    });
+    fireEvent.click(getByLabelText("Code change"));
+    expect(onSuggestEdit).toHaveBeenCalledWith("Should this be optional?");
+  });
+
   it("handles Escape cancel and Mod+Enter save from the focused textarea", () => {
     const onCancel = vi.fn();
     const onSave = vi.fn();
@@ -612,5 +666,29 @@ describe("InlineReviewThread", () => {
     expect(actions.onEditComment).toHaveBeenCalledWith(reviewTarget, draftComment);
     fireEvent.click(getByTestId("review-comment-delete-comment-1"));
     expect(actions.onDeleteComment).toHaveBeenCalledWith("comment-1");
+  });
+
+  it("switches a new code-change draft back to a comment", () => {
+    const reviewTarget = target({ sourceRevision: "revision-1" });
+    const actions = buildReviewActions({
+      canSuggest: true,
+      composerMode: "suggestion",
+      suggestionEditor: {
+        targets: [reviewTarget],
+        suggestionId: null,
+        replacement: "const value = changed;",
+        note: "Explain why",
+        sourceRevision: "revision-1",
+      },
+    });
+    const { getByLabelText } = render(
+      <InlineReviewThread reviewTarget={reviewTarget} reviewActions={actions} height={316} />,
+    );
+
+    fireEvent.click(getByLabelText("Comment"));
+    expect(actions.onSwitchSuggestionToComment).toHaveBeenCalledWith(
+      "const value = changed;",
+      "Explain why",
+    );
   });
 });

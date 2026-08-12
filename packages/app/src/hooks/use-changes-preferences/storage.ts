@@ -11,6 +11,7 @@ const changesPreferencesSchema = z.object({
   wrapLines: z.boolean().optional(),
   hideWhitespace: z.boolean().optional(),
   commitsCollapsed: z.boolean().optional(),
+  fileTreeCollapsed: z.boolean().optional(),
 });
 
 export interface ChangesPreferences {
@@ -19,6 +20,7 @@ export interface ChangesPreferences {
   wrapLines: boolean;
   hideWhitespace: boolean;
   commitsCollapsed: boolean;
+  fileTreeCollapsed: boolean;
 }
 
 export const DEFAULT_CHANGES_PREFERENCES: ChangesPreferences = {
@@ -27,6 +29,7 @@ export const DEFAULT_CHANGES_PREFERENCES: ChangesPreferences = {
   wrapLines: false,
   hideWhitespace: false,
   commitsCollapsed: true,
+  fileTreeCollapsed: false,
 };
 
 export interface KeyValueStorage {
@@ -50,9 +53,15 @@ export async function loadChangesPreferencesFromStorage(
 ): Promise<ChangesPreferences> {
   const stored = await storage.getItem(CHANGES_PREFERENCES_STORAGE_KEY);
   if (stored) {
-    const parsed = changesPreferencesSchema.safeParse(JSON.parse(stored));
-    if (parsed.success) {
-      return { ...DEFAULT_CHANGES_PREFERENCES, ...parsed.data };
+    try {
+      const parsed = changesPreferencesSchema.safeParse(JSON.parse(stored));
+      if (parsed.success) {
+        return { ...DEFAULT_CHANGES_PREFERENCES, ...parsed.data };
+      }
+    } catch (error) {
+      if (!(error instanceof SyntaxError)) {
+        throw error;
+      }
     }
   }
 

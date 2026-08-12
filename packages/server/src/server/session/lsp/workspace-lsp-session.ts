@@ -6,16 +6,26 @@ import type {
   WorkspaceLspResult,
 } from "@getpaseo/protocol/messages";
 import { resolveExplorerFilePath } from "../../file-explorer/service.js";
-import { ensureLensBroker, LensBrokerClient } from "./lens-broker-client.js";
+import {
+  type WorkspaceLspBackendFactory,
+  type WorkspaceLspClient,
+  workspaceLspBackendFactory,
+} from "./backend.js";
+import { isClangdDocument } from "./clangd-client.js";
+
+const INTERACTIVE_REQUEST_TIMEOUT_MS = 15_000;
 
 export interface WorkspaceLspSessionHost {
   emit(message: SessionOutboundMessage): void;
 }
 
 export class WorkspaceLspSession {
-  private readonly clients = new Map<string, LensBrokerClient>();
+  private readonly clients = new Map<string, WorkspaceLspClient>();
 
-  constructor(private readonly host: WorkspaceLspSessionHost) {}
+  constructor(
+    private readonly host: WorkspaceLspSessionHost,
+    private readonly backendFactory: WorkspaceLspBackendFactory = workspaceLspBackendFactory,
+  ) {}
 
   async handleRequest(request: WorkspaceLspRequest): Promise<void> {
     try {
@@ -24,7 +34,7 @@ export class WorkspaceLspSession {
         root: workspace,
         relativePath: request.path,
       });
-      const client = await this.clientForWorkspace(workspace);
+      const client = await this.clientForWorkspace(workspace, file);
       const result = await this.forward(client, file, request);
       this.host.emit({
         type: "workspace.lsp.response",
@@ -53,27 +63,19 @@ export class WorkspaceLspSession {
     this.clients.clear();
   }
 
-  private async clientForWorkspace(workspace: string): Promise<LensBrokerClient> {
-    let client = this.clients.get(workspace);
+  private async clientForWorkspace(workspace: string, file: string): Promise<WorkspaceLspClient> {
+    const languageFamily = isClangdDocument(file) ? "clangd" : "other";
+    const clientKey = `${workspace}\0${languageFamily}`;
+    let client = this.clients.get(clientKey);
     if (!client) {
-      client = new LensBrokerClient(workspace);
-      this.clients.set(workspace, client);
-    }
-    try {
-      await client.request({
-        method: "broker.ping",
-        params: {},
-        timeoutMs: 800,
-      });
-    } catch {
-      client.close();
-      await ensureLensBroker(workspace);
+      client = await this.backendFactory.connect(workspace, file);
+      this.clients.set(clientKey, client);
     }
     return client;
   }
 
   private async forward(
-    client: LensBrokerClient,
+    client: WorkspaceLspClient,
     file: string,
     request: WorkspaceLspRequest,
   ): Promise<WorkspaceLspResult> {
@@ -126,7 +128,7 @@ export class WorkspaceLspSession {
           {
             method: "textDocument.hover",
             params: { ...common, ...request.operation.position },
-            timeoutMs: 3_000,
+            timeoutMs: INTERACTIVE_REQUEST_TIMEOUT_MS,
           },
         );
         return { kind: "hover", hover };
@@ -137,7 +139,7 @@ export class WorkspaceLspSession {
         >({
           method: "textDocument.definition",
           params: { ...common, ...request.operation.position },
-          timeoutMs: 5_000,
+          timeoutMs: INTERACTIVE_REQUEST_TIMEOUT_MS,
         });
         return { kind: "definition", locations };
       }

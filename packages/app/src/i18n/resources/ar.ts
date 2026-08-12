@@ -790,6 +790,14 @@ export const ar: TranslationResources = {
       diff: {
         openChangesTab: "فتح علامة تبويب التغييرات",
         closeChangesTab: "إغلاق علامة تبويب التغييرات",
+        fileNavigator: "الملفات",
+        showFileNavigator: "إظهار مستعرض الملفات",
+        hideFileNavigator: "إخفاء مستعرض الملفات",
+        fileStatus: {
+          added: "مضاف",
+          deleted: "محذوف",
+          modified: "معدّل",
+        },
         binaryFile: "ملف ثنائي",
         tooLarge: "الفرق كبير جدًا بحيث لا يمكن عرضه",
         previewTooLargeTitle: "هذا الفرق كبير جدًا بحيث لا يمكن معاينته",
@@ -807,6 +815,7 @@ export const ar: TranslationResources = {
         wrapLongLines: "لف الخطوط الطويلة",
         collapseAll: "طي كافة الملفات",
         expandAll: "قم بتوسيع كافة الملفات",
+        expandUnreviewed: "توسيع الملفات غير المراجعة وطي الملفات المراجعة",
         collapseAllFolders: "طي كافة المجلدات",
         expandAllFolders: "توسيع كافة المجلدات",
         refreshing: "منعش",
@@ -836,6 +845,12 @@ export const ar: TranslationResources = {
         clearAllReviewed: "مسح علامات المراجعة من جميع الملفات",
         reviewUpdateHost: "حدّث المضيف لوضع علامات المراجعة على الملفات",
         reviewBranchRequired: "انتقل إلى فرع لوضع علامات المراجعة على الملفات",
+        markLineReviewed: "وضع علامة مراجعة على السطر {{line}}",
+        markLineUnreviewed: "إلغاء علامة مراجعة السطر {{line}}",
+        editLineUnavailable: "لا يمكن فتح هذا السطر في المحرر المدمج",
+        noUncheckedLines: "لا توجد أسطر غير مراجعة في هذا الاتجاه",
+        lineReviewShortcuts:
+          "M / , للمراجعة والتنقل · مسافة للتبديل · E للتحرير · U للتراجع · Esc للمسح",
         context: {
           hiddenLines: "{{count}} hidden lines",
           expandUp: "Show 20 lines above",
@@ -1682,6 +1697,10 @@ export const ar: TranslationResources = {
     accessibility: "تم استخدام نافذة السياق{{percentage}}%",
   },
   review: {
+    composer: {
+      comment: "تعليق",
+      codeChange: "تغيير الرمز",
+    },
     comment: {
       add: "إضافة تعليق المراجعة",
       edit: "تحرير تعليق المراجعة",

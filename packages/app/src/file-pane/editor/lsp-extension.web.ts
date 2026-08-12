@@ -66,6 +66,20 @@ export function editorLspExtensions(input: {
       scheduleDiagnostics(update.view);
     }),
     EditorView.domEventHandlers({
+      contextmenu(event, view) {
+        const showContextMenu = window.paseoDesktop?.menu?.showContextMenu;
+        if (typeof showContextMenu !== "function") return false;
+        const position = view.posAtCoords({ x: event.clientX, y: event.clientY });
+        if (position === null) return false;
+        event.preventDefault();
+        void showContextMenu({ kind: "editor-lsp" }).then((action) => {
+          if (action === "go-to-definition") {
+            void openDefinition(input.session, view, input.onOpenDefinition, position);
+          }
+          return undefined;
+        });
+        return true;
+      },
       mousedown(event, view) {
         if (!(event.metaKey || event.ctrlKey) || event.button !== 0) return false;
         const position = view.posAtCoords({

@@ -1,6 +1,7 @@
+import { execFileSync } from "node:child_process";
 import { unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { type Page } from "@playwright/test";
+import { type Locator, type Page } from "@playwright/test";
 import { buildHostWorkspaceRoute, buildSettingsSectionRoute } from "../../src/utils/host-routes";
 import { test, expect } from "../support/fixtures";
 import { getServerId } from "../support/helpers/server-id";
@@ -11,6 +12,7 @@ import { waitForWorkspaceTabsVisible } from "../support/helpers/workspace-tabs";
 interface DirtyWorkspace {
   id: string;
   repoPath: string;
+  editedLineCount: number;
 }
 
 interface WorkspaceFixtureOptions {
@@ -201,9 +203,208 @@ test.afterEach(async () => {
   }
 });
 
-test("changes file actions open below the right-click without a reserved kebab", async ({
-  page,
-}) => {
+test("changes diff keeps code rows aligned with the gutter", async ({ page }) => {
+  const workspace = await createWorkspaceWithMountedTabDiff();
+  await useCodeFont(page, 9);
+  await useUnwrappedDiffLines(page);
+  await openWorkspaceChanges(page, workspace);
+
+  await expectDiffCodeFontSize(page, 9);
+  await expectVisibleDiffRowsAligned(page);
+  await expectDiffCodeTextAlignedWithGutterText(page, [
+    {
+      codeText: "function createInitialMountedTabIds(input: UseMountedTabSetInput)",
+      lineNumber: "20",
+    },
+    { codeText: "return next;", lineNumber: "55" },
+    { codeText: "useLayoutEffect(() => {", lineNumber: "78" },
+  ]);
+  await expectHoverCommentButtonAlignedWithCodeLine(page, {
+    codeText: "function createInitialMountedTabIds(input: UseMountedTabSetInput)",
+    lineNumber: "20",
+  });
+});
+
+test("line review controls stay in the fixed gutter across diff layouts", async ({ page }) => {
+  const workspace = await createWorkspaceWithMountedTabDiff();
+  await useUnwrappedDiffLines(page);
+  await openWorkspaceChanges(page, workspace);
+
+  await expectLineReviewControls(page, workspace.editedLineCount);
+  const reviewCheckboxes = page.getByTestId(/^diff-line-review-/);
+  const selectedReviewLine = page.locator('[data-paseito-review-selected="true"]');
+  const reviewFocusMarker = page.getByTestId(/^diff-review-focus-/);
+  await reviewCheckboxes.nth(1).click();
+  await expect(reviewCheckboxes.nth(1)).toHaveAccessibleName(/unreviewed$/);
+  await expect(reviewFocusMarker).toHaveCount(1);
+  await expect(reviewFocusMarker).toHaveAttribute(
+    "data-testid",
+    `diff-review-focus-${await getReviewTargetKey(reviewCheckboxes.nth(1))}`,
+  );
+  await expect(selectedReviewLine).toHaveAttribute(
+    "data-paseito-review-target-key",
+    await reviewCheckboxes
+      .nth(1)
+      .getAttribute("data-testid")
+      .then((testID) => testID?.replace("diff-line-review-", "") ?? ""),
+  );
+  await page.keyboard.press("Comma");
+  await expect(reviewFocusMarker).toHaveAttribute(
+    "data-testid",
+    `diff-review-focus-${await getReviewTargetKey(reviewCheckboxes.nth(0))}`,
+  );
+  await expect(selectedReviewLine).toHaveAttribute(
+    "data-paseito-review-target-key",
+    await reviewCheckboxes
+      .nth(0)
+      .getAttribute("data-testid")
+      .then((testID) => testID?.replace("diff-line-review-", "") ?? ""),
+  );
+  await page.keyboard.press("j");
+  await page.keyboard.press("k");
+  await expect(selectedReviewLine).toHaveAttribute(
+    "data-paseito-review-target-key",
+    await reviewCheckboxes
+      .nth(0)
+      .getAttribute("data-testid")
+      .then((testID) => testID?.replace("diff-line-review-", "") ?? ""),
+  );
+  await reviewCheckboxes.nth(1).click();
+
+  await reviewCheckboxes.nth(2).click();
+  await expect(reviewCheckboxes.nth(2)).toHaveAccessibleName(/unreviewed$/);
+  await page.keyboard.press("m");
+  await expect(reviewFocusMarker).toHaveAttribute(
+    "data-testid",
+    `diff-review-focus-${await getReviewTargetKey(reviewCheckboxes.nth(3))}`,
+  );
+  await expect(selectedReviewLine).toHaveAttribute(
+    "data-paseito-review-target-key",
+    await reviewCheckboxes
+      .nth(3)
+      .getAttribute("data-testid")
+      .then((testID) => testID?.replace("diff-line-review-", "") ?? ""),
+  );
+  await reviewCheckboxes.nth(2).click();
+  await expect(page.getByTestId("diff-file-0")).toContainText(`0/${workspace.editedLineCount}`);
+
+  await page.setViewportSize({ width: 1400, height: 600 });
+  const lowerSelectedCheckbox = reviewCheckboxes.nth(20);
+  const offscreenTargetCheckbox = reviewCheckboxes.nth(21);
+  const offscreenTargetKey = await getReviewTargetKey(offscreenTargetCheckbox);
+  await lowerSelectedCheckbox.click();
+  await page.evaluate((targetKey) => {
+    const target = document.querySelector<HTMLElement>(
+      `[data-paseito-review-target-key="${CSS.escape(targetKey)}"]`,
+    );
+    let viewport = target?.parentElement ?? null;
+    while (viewport) {
+      const style = getComputedStyle(viewport);
+      if (
+        viewport.scrollHeight > viewport.clientHeight &&
+        (style.overflowY === "auto" || style.overflowY === "scroll")
+      ) {
+        break;
+      }
+      viewport = viewport.parentElement;
+    }
+    if (!viewport || !target) throw new Error("Review navigation viewport is unavailable");
+    const viewportBounds = viewport.getBoundingClientRect();
+    const targetBounds = target.getBoundingClientRect();
+    viewport.scrollTop = Math.max(
+      0,
+      viewport.scrollTop + targetBounds.top - (viewportBounds.bottom + 4),
+    );
+  }, offscreenTargetKey);
+  await expect
+    .poll(() =>
+      page.evaluate((targetKey) => {
+        const target = document.querySelector<HTMLElement>(
+          `[data-paseito-review-target-key="${CSS.escape(targetKey)}"]`,
+        );
+        let viewport = target?.parentElement ?? null;
+        while (viewport) {
+          const style = getComputedStyle(viewport);
+          if (
+            viewport.scrollHeight > viewport.clientHeight &&
+            (style.overflowY === "auto" || style.overflowY === "scroll")
+          ) {
+            break;
+          }
+          viewport = viewport.parentElement;
+        }
+        if (!viewport || !target) return false;
+        return target.getBoundingClientRect().top > viewport.getBoundingClientRect().bottom;
+      }, offscreenTargetKey),
+    )
+    .toBe(true);
+  await page.keyboard.press("m");
+  await expect(reviewFocusMarker).toHaveAttribute(
+    "data-testid",
+    `diff-review-focus-${offscreenTargetKey}`,
+  );
+  await expect
+    .poll(() =>
+      page.evaluate((targetKey) => {
+        const target = document.querySelector<HTMLElement>(
+          `[data-paseito-review-target-key="${CSS.escape(targetKey)}"]`,
+        );
+        let viewport = target?.parentElement ?? null;
+        while (viewport) {
+          const style = getComputedStyle(viewport);
+          if (
+            viewport.scrollHeight > viewport.clientHeight &&
+            (style.overflowY === "auto" || style.overflowY === "scroll")
+          ) {
+            break;
+          }
+          viewport = viewport.parentElement;
+        }
+        if (!viewport || !target) return Number.POSITIVE_INFINITY;
+        const viewportBounds = viewport.getBoundingClientRect();
+        const targetBounds = target.getBoundingClientRect();
+        return Math.abs(
+          (targetBounds.top + targetBounds.bottom) / 2 -
+            (viewportBounds.top + viewportBounds.bottom) / 2,
+        );
+      }, offscreenTargetKey),
+    )
+    .toBeLessThan(30);
+  await lowerSelectedCheckbox.click();
+  await expect(page.getByTestId("diff-file-0")).toContainText(`0/${workspace.editedLineCount}`);
+  await page.setViewportSize({ width: 1400, height: 900 });
+
+  const unifiedCheckbox = page
+    .locator('[data-testid^="diff-gutter-cell-"]')
+    .getByRole("checkbox")
+    .first();
+  await expectCheckboxFixedWhileCodeScrolls(page, "diff-file-0-body", unifiedCheckbox);
+
+  await page.getByTestId("changes-options-menu").click();
+  await page.getByTestId("changes-toggle-wrap-lines").click();
+  await expectLineReviewControls(page, workspace.editedLineCount);
+  const blankReviewRowCount = await page
+    .getByTestId(/^diff-wrapped-row-/)
+    .evaluateAll((rows) => rows.filter((row) => !row.querySelector('[role="checkbox"]')).length);
+  expect(blankReviewRowCount).toBeGreaterThan(0);
+
+  await page.getByTestId("changes-options-menu").click();
+  await page.getByTestId("changes-toggle-wrap-lines").click();
+  await page.getByTestId("changes-toggle-layout").click();
+  await expectLineReviewControls(page, workspace.editedLineCount);
+  const leftCheckbox = page
+    .locator('[data-testid^="diff-left-gutter-cell-"]')
+    .getByRole("checkbox")
+    .first();
+  const rightCheckbox = page
+    .locator('[data-testid^="diff-right-gutter-cell-"]')
+    .getByRole("checkbox")
+    .first();
+  await expectCheckboxFixedWhileCodeScrolls(page, "diff-left-column", leftCheckbox);
+  await expectCheckboxFixedWhileCodeScrolls(page, "diff-right-column", rightCheckbox);
+});
+
+test("changes file actions open from the kebab and right-click", async ({ page }) => {
   const workspace = await createWorkspaceWithMountedTabDiff({ includeDeletedFile: true });
   await useUnwrappedDiffLines(page);
   await openWorkspaceChanges(page, workspace);
@@ -268,6 +469,18 @@ test("Changes switches between inline and full-tab navigation", async ({ page })
   await expect(visiblePanel.getByTestId(/^diff-file-\d+-body$/)).toHaveCount(0);
   await visiblePanel.getByTestId("working-diff-toggle-expand-all").click();
   await expect(visiblePanel.getByTestId("diff-file-0-body")).toBeVisible();
+
+  const expandUnreviewedFiles = visiblePanel.getByTestId("working-diff-expand-unreviewed-files");
+  await expect(expandUnreviewedFiles).toHaveAccessibleName(
+    "Expand unreviewed files and collapse reviewed files",
+  );
+  await visiblePanel.getByTestId("diff-file-0-reviewed").click();
+  await expect(visiblePanel.getByTestId("diff-file-0-body")).toHaveCount(0);
+  await visiblePanel.getByTestId("diff-file-1-toggle").click();
+  await expect(visiblePanel.getByTestId("diff-file-1-body")).toHaveCount(0);
+  await expandUnreviewedFiles.click();
+  await expect(visiblePanel.getByTestId("diff-file-0-body")).toHaveCount(0);
+  await expect(visiblePanel.getByTestId("diff-file-1-body")).toBeVisible();
 
   await page.getByTestId("explorer-content-area").getByTestId("diff-file-0-toggle").click();
   await expect(
@@ -407,6 +620,51 @@ async function expectFlatFileList(page: Page): Promise<void> {
   await expect(page.getByTestId("diff-file-0")).toContainText("src");
 }
 
+async function expectLineReviewControls(page: Page, editedLineCount: number): Promise<void> {
+  const controls = page.getByTestId(/^diff-line-review-/);
+  await expect(controls).toHaveCount(editedLineCount);
+  await expect(controls.first()).toBeVisible();
+  await expect(page.getByTestId("diff-file-0")).toContainText(`0/${editedLineCount}`);
+}
+
+async function getReviewTargetKey(checkbox: Locator): Promise<string> {
+  const testID = await checkbox.getAttribute("data-testid");
+  if (!testID?.startsWith("diff-line-review-")) {
+    throw new Error("Line review checkbox has no target key");
+  }
+  return testID.slice("diff-line-review-".length);
+}
+
+async function expectCheckboxFixedWhileCodeScrolls(
+  page: Page,
+  scrollContainerTestID: string,
+  checkbox: Locator,
+): Promise<void> {
+  await expect(checkbox).toBeVisible();
+  const before = await checkbox.boundingBox();
+  expect(before).not.toBeNull();
+  const overflow = await page.getByTestId(scrollContainerTestID).evaluate((container) => {
+    const candidates = [container, ...container.querySelectorAll<HTMLElement>("*")];
+    const scroll = candidates.find((element) => {
+      const style = getComputedStyle(element);
+      return (
+        element.scrollWidth > element.clientWidth &&
+        (style.overflowX === "auto" || style.overflowX === "scroll")
+      );
+    });
+    if (!scroll) throw new Error("Could not find the horizontal diff scroller");
+    const maxScrollLeft = scroll.scrollWidth - scroll.clientWidth;
+    scroll.scrollLeft = maxScrollLeft;
+    scroll.dispatchEvent(new Event("scroll", { bubbles: true }));
+    return { maxScrollLeft, scrollLeft: scroll.scrollLeft };
+  });
+  expect(overflow.maxScrollLeft).toBeGreaterThan(0);
+  expect(overflow.scrollLeft).toBeGreaterThan(0);
+  const after = await checkbox.boundingBox();
+  expect(after).not.toBeNull();
+  expect(after!.x).toBeCloseTo(before!.x, 0);
+}
+
 async function expectDiffCodeFontSize(page: Page, fontSize: number): Promise<void> {
   await expect
     .poll(async () => {
@@ -470,7 +728,10 @@ async function readVisibleDiffRowGeometry(page: Page): Promise<{
 
     return {
       mismatchedTypography: rows
-        .filter((row) => Math.abs(row.gutterLineHeight - row.codeLineHeight) > 0.5)
+        .filter(
+          (row) =>
+            row.codeLineHeight > 0 && Math.abs(row.gutterLineHeight - row.codeLineHeight) > 0.5,
+        )
         .map((row) => ({
           index: row.index,
           gutterLineHeight: row.gutterLineHeight,
@@ -498,6 +759,16 @@ async function createWorkspaceWithMountedTabDiff(
   });
 
   await writeFile(path.join(repo.path, "src/use-mounted-tab-set.ts"), AFTER);
+  const [additions, deletions] = execFileSync(
+    "git",
+    ["diff", "--numstat", "--", "src/use-mounted-tab-set.ts"],
+    { cwd: repo.path },
+  )
+    .toString()
+    .trim()
+    .split(/\s+/)
+    .map(Number);
+  const editedLineCount = additions + deletions;
   if (options.includeDeletedFile) {
     await unlink(path.join(repo.path, "src/zz-deleted.ts"));
   }
@@ -507,7 +778,7 @@ async function createWorkspaceWithMountedTabDiff(
   if (!createdWorkspace.workspace) {
     throw new Error(createdWorkspace.error ?? `Failed to create workspace ${repo.path}`);
   }
-  return { id: createdWorkspace.workspace.id, repoPath: repo.path };
+  return { id: createdWorkspace.workspace.id, repoPath: repo.path, editedLineCount };
 }
 
 async function openWorkspaceChanges(page: Page, workspace: DirtyWorkspace): Promise<void> {

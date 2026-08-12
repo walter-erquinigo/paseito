@@ -812,6 +812,14 @@ export const ru: TranslationResources = {
       diff: {
         openChangesTab: "Открыть вкладку «Изменения»",
         closeChangesTab: "Закрыть вкладку «Изменения»",
+        fileNavigator: "Файлы",
+        showFileNavigator: "Показать навигатор файлов",
+        hideFileNavigator: "Скрыть навигатор файлов",
+        fileStatus: {
+          added: "Добавлен",
+          deleted: "Удалён",
+          modified: "Изменён",
+        },
         binaryFile: "Бинарный файл",
         tooLarge: "Разница слишком велика для отображения",
         previewTooLargeTitle: "Этот diff слишком велик для предпросмотра",
@@ -829,6 +837,7 @@ export const ru: TranslationResources = {
         wrapLongLines: "Перенос длинных строк",
         collapseAll: "Свернуть все файлы",
         expandAll: "Развернуть все файлы",
+        expandUnreviewed: "Развернуть непросмотренные и свернуть просмотренные файлы",
         collapseAllFolders: "Свернуть все папки",
         expandAllFolders: "Развернуть все папки",
         refreshing: "Освежающий",
@@ -858,6 +867,12 @@ export const ru: TranslationResources = {
         clearAllReviewed: "Снять все отметки просмотра",
         reviewUpdateHost: "Обновите хост, чтобы отмечать просмотренные файлы",
         reviewBranchRequired: "Переключитесь на ветку, чтобы отмечать просмотренные файлы",
+        markLineReviewed: "Отметить строку {{line}} как просмотренную",
+        markLineUnreviewed: "Отметить строку {{line}} как непросмотренную",
+        editLineUnavailable: "Эту строку нельзя открыть во встроенном редакторе",
+        noUncheckedLines: "В этом направлении нет непросмотренных строк",
+        lineReviewShortcuts:
+          "M / , принять и перейти · Пробел переключить · E изменить · U отменить · Esc очистить",
         context: {
           hiddenLines: "Скрыто строк: {{count}}",
           expandUp: "Показать 20 строк выше",
@@ -1716,6 +1731,10 @@ export const ru: TranslationResources = {
     accessibility: "Контекстное окно{{percentage}}% использовано",
   },
   review: {
+    composer: {
+      comment: "Комментарий",
+      codeChange: "Изменение кода",
+    },
     comment: {
       add: "Добавить комментарий к обзору",
       edit: "Изменить комментарий к отзыву",

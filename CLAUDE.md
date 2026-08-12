@@ -179,3 +179,18 @@ The app runs on iOS, Android, web (browser), and web (Electron desktop). Code is
 ## Debugging
 
 Find the complete daemon logs and traces in the $PASEO_HOME/daemon.log
+
+## Verify the build the user is actually running
+
+Source changes are not visible in an already-running packaged Paseito app. Before reporting a desktop UI change as complete or diagnosing a missing UI element:
+
+1. Identify the exact version and path of the running app and daemon. On macOS, inspect the process path and the app's `Info.plist`; do not infer the running version from `package.json`.
+2. Compare that version with the version or commit that introduced the feature. Treat a stale running bundle as the first suspect when source-level tests pass but the UI is absent.
+3. For desktop UI work, run `npm run build:desktop` and verify the produced app's embedded `CFBundleShortVersionString` before claiming that a packaged build contains the change.
+4. Validate the new bundle in an isolated development profile and on non-production ports when possible. A source checkout, passing unit tests, or an Expo export alone is not proof that the user's packaged app has been updated.
+5. State the relaunch/install requirement explicitly in the handoff. Do not imply that an existing Electron process hot-reloads a newly built bundle.
+6. Never replace, quit, or relaunch the packaged app—and never restart its daemon on port `6767`—without the user's permission. Building an artifact is allowed; activating it is a separate step.
+
+For capability-gated UI, verify both sides of the runtime contract: the client bundle must contain the feature and the connected daemon must advertise the required `server_info.features.*` capability. When the capability is absent, the UI must show an explicit upgrade message rather than silently hiding the feature.
+
+See [docs/development.md](docs/development.md) for isolated runtime ports and [docs/release.md](docs/release.md) for packaging and release checks.

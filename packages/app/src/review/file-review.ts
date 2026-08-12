@@ -3,13 +3,26 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import type { ParsedDiffFile } from "@/git/use-diff-query";
+import {
+  buildReviewableChangedFiles,
+  type ReviewableChangedFile,
+  type ReviewableChangedLine,
+} from "./line-review";
 
 const EMPTY_RECORDS: Readonly<Record<string, FileReviewRecord>> = {};
+
+export interface ReviewedLineRecord {
+  fingerprint: string;
+  occurrence: number;
+}
 
 export interface FileReviewRecord {
   reviewedRevision: string;
   lastSeenRevision: string;
   reviewedAt: string;
+  reviewedLines?: ReviewedLineRecord[];
+  lastSeenDiffSignature?: string;
+  lastSeenFingerprintCounts?: Record<string, number>;
 }
 
 export interface FileReviewScopeInput {
@@ -18,15 +31,25 @@ export interface FileReviewScopeInput {
   branch: string;
 }
 
+export interface FileLineReviewProgress {
+  reviewed: number;
+  total: number;
+}
+
 export interface FileReviewSnapshot {
   reviewedPaths: ReadonlySet<string>;
+  reviewedLineIds: ReadonlySet<string>;
+  lineProgressByPath: ReadonlyMap<string, FileLineReviewProgress>;
   invalidatedPaths: readonly string[];
   reviewedCount: number;
   reviewableCount: number;
+  reviewedLineCount: number;
+  reviewableLineCount: number;
 }
 
 interface FileReviewStoreState {
   recordsByScope: Record<string, Record<string, FileReviewRecord>>;
+  replaceRecords: (recordsByScope: FileReviewStoreState["recordsByScope"]) => void;
   mark: (input: { scopeKey: string; files: readonly ReviewableFile[]; reviewedAt: string }) => void;
   unmark: (input: { scopeKey: string; paths: readonly string[] }) => void;
   observe: (input: { scopeKey: string; files: readonly ReviewableFile[] }) => void;
@@ -55,35 +78,111 @@ export function buildFileReviewScopeKey(input: FileReviewScopeInput): string {
   ].join(":");
 }
 
-function toReviewableFiles(files: readonly ParsedDiffFile[]): ReviewableFile[] {
-  return files.flatMap((file) => {
-    const contentRevision = file.contentRevision?.trim();
-    return contentRevision ? [{ path: file.path, contentRevision }] : [];
+function lineRecordId(path: string, line: ReviewedLineRecord): string {
+  return `${path}:${line.fingerprint}:${line.occurrence}`;
+}
+
+function allLineRecords(file: ReviewableChangedFile): ReviewedLineRecord[] {
+  return file.lines.map(({ fingerprint, occurrence }) => ({ fingerprint, occurrence }));
+}
+
+function remapReviewedLines(
+  record: FileReviewRecord,
+  file: ReviewableChangedFile,
+): ReviewedLineRecord[] {
+  if (!record.reviewedLines) {
+    return record.reviewedRevision === file.contentRevision ? allLineRecords(file) : [];
+  }
+  if (record.lastSeenDiffSignature === file.diffSignature) return record.reviewedLines;
+
+  const previousCounts = record.lastSeenFingerprintCounts ?? {};
+  return record.reviewedLines.flatMap((line) => {
+    const currentCount = file.fingerprintCounts[line.fingerprint];
+    if (currentCount === undefined) return [line];
+    return previousCounts[line.fingerprint] === 1 && currentCount === 1
+      ? [{ fingerprint: line.fingerprint, occurrence: 0 }]
+      : [];
   });
+}
+
+function currentReviewedLines(
+  reviewedLines: readonly ReviewedLineRecord[],
+  file: ReviewableChangedFile,
+): ReviewedLineRecord[] {
+  const currentIds = new Set(file.lines.map((line) => line.id));
+  return reviewedLines.filter((line) => currentIds.has(lineRecordId(file.path, line)));
+}
+
+function mergeDormantLines(
+  record: FileReviewRecord | undefined,
+  file: ReviewableChangedFile,
+  currentLines: readonly ReviewedLineRecord[],
+): ReviewedLineRecord[] {
+  const dormant = record?.reviewedLines?.filter(
+    (line) => file.fingerprintCounts[line.fingerprint] === undefined,
+  );
+  return [...(dormant ?? []), ...currentLines];
+}
+
+function reviewableFilesFromLegacy(files: readonly ReviewableFile[]): ReviewableChangedFile[] {
+  return files.map((file) => ({
+    ...file,
+    diffSignature: "",
+    fingerprintCounts: {},
+    lines: [],
+  }));
 }
 
 export function getFileReviewSnapshot(
   records: Readonly<Record<string, FileReviewRecord>>,
-  files: readonly ReviewableFile[],
+  files: readonly ReviewableFile[] | readonly ReviewableChangedFile[],
 ): FileReviewSnapshot {
+  const reviewableFiles = files.map((file) =>
+    "lines" in file ? file : reviewableFilesFromLegacy([file])[0],
+  );
   const reviewedPaths = new Set<string>();
+  const reviewedLineIds = new Set<string>();
+  const lineProgressByPath = new Map<string, FileLineReviewProgress>();
   const invalidatedPaths: string[] = [];
-  for (const file of files) {
+  let reviewedLineCount = 0;
+  let reviewableLineCount = 0;
+
+  for (const file of reviewableFiles) {
     const record = records[file.path];
-    if (!record) continue;
-    if (record.reviewedRevision === file.contentRevision) {
-      reviewedPaths.add(file.path);
-      continue;
-    }
-    if (record.lastSeenRevision !== file.contentRevision) {
-      invalidatedPaths.push(file.path);
-    }
+    const reviewedLines = record ? remapReviewedLines(record, file) : [];
+    const currentReviewedIds = currentReviewedLines(reviewedLines, file).map((line) =>
+      lineRecordId(file.path, line),
+    );
+    for (const id of currentReviewedIds) reviewedLineIds.add(id);
+
+    const total = file.lines.length;
+    const reviewed = currentReviewedIds.length;
+    reviewableLineCount += total;
+    reviewedLineCount += reviewed;
+    lineProgressByPath.set(file.path, { reviewed, total });
+
+    const isReviewed =
+      total > 0 ? reviewed === total : record?.reviewedRevision === file.contentRevision;
+    if (isReviewed) reviewedPaths.add(file.path);
+
+    const wasFullyReviewed = Boolean(record && record.reviewedRevision === record.lastSeenRevision);
+    const newlyObserved = Boolean(
+      record &&
+      (record.lastSeenRevision !== file.contentRevision ||
+        record.lastSeenDiffSignature !== file.diffSignature),
+    );
+    if (wasFullyReviewed && newlyObserved && !isReviewed) invalidatedPaths.push(file.path);
   }
+
   return {
     reviewedPaths,
+    reviewedLineIds,
+    lineProgressByPath,
     invalidatedPaths,
     reviewedCount: reviewedPaths.size,
-    reviewableCount: files.length,
+    reviewableCount: reviewableFiles.length,
+    reviewedLineCount,
+    reviewableLineCount,
   };
 }
 
@@ -123,41 +222,82 @@ export function observeFileReviewsInState(
 ): FileReviewStoreState["recordsByScope"] {
   const current = recordsByScope[input.scopeKey];
   if (!current) return recordsByScope;
-  let scopeRecords: Record<string, FileReviewRecord> | null = null;
+  let changed = false;
+  const scopeRecords = { ...current };
   for (const file of input.files) {
     const record = current[file.path];
     if (!record || record.lastSeenRevision === file.contentRevision) continue;
-    scopeRecords ??= { ...current };
+    changed = true;
     scopeRecords[file.path] = { ...record, lastSeenRevision: file.contentRevision };
   }
-  return scopeRecords ? { ...recordsByScope, [input.scopeKey]: scopeRecords } : recordsByScope;
+  return changed ? { ...recordsByScope, [input.scopeKey]: scopeRecords } : recordsByScope;
+}
+
+function observeChangedFilesInState(
+  recordsByScope: FileReviewStoreState["recordsByScope"],
+  scopeKey: string,
+  files: readonly ReviewableChangedFile[],
+): FileReviewStoreState["recordsByScope"] {
+  const current = recordsByScope[scopeKey];
+  if (!current) return recordsByScope;
+  let changed = false;
+  const scopeRecords = { ...current };
+  for (const file of files) {
+    const record = current[file.path];
+    if (!record) continue;
+    if (
+      record.lastSeenRevision === file.contentRevision &&
+      record.lastSeenDiffSignature === file.diffSignature &&
+      record.reviewedLines
+    ) {
+      continue;
+    }
+    changed = true;
+    const reviewedLines = remapReviewedLines(record, file);
+    const reviewedCurrentLines = currentReviewedLines(reviewedLines, file);
+    const isFullyReviewed =
+      file.lines.length > 0
+        ? reviewedCurrentLines.length === file.lines.length
+        : record.reviewedRevision === file.contentRevision;
+    scopeRecords[file.path] = {
+      ...record,
+      reviewedRevision: isFullyReviewed ? file.contentRevision : record.reviewedRevision,
+      lastSeenRevision: file.contentRevision,
+      reviewedLines,
+      lastSeenDiffSignature: file.diffSignature,
+      lastSeenFingerprintCounts: {
+        ...record.lastSeenFingerprintCounts,
+        ...file.fingerprintCounts,
+      },
+    };
+  }
+  return changed ? { ...recordsByScope, [scopeKey]: scopeRecords } : recordsByScope;
 }
 
 export const useFileReviewStore = create<FileReviewStoreState>()(
   persist(
     (set) => ({
       recordsByScope: {},
-      mark: (input) => {
+      replaceRecords: (recordsByScope) => set({ recordsByScope }),
+      mark: (input) =>
         set((state) => ({
           recordsByScope: markFileReviewsInState(state.recordsByScope, input),
-        }));
-      },
-      unmark: (input) => {
+        })),
+      unmark: (input) =>
         set((state) => ({
           recordsByScope: unmarkFileReviewsInState(state.recordsByScope, input),
-        }));
-      },
-      observe: (input) => {
+        })),
+      observe: (input) =>
         set((state) => ({
           recordsByScope: observeFileReviewsInState(state.recordsByScope, input),
-        }));
-      },
+        })),
     }),
     {
       name: "@paseo:file-review-store",
-      version: 1,
+      version: 2,
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (state) => ({ recordsByScope: state.recordsByScope }),
+      migrate: (persisted) => persisted as FileReviewStoreState,
     },
   ),
 );
@@ -165,7 +305,11 @@ export const useFileReviewStore = create<FileReviewStoreState>()(
 export interface FileReviewActions extends FileReviewSnapshot {
   supported: boolean;
   available: boolean;
+  files: readonly ReviewableChangedFile[];
+  lineByTargetKey: ReadonlyMap<string, ReviewableChangedLine>;
   toggle: (path: string) => boolean;
+  toggleLine: (line: ReviewableChangedLine) => boolean;
+  markLine: (line: ReviewableChangedLine) => boolean;
   markAll: () => readonly string[];
   clearAll: () => void;
 }
@@ -185,22 +329,60 @@ export function useFileReviews(input: {
       branch: input.branch,
     });
   }, [input.branch, input.repositoryRoot, input.serverId]);
-  const records = useFileReviewStore((state) =>
-    scopeKey ? (state.recordsByScope[scopeKey] ?? EMPTY_RECORDS) : EMPTY_RECORDS,
-  );
-  const mark = useFileReviewStore((state) => state.mark);
-  const unmark = useFileReviewStore((state) => state.unmark);
-  const observe = useFileReviewStore((state) => state.observe);
-  const reviewableFiles = useMemo(() => toReviewableFiles(input.files), [input.files]);
+  const recordsByScope = useFileReviewStore((state) => state.recordsByScope);
+  const replaceRecords = useFileReviewStore((state) => state.replaceRecords);
+  const records = scopeKey ? (recordsByScope[scopeKey] ?? EMPTY_RECORDS) : EMPTY_RECORDS;
+  const reviewableFiles = useMemo(() => buildReviewableChangedFiles(input.files), [input.files]);
   const snapshot = useMemo(
     () => getFileReviewSnapshot(records, reviewableFiles),
     [records, reviewableFiles],
   );
+  const lineByTargetKey = useMemo(
+    () =>
+      new Map(
+        reviewableFiles.flatMap((file) =>
+          file.lines.map((line) => [line.target.key, line] as const),
+        ),
+      ),
+    [reviewableFiles],
+  );
 
   useEffect(() => {
     if (!scopeKey || !input.supported) return;
-    observe({ scopeKey, files: reviewableFiles });
-  }, [input.supported, observe, reviewableFiles, scopeKey]);
+    const next = observeChangedFilesInState(
+      useFileReviewStore.getState().recordsByScope,
+      scopeKey,
+      reviewableFiles,
+    );
+    if (next !== useFileReviewStore.getState().recordsByScope) replaceRecords(next);
+  }, [input.supported, replaceRecords, reviewableFiles, scopeKey]);
+
+  const updateFile = useCallback(
+    (file: ReviewableChangedFile, reviewedLines: ReviewedLineRecord[]) => {
+      if (!scopeKey) return;
+      const current = useFileReviewStore.getState().recordsByScope;
+      const scopeRecords = { ...current[scopeKey] };
+      const now = new Date().toISOString();
+      const mergedReviewedLines = mergeDormantLines(scopeRecords[file.path], file, reviewedLines);
+      const isFullyReviewed =
+        file.lines.length > 0
+          ? reviewedLines.length === file.lines.length
+          : scopeRecords[file.path]?.reviewedRevision === file.contentRevision;
+      scopeRecords[file.path] = {
+        reviewedRevision: isFullyReviewed ? file.contentRevision : "",
+        lastSeenRevision: file.contentRevision,
+        reviewedAt: now,
+        reviewedLines: mergedReviewedLines,
+        lastSeenDiffSignature: file.diffSignature,
+        lastSeenFingerprintCounts: {
+          ...scopeRecords[file.path]?.lastSeenFingerprintCounts,
+          ...file.fingerprintCounts,
+        },
+      };
+      replaceRecords({ ...current, [scopeKey]: scopeRecords });
+    },
+    [replaceRecords, scopeKey],
+  );
 
   const toggle = useCallback(
     (path: string): boolean => {
@@ -208,29 +390,107 @@ export function useFileReviews(input: {
       const file = reviewableFiles.find((candidate) => candidate.path === path);
       if (!file) return false;
       if (snapshot.reviewedPaths.has(path)) {
-        unmark({ scopeKey, paths: [path] });
+        replaceRecords(
+          unmarkFileReviewsInState(useFileReviewStore.getState().recordsByScope, {
+            scopeKey,
+            paths: [path],
+          }),
+        );
         return false;
       }
-      mark({ scopeKey, files: [file], reviewedAt: new Date().toISOString() });
+      updateFile(file, allLineRecords(file));
+      if (file.lines.length === 0) {
+        const current = useFileReviewStore.getState().recordsByScope;
+        replaceRecords(
+          markFileReviewsInState(current, {
+            scopeKey,
+            files: [{ path, contentRevision: file.contentRevision }],
+            reviewedAt: new Date().toISOString(),
+          }),
+        );
+      }
       return true;
     },
-    [input.supported, mark, reviewableFiles, scopeKey, snapshot.reviewedPaths, unmark],
+    [
+      input.supported,
+      replaceRecords,
+      reviewableFiles,
+      scopeKey,
+      snapshot.reviewedPaths,
+      updateFile,
+    ],
+  );
+
+  const setLineReviewed = useCallback(
+    (line: ReviewableChangedLine, reviewed: boolean): boolean => {
+      if (!scopeKey || !input.supported) return false;
+      const file = reviewableFiles.find((candidate) => candidate.path === line.target.filePath);
+      if (!file) return false;
+      const record = records[file.path];
+      const currentLines = record ? remapReviewedLines(record, file) : [];
+      const ids = new Set(currentLines.map((candidate) => lineRecordId(file.path, candidate)));
+      if (reviewed) ids.add(line.id);
+      else ids.delete(line.id);
+      updateFile(
+        file,
+        file.lines
+          .filter((candidate) => ids.has(candidate.id))
+          .map(({ fingerprint, occurrence }) => ({ fingerprint, occurrence })),
+      );
+      return reviewed;
+    },
+    [input.supported, records, reviewableFiles, scopeKey, updateFile],
+  );
+  const toggleLine = useCallback(
+    (line: ReviewableChangedLine) => setLineReviewed(line, !snapshot.reviewedLineIds.has(line.id)),
+    [setLineReviewed, snapshot.reviewedLineIds],
+  );
+  const markLine = useCallback(
+    (line: ReviewableChangedLine) => setLineReviewed(line, true),
+    [setLineReviewed],
   );
   const markAll = useCallback((): readonly string[] => {
     if (!scopeKey || !input.supported) return [];
-    mark({ scopeKey, files: reviewableFiles, reviewedAt: new Date().toISOString() });
+    let next = useFileReviewStore.getState().recordsByScope;
+    const scopeRecords = { ...next[scopeKey] };
+    const reviewedAt = new Date().toISOString();
+    for (const file of reviewableFiles) {
+      const currentRecord = scopeRecords[file.path];
+      scopeRecords[file.path] = {
+        reviewedRevision: file.contentRevision,
+        lastSeenRevision: file.contentRevision,
+        reviewedAt,
+        reviewedLines: mergeDormantLines(currentRecord, file, allLineRecords(file)),
+        lastSeenDiffSignature: file.diffSignature,
+        lastSeenFingerprintCounts: {
+          ...currentRecord?.lastSeenFingerprintCounts,
+          ...file.fingerprintCounts,
+        },
+      };
+    }
+    next = { ...next, [scopeKey]: scopeRecords };
+    replaceRecords(next);
     return reviewableFiles.map((file) => file.path);
-  }, [input.supported, mark, reviewableFiles, scopeKey]);
+  }, [input.supported, replaceRecords, reviewableFiles, scopeKey]);
   const clearAll = useCallback(() => {
     if (!scopeKey || !input.supported) return;
-    unmark({ scopeKey, paths: reviewableFiles.map((file) => file.path) });
-  }, [input.supported, reviewableFiles, scopeKey, unmark]);
+    replaceRecords(
+      unmarkFileReviewsInState(useFileReviewStore.getState().recordsByScope, {
+        scopeKey,
+        paths: reviewableFiles.map((file) => file.path),
+      }),
+    );
+  }, [input.supported, replaceRecords, reviewableFiles, scopeKey]);
 
   return {
     ...snapshot,
     supported: input.supported,
     available: input.supported && scopeKey !== null,
+    files: reviewableFiles,
+    lineByTargetKey,
     toggle,
+    toggleLine,
+    markLine,
     markAll,
     clearAll,
   };

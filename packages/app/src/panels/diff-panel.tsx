@@ -1,5 +1,13 @@
-import { useCallback, useMemo, useState, type ComponentProps, type ReactNode } from "react";
-import { Text, View } from "react-native";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ComponentProps,
+  type ReactNode,
+} from "react";
+import { Text, View, type LayoutChangeEvent } from "react-native";
 import { useTranslation } from "react-i18next";
 import { FileDiff, GitCommitHorizontal } from "lucide-react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
@@ -9,6 +17,13 @@ import { useIsCompactFormFactor, WORKSPACE_SECONDARY_HEADER_HEIGHT } from "@/con
 import { isWeb } from "@/constants/platform";
 import { useToast } from "@/contexts/toast-context";
 import { useCheckoutGitActionsStore } from "@/git/actions-store";
+import { activateChangesFile, retainSelectedChangesFile } from "@/git/changes-file-tree-navigation";
+import {
+  CHANGES_FILE_TREE_MIN_PANE_WIDTH,
+  ChangesFileTreeNavigator,
+  ChangesFileTreeToggle,
+} from "@/git/changes-file-tree-navigator";
+import { expandOnlyUnreviewedFiles } from "@/git/file-review-expansion";
 import {
   DiffFilesToolbar,
   FileReviewBulkToggle,
@@ -21,6 +36,7 @@ import {
 import { DiffTooLargeState } from "@/git/diff-too-large-state";
 import { useCommitDiffFiles } from "@/git/use-diff-files";
 import { usePublishWorkingDiffAttachment, useWorkingDiff } from "@/git/use-working-diff";
+import type { ReviewableChangedLine } from "@/review";
 import { useChangesPreferences } from "@/hooks/use-changes-preferences";
 import { useAppSettings } from "@/hooks/use-settings";
 import { usePaneContext } from "@/panels/pane-context";
@@ -28,6 +44,11 @@ import type { PanelDescriptor, PanelRegistration } from "@/panels/panel-registry
 import { useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import { useSessionStore } from "@/stores/session-store";
 import { useWorkspaceDirectory } from "@/stores/session-store-hooks";
+import {
+  clearWorkingDiffNavigationSnapshot,
+  publishWorkingDiffNavigationSnapshot,
+} from "@/workspace/markdown-changes-navigation";
+import { buildWorkspaceTabPersistenceKey } from "@/workspace-tabs/model";
 import type { WorkspaceTabTarget } from "@/workspace-tabs/model";
 
 const ThemedFileDiff = withUnistyles(FileDiff);
@@ -60,6 +81,7 @@ function useDiffPanelPreferences() {
 
   return {
     preferences,
+    updatePreferences,
     isCompact,
     canUseSplitLayout,
     displayPreferences,
@@ -151,13 +173,30 @@ function WorkingDiffBody({
 function WorkingDiffPanel() {
   const { t } = useTranslation();
   const toast = useToast();
-  const { serverId, workspaceId, tabId, target } = usePaneContext();
+  const { serverId, workspaceId, tabId, target, retargetCurrentTab, openFileInWorkspace } =
+    usePaneContext();
+  invariant(target.kind === "working_diff", "WorkingDiffPanel requires working_diff target");
   const cwd = useWorkspaceDirectory(serverId, workspaceId);
   const isConnected = useHostRuntimeIsConnected(serverId);
   const isActive = useRetainedPanelActive();
+  const editingSupported = useSessionStore(
+    (state) => state.sessions[serverId]?.serverInfo?.features?.workspaceFileEditing === true,
+  );
   const panelPreferences = useDiffPanelPreferences();
   const [expandedPaths, setExpandedPaths] = useState<string[] | null>(null);
-  invariant(target.kind === "working_diff", "WorkingDiffPanel requires working_diff target");
+  const [collapsedNavigatorFolders, setCollapsedNavigatorFolders] = useState<string[]>([]);
+  const [selectedNavigatorPath, setSelectedNavigatorPath] = useState<string | null>(null);
+  const [paneWidth, setPaneWidth] = useState(0);
+  const focusRequestIdRef = useRef(target.focusRequestId ?? 0);
+  const snapshotOwnerRef = useRef<object>({});
+  const workspaceKey = buildWorkspaceTabPersistenceKey({ serverId, workspaceId });
+  const requestedNavigationLine = useMemo(
+    () =>
+      target.focusPath && target.focusLineStart
+        ? { filePath: target.focusPath, lineNumber: target.focusLineStart }
+        : undefined,
+    [target.focusLineStart, target.focusPath],
+  );
 
   const workingDiff = useWorkingDiff({
     serverId,
@@ -166,7 +205,31 @@ function WorkingDiffPanel() {
     ignoreWhitespace: panelPreferences.preferences.hideWhitespace,
     enabled: Boolean(cwd) && isActive,
     queryScope: `working-diff-tab:${tabId}`,
+    requestedNavigationLine,
   });
+  useEffect(() => {
+    if (!workspaceKey) return;
+    publishWorkingDiffNavigationSnapshot(workspaceKey, snapshotOwnerRef.current, {
+      tabId,
+      files: workingDiff.sourceFiles,
+      isLoading: workingDiff.isDiffLoading,
+      contextExpansionSupported: workingDiff.contextExpansionSupported,
+    });
+  }, [
+    tabId,
+    workingDiff.contextExpansionSupported,
+    workingDiff.isDiffLoading,
+    workingDiff.sourceFiles,
+    workspaceKey,
+  ]);
+  useEffect(
+    () => () => {
+      if (workspaceKey) {
+        clearWorkingDiffNavigationSnapshot(workspaceKey, snapshotOwnerRef.current);
+      }
+    },
+    [workspaceKey],
+  );
   usePublishWorkingDiffAttachment({
     serverId,
     workspaceId,
@@ -202,6 +265,54 @@ function WorkingDiffPanel() {
   const toggleExpandAll = useCallback(() => {
     setExpandedPaths(allFilesExpanded ? [] : null);
   }, [allFilesExpanded]);
+  useEffect(() => {
+    focusRequestIdRef.current = Math.max(focusRequestIdRef.current, target.focusRequestId ?? 0);
+  }, [target.focusRequestId]);
+  useEffect(() => {
+    if (workingDiff.isDiffLoading) {
+      return;
+    }
+    setSelectedNavigatorPath((current) => retainSelectedChangesFile(current, workingDiff.files));
+  }, [workingDiff.files, workingDiff.isDiffLoading]);
+  const activateNavigatorFile = useCallback(
+    (path: string) => {
+      const activation = activateChangesFile({
+        expandedPaths,
+        focusRequestId: focusRequestIdRef.current,
+        path,
+      });
+      focusRequestIdRef.current = activation.focusRequestId;
+      setExpandedPaths(activation.expandedPaths);
+      setSelectedNavigatorPath(activation.selectedPath);
+      retargetCurrentTab({
+        kind: "working_diff",
+        focusPath: activation.focusPath,
+        focusRequestId: activation.focusRequestId,
+      });
+    },
+    [expandedPaths, retargetCurrentTab],
+  );
+  const toggleNavigatorFolder = useCallback((path: string) => {
+    setCollapsedNavigatorFolders((current) =>
+      current.includes(path)
+        ? current.filter((candidate) => candidate !== path)
+        : [...current, path],
+    );
+  }, []);
+  const fileTreeCollapsed = panelPreferences.preferences.fileTreeCollapsed;
+  const updateChangesPreferences = panelPreferences.updatePreferences;
+  const toggleFileTree = useCallback(() => {
+    void updateChangesPreferences({
+      fileTreeCollapsed: !fileTreeCollapsed,
+    });
+  }, [fileTreeCollapsed, updateChangesPreferences]);
+  const measurePane = useCallback((event: LayoutChangeEvent) => {
+    setPaneWidth(event.nativeEvent.layout.width);
+  }, []);
+  const expandUnreviewedFiles = useCallback(() => {
+    const filePaths = workingDiff.files.map((file) => file.path);
+    setExpandedPaths(expandOnlyUnreviewedFiles(filePaths, workingDiff.fileReviews.reviewedPaths));
+  }, [workingDiff.fileReviews.reviewedPaths, workingDiff.files]);
   const toggleAllFileReviews = useCallback(() => {
     const allReviewed =
       workingDiff.fileReviews.reviewableCount > 0 &&
@@ -213,6 +324,21 @@ function WorkingDiffPanel() {
     workingDiff.fileReviews.markAll();
     setExpandedPaths([]);
   }, [workingDiff.fileReviews]);
+  const editLine = useCallback(
+    (line: ReviewableChangedLine) => {
+      const lineStart = line.target.editLineNumber;
+      if (!editingSupported || !lineStart) return;
+      openFileInWorkspace({
+        disposition: "side",
+        location: {
+          path: line.target.filePath,
+          lineStart,
+          openMode: "source",
+        },
+      });
+    },
+    [editingSupported, openFileInWorkspace],
+  );
   const mode = useMemo(
     () => ({
       kind: "working_tab" as const,
@@ -221,20 +347,35 @@ function WorkingDiffPanel() {
       fileReviews: workingDiff.fileReviews,
       focusPath: target.focusPath,
       focusRequestId: target.focusRequestId,
+      focusLineStart: target.focusLineStart,
+      focusLineEnd: target.focusLineEnd,
+      focusColumn: target.focusColumn,
+      onEditLine: editingSupported ? editLine : undefined,
+      keyboardEnabled: isActive,
       onExpandedPathsChange: setExpandedPaths,
     }),
     [
       expandedPaths,
+      editLine,
+      editingSupported,
+      isActive,
       target.focusPath,
       target.focusRequestId,
+      target.focusLineStart,
+      target.focusLineEnd,
+      target.focusColumn,
       workingDiff.fileReviews,
       workingDiff.reviewActions,
     ],
   );
 
   const baseRefLabel = workingDiff.baseRef?.replace(/^refs\/(heads|remotes)\//, "") ?? "";
+  const hasNavigatorSpace = paneWidth >= CHANGES_FILE_TREE_MIN_PANE_WIDTH;
+  const navigatorAvailable =
+    panelPreferences.canUseSplitLayout && hasNavigatorSpace && workingDiff.files.length > 0;
+  const showNavigator = navigatorAvailable && !fileTreeCollapsed;
   return (
-    <View style={styles.container} testID="working-diff-panel">
+    <View style={styles.container} testID="working-diff-panel" onLayout={measurePane}>
       <View style={styles.toolbar}>
         <DiffModeMenu
           diffMode={workingDiff.diffMode}
@@ -252,6 +393,9 @@ function WorkingDiffPanel() {
               onToggle={panelPreferences.toggleLayout}
             />
           ) : null}
+          {navigatorAvailable ? (
+            <ChangesFileTreeToggle collapsed={fileTreeCollapsed} onToggle={toggleFileTree} />
+          ) : null}
           <FileReviewBulkToggle
             fileReviews={workingDiff.fileReviews}
             isMobile={panelPreferences.isCompact}
@@ -262,9 +406,12 @@ function WorkingDiffPanel() {
           {workingDiff.files.length > 0 ? (
             <DiffFilesToolbar
               allFileDiffsExpanded={allFilesExpanded}
+              canExpandUnreviewed={workingDiff.fileReviews.available}
               isMobile={panelPreferences.isCompact}
               testID="working-diff-toggle-expand-all"
+              expandUnreviewedTestID="working-diff-expand-unreviewed-files"
               onToggleExpandAll={toggleExpandAll}
+              onExpandUnreviewed={expandUnreviewedFiles}
             />
           ) : null}
           <DiffOptionsMenu
@@ -281,14 +428,26 @@ function WorkingDiffPanel() {
         </View>
       </View>
       <View style={styles.body}>
-        <WorkingDiffBody
-          cwd={cwd}
-          isConnected={isConnected}
-          workingDiff={workingDiff}
-          hideWhitespace={panelPreferences.preferences.hideWhitespace}
-          displayPreferences={panelPreferences.displayPreferences}
-          mode={mode}
-        />
+        <View style={styles.diffBody}>
+          <WorkingDiffBody
+            cwd={cwd}
+            isConnected={isConnected}
+            workingDiff={workingDiff}
+            hideWhitespace={panelPreferences.preferences.hideWhitespace}
+            displayPreferences={panelPreferences.displayPreferences}
+            mode={mode}
+          />
+        </View>
+        {showNavigator ? (
+          <ChangesFileTreeNavigator
+            files={workingDiff.files}
+            selectedPath={selectedNavigatorPath}
+            collapsedFolders={collapsedNavigatorFolders}
+            onActivateFile={activateNavigatorFile}
+            onToggleFolder={toggleNavigatorFolder}
+            onCollapse={toggleFileTree}
+          />
+        ) : null}
       </View>
     </View>
   );
@@ -417,6 +576,12 @@ const styles = StyleSheet.create((theme) => ({
   },
   body: {
     flex: 1,
+    minHeight: 0,
+    flexDirection: "row",
+  },
+  diffBody: {
+    flex: 1,
+    minWidth: 0,
     minHeight: 0,
   },
   centerState: {

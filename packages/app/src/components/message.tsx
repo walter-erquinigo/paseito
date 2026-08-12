@@ -102,6 +102,7 @@ import {
   AttachmentThumbnail,
 } from "@/components/attachment-pill";
 import { AttachmentLightbox } from "@/components/attachment-lightbox";
+import { ReviewAttachmentCard } from "@/components/review-attachment-card";
 import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
 import { isWeb, isNative } from "@/constants/platform";
 import type { AgentCapabilityFlags } from "@getpaseo/protocol/agent-types";
@@ -525,11 +526,15 @@ export const UserMessage = memo(function UserMessage({
           {hasAttachments ? (
             <View style={attachmentPreviewContainerStyle}>
               {attachments.map((attachment, index) => {
+                const attachmentKey = `${attachment.type}:${
+                  "number" in attachment ? attachment.number : index
+                }`;
+                if (attachment.type === "review") {
+                  return <ReviewAttachmentCard key={attachmentKey} attachment={attachment} />;
+                }
                 const content = getAgentAttachmentPillContent(attachment, t);
                 return (
-                  <AttachmentFrame
-                    key={`${attachment.type}:${"number" in attachment ? attachment.number : index}`}
-                  >
+                  <AttachmentFrame key={attachmentKey}>
                     <AttachmentLabel
                       icon={content.icon}
                       title={content.title}

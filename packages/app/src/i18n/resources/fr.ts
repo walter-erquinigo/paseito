@@ -820,6 +820,14 @@ export const fr: TranslationResources = {
       diff: {
         openChangesTab: "Ouvrir l'onglet Modifications",
         closeChangesTab: "Fermer l'onglet Modifications",
+        fileNavigator: "Fichiers",
+        showFileNavigator: "Afficher le navigateur de fichiers",
+        hideFileNavigator: "Masquer le navigateur de fichiers",
+        fileStatus: {
+          added: "Ajouté",
+          deleted: "Supprimé",
+          modified: "Modifié",
+        },
         binaryFile: "Fichier binaire",
         tooLarge: "Diff trop grand pour être affiché",
         previewTooLargeTitle: "Ce diff est trop volumineux pour être prévisualisé",
@@ -837,6 +845,7 @@ export const fr: TranslationResources = {
         wrapLongLines: "Enroulez les longues lignes",
         collapseAll: "Réduire tous les fichiers",
         expandAll: "Développer tous les fichiers",
+        expandUnreviewed: "Développer les fichiers non révisés et réduire les fichiers révisés",
         collapseAllFolders: "Réduire tous les dossiers",
         expandAllFolders: "Développer tous les dossiers",
         refreshing: "Rafraîchissant",
@@ -866,6 +875,12 @@ export const fr: TranslationResources = {
         clearAllReviewed: "Effacer tous les fichiers révisés",
         reviewUpdateHost: "Mettez à jour l’hôte pour marquer les fichiers comme révisés",
         reviewBranchRequired: "Basculez sur une branche pour marquer les fichiers comme révisés",
+        markLineReviewed: "Marquer la ligne {{line}} comme révisée",
+        markLineUnreviewed: "Marquer la ligne {{line}} comme non révisée",
+        editLineUnavailable: "Cette ligne ne peut pas être ouverte dans l’éditeur intégré",
+        noUncheckedLines: "Aucune ligne non cochée dans cette direction",
+        lineReviewShortcuts:
+          "M / , valider et avancer · Espace basculer · E modifier · U annuler · Échap effacer",
         context: {
           hiddenLines: "{{count}} lignes masquées",
           expandUp: "Afficher les 20 lignes précédentes",
@@ -1729,6 +1744,10 @@ export const fr: TranslationResources = {
     accessibility: "Fenêtre contextuelle{{percentage}}% utilisé",
   },
   review: {
+    composer: {
+      comment: "Commentaire",
+      codeChange: "Modification du code",
+    },
     comment: {
       add: "Ajouter un commentaire",
       edit: "Modifier le commentaire de l'avis",
