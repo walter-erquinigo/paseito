@@ -221,6 +221,7 @@
       "intent": "Use local Codex reconciliation, fail-closed verification, provenance-bound installation, migration and daily reporting.",
       "invariants": [
         "Codex never receives promotion authority and GitHub never rebases or semantically retires features.",
+        "At the 07:00 New York gate, ambiguous, unverified, divergent, or credential-like source changes block before a fast-forward push; successful semantic promotion preserves concurrent edits while synchronizing the enrolled source checkout through a recoverable backup ref.",
         "A separate read-only Codex review must approve every candidate.",
         "Failed reconciliation or verification preserves the published branch and installed app.",
         "The verified release contains checksum-bound macOS arm64 desktop and Linux x64 daemon artifacts from the same candidate commit.",

@@ -16,18 +16,18 @@ from local_smtp_report import keychain_password, local_status, send_smtp, write_
 
 class ReportingTests(unittest.TestCase):
     def test_new_york_dst_boundaries(self) -> None:
-        self.assertIsNone(report_date(datetime(2026, 3, 8, 10, 59, tzinfo=timezone.utc)))
+        self.assertIsNone(report_date(datetime(2026, 3, 8, 11, 59, tzinfo=timezone.utc)))
         self.assertEqual(
-            report_date(datetime(2026, 3, 7, 12, 0, tzinfo=timezone.utc)), "2026-03-07"
-        )
-        self.assertEqual(
-            report_date(datetime(2026, 3, 8, 11, 0, tzinfo=timezone.utc)), "2026-03-08"
+            report_date(datetime(2026, 3, 7, 13, 0, tzinfo=timezone.utc)), "2026-03-07"
         )
         self.assertEqual(
             report_date(datetime(2026, 3, 8, 12, 0, tzinfo=timezone.utc)), "2026-03-08"
         )
         self.assertEqual(
-            report_date(datetime(2026, 11, 1, 12, 0, tzinfo=timezone.utc)), "2026-11-01"
+            report_date(datetime(2026, 3, 8, 13, 0, tzinfo=timezone.utc)), "2026-03-08"
+        )
+        self.assertEqual(
+            report_date(datetime(2026, 11, 1, 13, 0, tzinfo=timezone.utc)), "2026-11-01"
         )
         self.assertEqual(
             report_date(datetime(2026, 11, 1, 18, 0, tzinfo=timezone.utc)), "2026-11-01"
