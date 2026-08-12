@@ -13,6 +13,7 @@ from unittest.mock import patch
 from semantic_sync import (
     SyncError,
     codex_environment,
+    conflict_prompt,
     controller_skill_path,
     rebase_candidate,
     reconciliation_prompt,
@@ -134,6 +135,18 @@ class SemanticSyncTests(unittest.TestCase):
 
             self.assertEqual((repo / "shared.txt").read_text(encoding="utf-8"), "resolved\n")
             self.assertEqual(git("merge-base", "HEAD", "main"), new)
+
+    def test_conflict_prompt_uses_controller_skill_and_defers_dependency_checks(self) -> None:
+        skill = Path("/controller/paseito-upstream-sync")
+        prompt = conflict_prompt(
+            {"upstream_commit": "a" * 40},
+            ["package.json"],
+            skill,
+        )
+        self.assertIn(str(skill / "SKILL.md"), prompt)
+        self.assertIn("Dependencies are intentionally not installed", prompt)
+        self.assertIn("do not run package scripts", prompt)
+        self.assertIn("not for absent tools", prompt)
 
     def test_review_prompt_explains_read_only_handoff_and_controller_verification(self) -> None:
         prompt = review_prompt(
