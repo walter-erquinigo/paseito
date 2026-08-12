@@ -246,6 +246,38 @@ class SemanticSyncTests(unittest.TestCase):
             with self.assertRaisesRegex(SyncError, "requires sandboxed proof"):
                 complete_deferred_browser_contracts(root, decision, registry, log)
 
+    def test_failed_deferred_browser_contract_surfaces_command_and_transcript(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            command_text = (
+                "npm run test:e2e --workspace=@getpaseo/app -- e2e/browser-proof.spec.ts"
+            )
+            registry = root / "registry.json"
+            registry.write_text(
+                json.dumps(
+                    {"features": [{"id": "proof", "contracts": [command_text]}]}
+                ),
+                encoding="utf-8",
+            )
+            decision = {
+                "features": [
+                    {
+                        "id": "proof",
+                        "contractChecks": [{"command": command_text, "result": "not_run"}],
+                    }
+                ]
+            }
+            failed = subprocess.CompletedProcess(
+                [], 1, stdout="Expected y=344, received y=204\n", stderr=""
+            )
+            with (
+                patch("semantic_sync.command", return_value=failed),
+                self.assertRaisesRegex(SyncError, "Expected y=344, received y=204"),
+            ):
+                complete_deferred_browser_contracts(
+                    root, decision, registry, root / "evidence.jsonl"
+                )
+
     def test_codex_environment_does_not_delegate_promotion_credentials(self) -> None:
         sensitive = {
             "GH_TOKEN": "gh",

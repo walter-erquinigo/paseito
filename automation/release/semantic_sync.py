@@ -353,7 +353,11 @@ def complete_deferred_browser_contracts(
                 + "\n"
             )
         if result.returncode:
-            raise SyncError("verification", "a controller-run deferred browser contract failed")
+            transcript = (result.stdout + result.stderr).strip()
+            raise SyncError(
+                "verification",
+                f"deferred browser contract failed: {command_text}\n{transcript[-4000:]}",
+            )
         check["result"] = "passed"
 
 
@@ -769,17 +773,28 @@ def synchronize(control_repo: Path, state_root: Path, force: bool = False) -> in
             or decision.get("upstreamCommit") != values["upstream_commit"]
         ):
             raise SyncError("semantic-sync", "Codex reported a different candidate")
-        if not decision.get("blocked"):
-            break
+        if decision.get("blocked"):
+            continue
+        try:
+            complete_deferred_browser_contracts(
+                candidate,
+                decision,
+                candidate / "automation/feature-registry.json",
+                reconcile_log,
+            )
+        except SyncError as error:
+            if attempt == 3:
+                raise
+            decision["blocked"] = True
+            decision["blockers"] = [str(error)]
+            decision["verificationRecommendations"] = [
+                "Repair the failing browser contract and rerun every affected focused contract."
+            ]
+            continue
+        break
     evidence_path.write_bytes(reconcile_log.read_bytes())
     if decision.get("blocked"):
         raise SyncError("semantic-sync", "Codex blocked reconciliation after repair attempts")
-    complete_deferred_browser_contracts(
-        candidate,
-        decision,
-        candidate / "automation/feature-registry.json",
-        reconcile_log,
-    )
     decision_path.write_text(json.dumps(decision, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     evidence_path.write_bytes(reconcile_log.read_bytes())
     command(
