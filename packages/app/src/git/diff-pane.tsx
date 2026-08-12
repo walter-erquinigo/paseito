@@ -103,7 +103,10 @@ import { useOverlayFlatListScrollbar } from "@/components/ui/overlay-scrollbar/u
 import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
 import { usePanelStore } from "@/stores/panel-store";
 import { collectAllTabs, useWorkspaceLayoutStore } from "@/stores/workspace-layout-store";
-import { buildWorkspaceTabPersistenceKey } from "@/workspace-tabs/model";
+import {
+  buildWorkspaceTabPersistenceKey,
+  type WorkspaceWorkingDiffTabTarget,
+} from "@/workspace-tabs/model";
 import { buildWorkspaceExplorerStateKey } from "@/hooks/use-file-explorer-actions";
 import {
   formatDiffContentText,
@@ -142,6 +145,10 @@ import {
   getLineReviewKeyboardAction,
   isReviewTargetFullyVisible,
 } from "@/review/line-review-navigation";
+import {
+  clearInlineWorkingDiffNavigationSnapshot,
+  publishInlineWorkingDiffNavigationSnapshot,
+} from "@/workspace/markdown-changes-navigation";
 
 export type { GitActionId, GitAction, GitActions } from "@/git/policy";
 
@@ -1840,6 +1847,74 @@ interface GitDiffPaneProps {
   onAddToChat?: (path: string) => void;
 }
 
+function useInlineChangesNavigationTarget(): {
+  focus: Pick<
+    WorkspaceWorkingDiffTabTarget,
+    "focusPath" | "focusRequestId" | "focusLineStart" | "focusLineEnd" | "focusColumn"
+  >;
+  requestedLine: { filePath: string; lineNumber: number } | undefined;
+  navigate: (target: WorkspaceWorkingDiffTabTarget) => void;
+} {
+  const [target, setTarget] = useState<WorkspaceWorkingDiffTabTarget | null>(null);
+  const navigate = useCallback((nextTarget: WorkspaceWorkingDiffTabTarget) => {
+    setTarget(nextTarget);
+  }, []);
+  const requestedLine = useMemo(
+    () =>
+      target?.focusPath && target.focusLineStart
+        ? { filePath: target.focusPath, lineNumber: target.focusLineStart }
+        : undefined,
+    [target?.focusLineStart, target?.focusPath],
+  );
+  const focus = useMemo(
+    () => ({
+      focusPath: target?.focusPath,
+      focusRequestId: target?.focusRequestId,
+      focusLineStart: target?.focusLineStart,
+      focusLineEnd: target?.focusLineEnd,
+      focusColumn: target?.focusColumn,
+    }),
+    [target],
+  );
+  return { focus, requestedLine, navigate };
+}
+
+function usePublishInlineChangesNavigation(input: {
+  workspaceKey: string | null;
+  enabled?: boolean;
+  changesTabOpen: boolean;
+  files: ParsedDiffFile[];
+  isLoading: boolean;
+  contextExpansionSupported: boolean;
+  navigate: (target: WorkspaceWorkingDiffTabTarget) => void;
+}): void {
+  const ownerRef = useRef<object>({});
+  useEffect(() => {
+    if (!input.workspaceKey || input.enabled === false || input.changesTabOpen) {
+      return;
+    }
+    const owner = ownerRef.current;
+    const workspaceKey = input.workspaceKey;
+    publishInlineWorkingDiffNavigationSnapshot(workspaceKey, owner, {
+      files: input.files,
+      isLoading: input.isLoading,
+      contextExpansionSupported: input.contextExpansionSupported,
+      navigate: input.navigate,
+    });
+    return () => {
+      clearInlineWorkingDiffNavigationSnapshot(workspaceKey, owner);
+    };
+  }, [
+    input.changesTabOpen,
+    input.contextExpansionSupported,
+    input.enabled,
+    input.files,
+    input.isLoading,
+    input.navigate,
+    input.workspaceKey,
+  ]);
+}
+
 type PressableStyleFn = (
   state: PressableStateCallbackType & { hovered?: boolean; open?: boolean },
 ) => StyleProp<ViewStyle>;
@@ -2499,6 +2574,11 @@ interface SharedDiffViewProps {
         onExpandedPathsChange: (paths: string[]) => void;
         onCollapsedFoldersChange: (paths: string[]) => void;
         keyboardEnabled?: boolean;
+        focusPath?: string;
+        focusRequestId?: number;
+        focusLineStart?: number;
+        focusLineEnd?: number;
+        focusColumn?: number;
       }
     | {
         kind: "working_tab";
@@ -2558,11 +2638,11 @@ export function SharedDiffView({ files, displayPreferences, mode }: SharedDiffVi
   const reviewActions = mode.kind === "commit" ? undefined : mode.reviewActions;
   const fileReviews = mode.kind === "commit" ? undefined : mode.fileReviews;
   const onFilePress = mode.kind === "working_tree" ? mode.onFilePress : undefined;
-  const focusPath = mode.kind === "working_tab" ? mode.focusPath : undefined;
-  const focusRequestId = mode.kind === "working_tab" ? mode.focusRequestId : undefined;
-  const focusLineStart = mode.kind === "working_tab" ? mode.focusLineStart : undefined;
-  const focusLineEnd = mode.kind === "working_tab" ? mode.focusLineEnd : undefined;
-  const focusColumn = mode.kind === "working_tab" ? mode.focusColumn : undefined;
+  const focusPath = mode.kind !== "commit" ? mode.focusPath : undefined;
+  const focusRequestId = mode.kind !== "commit" ? mode.focusRequestId : undefined;
+  const focusLineStart = mode.kind !== "commit" ? mode.focusLineStart : undefined;
+  const focusLineEnd = mode.kind !== "commit" ? mode.focusLineEnd : undefined;
+  const focusColumn = mode.kind !== "commit" ? mode.focusColumn : undefined;
   const navigationHighlight = useMemo<DiffNavigationHighlight | undefined>(() => {
     if (!focusPath || !focusLineStart) return undefined;
     return {
@@ -3814,6 +3894,11 @@ export function GitDiffPane({
     openCommit: handleCommitPress,
     onChangesFilePress,
   } = useDiffTabNavigation({ serverId, workspaceId, cwd, isMobile });
+  const workspaceKey = useMemo(
+    () => buildWorkspaceTabPersistenceKey({ serverId, workspaceId: workspaceId ?? cwd }),
+    [cwd, serverId, workspaceId],
+  );
+  const inlineNavigation = useInlineChangesNavigationTarget();
   const refreshSupported = useSessionStore(
     (s) => s.sessions[serverId]?.serverInfo?.features?.checkoutRefresh === true,
   );
@@ -3848,6 +3933,7 @@ export function GitDiffPane({
     selectUncommitted: handleSelectUncommitted,
     selectBase: handleSelectBase,
     files,
+    sourceFiles,
     diffPayloadError,
     diffTooLarge,
     isDiffLoading,
@@ -3862,6 +3948,16 @@ export function GitDiffPane({
     cwd,
     ignoreWhitespace: changesPreferences.hideWhitespace,
     enabled: enabled !== false,
+    requestedNavigationLine: inlineNavigation.requestedLine,
+  });
+  usePublishInlineChangesNavigation({
+    workspaceKey,
+    enabled,
+    changesTabOpen,
+    files: sourceFiles,
+    isLoading: isDiffLoading,
+    contextExpansionSupported,
+    navigate: inlineNavigation.navigate,
   });
   const reviewAttachment = useReviewAttachmentSnapshot({
     key: reviewDraftKey,
@@ -4000,6 +4096,7 @@ export function GitDiffPane({
       reviewActions,
       fileReviews,
       keyboardEnabled: enabled !== false && !changesTabOpen,
+      ...inlineNavigation.focus,
       onEditLine: onOpenFile && fileEditingSupported ? handleEditLine : undefined,
       onFilePress: onChangesFilePress,
       workspaceFileDragScope: workspaceId ? { serverId, workspaceId } : undefined,
@@ -4014,6 +4111,7 @@ export function GitDiffPane({
     [
       enabled,
       changesTabOpen,
+      inlineNavigation.focus,
       viewMode,
       changesTree.expandedPaths,
       changesTree.collapsedFolders,

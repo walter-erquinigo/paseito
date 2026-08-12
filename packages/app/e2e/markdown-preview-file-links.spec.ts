@@ -149,19 +149,34 @@ test("Markdown preview locations reuse an existing Changes tab when its current 
     await page.getByRole("button", { name: "Open explorer" }).click();
     await expect(page.getByTestId("explorer-tab-changes")).toBeVisible({ timeout: 30_000 });
     await expect(page.getByText("long.ts", { exact: true })).toBeVisible({ timeout: 30_000 });
-    await page.getByTestId("changes-open-tab").click();
-
-    const panel = page.getByTestId("working-diff-panel").filter({ visible: true });
-    await expect(panel).toBeVisible();
-    await panel.getByTestId("diff-file-0-toggle").click();
-    await expect(panel.getByTestId("diff-file-0-body")).toHaveCount(0);
-
     await page.getByTestId("explorer-tab-files").click();
     await expect(page.getByTestId("file-explorer-tree-scroll")).toBeVisible({ timeout: 30_000 });
     await openFileFromExplorer(page, "notes.md");
     const notesTab = page.getByTestId("workspace-tab-file_notes.md").filter({ visible: true });
     await expect(notesTab).toBeVisible();
 
+    await page.getByTestId("explorer-tab-changes").click();
+    const inlineScroll = page.getByTestId("git-diff-scroll").filter({ visible: true });
+    await expect(inlineScroll).toBeVisible();
+    const visibleWorkspaceTabs = page.getByTestId(/^workspace-tab-/).filter({ visible: true });
+    const tabCountBeforeInlineNavigation = await visibleWorkspaceTabs.count();
+    await page.locator('a[href="long.ts#L40C180"]').click();
+    const inlineSelectedLine = inlineScroll.locator(
+      '[data-paseito-diff-current-line="40"][data-paseito-diff-navigation-selected="true"]',
+    );
+    await expect(inlineSelectedLine).toBeVisible();
+    await expect(inlineScroll).toBeFocused();
+    await expect(visibleWorkspaceTabs).toHaveCount(tabCountBeforeInlineNavigation);
+    await expect(page.getByTestId("workspace-tab-file_long.ts")).toHaveCount(0);
+    await expect(notesTab).toBeVisible();
+
+    await page.getByTestId("changes-open-tab").click();
+    const panel = page.getByTestId("working-diff-panel").filter({ visible: true });
+    await expect(panel).toBeVisible();
+    await panel.getByTestId("diff-file-0-toggle").click();
+    await expect(panel.getByTestId("diff-file-0-body")).toHaveCount(0);
+
+    await notesTab.click();
     await page.locator('a[href="long.ts#L40C180"]').click();
     await expect(panel).toBeVisible();
     await expect(panel.getByTestId("diff-file-0-body")).toBeVisible();

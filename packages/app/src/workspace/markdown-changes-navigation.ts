@@ -11,12 +11,23 @@ export interface WorkingDiffNavigationSnapshot {
   contextExpansionSupported: boolean;
 }
 
+export interface InlineWorkingDiffNavigationSnapshot {
+  files: ParsedDiffFile[];
+  isLoading: boolean;
+  contextExpansionSupported: boolean;
+  navigate: (target: WorkspaceWorkingDiffTabTarget) => void;
+}
+
 interface RegisteredWorkingDiffSnapshot {
   owner: object;
   snapshot: WorkingDiffNavigationSnapshot;
 }
 
 const workingDiffSnapshots = new Map<string, RegisteredWorkingDiffSnapshot>();
+const inlineWorkingDiffSnapshots = new Map<
+  string,
+  { owner: object; snapshot: InlineWorkingDiffNavigationSnapshot }
+>();
 let lastWorkingDiffFocusRequestId = 0;
 
 export function publishWorkingDiffNavigationSnapshot(
@@ -39,6 +50,29 @@ export function getWorkingDiffNavigationSnapshot(
   return workingDiffSnapshots.get(workspaceKey)?.snapshot ?? null;
 }
 
+export function publishInlineWorkingDiffNavigationSnapshot(
+  workspaceKey: string,
+  owner: object,
+  snapshot: InlineWorkingDiffNavigationSnapshot,
+): void {
+  inlineWorkingDiffSnapshots.set(workspaceKey, { owner, snapshot });
+}
+
+export function clearInlineWorkingDiffNavigationSnapshot(
+  workspaceKey: string,
+  owner: object,
+): void {
+  if (inlineWorkingDiffSnapshots.get(workspaceKey)?.owner === owner) {
+    inlineWorkingDiffSnapshots.delete(workspaceKey);
+  }
+}
+
+export function getInlineWorkingDiffNavigationSnapshot(
+  workspaceKey: string,
+): InlineWorkingDiffNavigationSnapshot | null {
+  return inlineWorkingDiffSnapshots.get(workspaceKey)?.snapshot ?? null;
+}
+
 export interface MarkdownChangesNavigation {
   tabId: string;
   target: WorkspaceWorkingDiffTabTarget;
@@ -59,24 +93,13 @@ export function resolveMarkdownChangesNavigation(input: {
     return null;
   }
 
-  const lineStart = normalizePositiveInteger(input.location.lineStart);
-  if (!lineStart) {
-    return null;
-  }
-  const resolvedTarget = resolveWorkspaceFilePaths({
-    path: input.location.path,
+  const location = resolveNavigationLocation({
     workspaceRoot: input.workspaceRoot,
+    location: input.location,
+    files: snapshot.files,
+    contextExpansionSupported: snapshot.contextExpansionSupported,
   });
-  if (!resolvedTarget?.relativePath) {
-    return null;
-  }
-
-  const file = snapshot.files.find(
-    (candidate) =>
-      resolveWorkspaceFilePaths({ path: candidate.path, workspaceRoot: input.workspaceRoot })
-        ?.relativePath === resolvedTarget.relativePath,
-  );
-  if (!file || !canNavigateToCurrentLine(file, lineStart, snapshot.contextExpansionSupported)) {
+  if (!location) {
     return null;
   }
 
@@ -84,12 +107,33 @@ export function resolveMarkdownChangesNavigation(input: {
     tabId: changesTab.tabId,
     target: createWorkingDiffNavigationTarget({
       current: changesTab.target,
-      path: resolvedTarget.relativePath,
-      lineStart,
-      lineEnd: input.location.lineEnd,
-      column: input.location.column,
+      ...location,
     }),
   };
+}
+
+export function resolveMarkdownInlineChangesNavigation(input: {
+  workspaceRoot: string;
+  location: WorkspaceFileLocation;
+  snapshot: InlineWorkingDiffNavigationSnapshot | null;
+}): WorkspaceWorkingDiffTabTarget | null {
+  const snapshot = input.snapshot;
+  if (!snapshot || snapshot.isLoading) {
+    return null;
+  }
+  const location = resolveNavigationLocation({
+    workspaceRoot: input.workspaceRoot,
+    location: input.location,
+    files: snapshot.files,
+    contextExpansionSupported: snapshot.contextExpansionSupported,
+  });
+  if (!location) {
+    return null;
+  }
+  return createWorkingDiffNavigationTarget({
+    current: { kind: "working_diff" },
+    ...location,
+  });
 }
 
 export function createWorkingDiffNavigationTarget(input: {
@@ -141,6 +185,46 @@ export function canNavigateToCurrentLine(
       (region) => lineNumber >= region.newStart && lineNumber < region.newStart + region.lineCount,
     )
   );
+}
+
+function resolveNavigationLocation(input: {
+  workspaceRoot: string;
+  location: WorkspaceFileLocation;
+  files: ParsedDiffFile[];
+  contextExpansionSupported: boolean;
+}): {
+  path: string;
+  lineStart: number;
+  lineEnd?: number;
+  column?: number;
+} | null {
+  const lineStart = normalizePositiveInteger(input.location.lineStart);
+  if (!lineStart) {
+    return null;
+  }
+  const resolvedTarget = resolveWorkspaceFilePaths({
+    path: input.location.path,
+    workspaceRoot: input.workspaceRoot,
+  });
+  if (!resolvedTarget?.relativePath) {
+    return null;
+  }
+  const file = input.files.find(
+    (candidate) =>
+      resolveWorkspaceFilePaths({ path: candidate.path, workspaceRoot: input.workspaceRoot })
+        ?.relativePath === resolvedTarget.relativePath,
+  );
+  if (!file || !canNavigateToCurrentLine(file, lineStart, input.contextExpansionSupported)) {
+    return null;
+  }
+  const lineEnd = normalizePositiveInteger(input.location.lineEnd);
+  const column = normalizePositiveInteger(input.location.column);
+  return {
+    path: resolvedTarget.relativePath,
+    lineStart,
+    ...(lineEnd && lineEnd >= lineStart ? { lineEnd } : {}),
+    ...(column ? { column } : {}),
+  };
 }
 
 function normalizePositiveInteger(value: number | null | undefined): number | null {

@@ -200,8 +200,10 @@ import {
   type WorkspaceFileOpenRequest,
 } from "@/workspace/file-open";
 import {
+  getInlineWorkingDiffNavigationSnapshot,
   getWorkingDiffNavigationSnapshot,
   resolveMarkdownChangesNavigation,
+  resolveMarkdownInlineChangesNavigation,
 } from "@/workspace/markdown-changes-navigation";
 import { RenderProfile } from "@/utils/render-profiler";
 import { useWorkspaceCheckoutStatus } from "@/screens/workspace/use-workspace-checkout-status";
@@ -2472,6 +2474,16 @@ function WorkspaceScreenContent({
           retargetWorkspaceTab(persistenceKey, navigation.tabId, navigation.target);
           focusWorkspaceTab(persistenceKey, navigation.tabId);
           navigateToTabId(navigation.tabId);
+          return;
+        }
+        const inlineSnapshot = getInlineWorkingDiffNavigationSnapshot(persistenceKey);
+        const inlineNavigation = resolveMarkdownInlineChangesNavigation({
+          workspaceRoot: workspaceDirectory,
+          location,
+          snapshot: inlineSnapshot,
+        });
+        if (inlineSnapshot && inlineNavigation) {
+          inlineSnapshot.navigate(inlineNavigation);
           return;
         }
       }
