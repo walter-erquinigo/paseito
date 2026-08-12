@@ -1,42 +1,36 @@
 import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { afterEach, describe, expect, test } from "vitest";
 import type { SessionOutboundMessage } from "@getpaseo/protocol/messages";
+import type { WorkspaceLspBackendFactory, WorkspaceLspClient } from "./backend.js";
+import { WorkspaceLspSession } from "./workspace-lsp-session.js";
 
-const brokerRequests: Array<{
+interface BackendRequest {
   method: string;
   params: Record<string, unknown>;
   timeoutMs: number;
-}> = [];
-const broker = vi.hoisted(() => ({
-  ensure: vi.fn(async () => undefined),
-  request: vi.fn(
-    async (input: { method: string; params: Record<string, unknown>; timeoutMs: number }) => {
-      brokerRequests.push(input);
-      if (input.method === "broker.ping") return { protocolVersion: 1 };
-      if (input.method === "textDocument.definition") return [];
-      return undefined;
-    },
-  ),
-}));
+}
 
-vi.mock("./lens-broker-client.js", () => ({
-  ensureLensBroker: broker.ensure,
-  LensBrokerClient: class {
-    request = broker.request;
-    close() {}
-  },
-}));
+class RecordingBackend implements WorkspaceLspClient {
+  readonly requests: BackendRequest[] = [];
 
-import { WorkspaceLspSession } from "./workspace-lsp-session.js";
+  async request<T>(input: BackendRequest): Promise<T> {
+    this.requests.push(input);
+    if (input.method === "textDocument.definition") return [] as T;
+    return undefined as T;
+  }
+
+  close() {}
+}
+
+function backendFactory(backend: RecordingBackend): WorkspaceLspBackendFactory {
+  return { connect: async () => backend };
+}
 
 const directories: string[] = [];
 
 afterEach(() => {
-  brokerRequests.length = 0;
-  broker.ensure.mockClear();
-  broker.request.mockClear();
   for (const directory of directories.splice(0))
     rmSync(directory, { recursive: true, force: true });
 });
@@ -52,9 +46,11 @@ describe("WorkspaceLspSession", () => {
   test("confines a request and preserves its document version", async () => {
     const cwd = workspace();
     const emitted: SessionOutboundMessage[] = [];
-    const session = new WorkspaceLspSession({
-      emit: (message) => emitted.push(message),
-    });
+    const backend = new RecordingBackend();
+    const session = new WorkspaceLspSession(
+      { emit: (message) => emitted.push(message) },
+      backendFactory(backend),
+    );
 
     await session.handleRequest({
       type: "workspace.lsp.request",
@@ -65,7 +61,7 @@ describe("WorkspaceLspSession", () => {
       requestId: "request-1",
     });
 
-    expect(brokerRequests.at(-1)).toEqual({
+    expect(backend.requests.at(-1)).toEqual({
       method: "textDocument.definition",
       params: {
         file: join(cwd, "main.cpp"),
@@ -73,7 +69,7 @@ describe("WorkspaceLspSession", () => {
         line: 0,
         character: 4,
       },
-      timeoutMs: 5_000,
+      timeoutMs: 15_000,
     });
     expect(emitted).toEqual([
       {
@@ -91,9 +87,11 @@ describe("WorkspaceLspSession", () => {
   test("rejects paths outside the workspace before contacting the broker", async () => {
     const cwd = workspace();
     const emitted: SessionOutboundMessage[] = [];
-    const session = new WorkspaceLspSession({
-      emit: (message) => emitted.push(message),
-    });
+    const backend = new RecordingBackend();
+    const session = new WorkspaceLspSession(
+      { emit: (message) => emitted.push(message) },
+      backendFactory(backend),
+    );
 
     await session.handleRequest({
       type: "workspace.lsp.request",
@@ -104,7 +102,7 @@ describe("WorkspaceLspSession", () => {
       requestId: "request-2",
     });
 
-    expect(broker.request).not.toHaveBeenCalled();
+    expect(backend.requests).toEqual([]);
     expect(emitted[0]).toMatchObject({
       type: "workspace.lsp.response",
       payload: { documentVersion: 1, result: null, requestId: "request-2" },

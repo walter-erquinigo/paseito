@@ -68,15 +68,21 @@
       "invariants": [
         "On macOS, reviewers can drag or Shift-click current-side gutters to select up to 200 contiguous loaded lines, including manually expanded context across synthetic hunk boundaries.",
         "Range selection opens the suggestion editor below the final line with the selected source prefilled; omitted lines must be expanded before selection.",
+        "New drafts expose Comment and Code change tabs: comments require only a message, code changes require a changed replacement, and switching tabs preserves both drafts.",
         "Replacement text may be empty, must differ from the original, and is bounded to 200 lines and 64 KiB.",
         "Suggestions are persisted with original lines and source revision; stale suggestions remain visible and block sending until updated or deleted.",
-        "Suggestions are sent only to the destination agent and never mutate a checkout or forge review."
+        "Suggestions are sent only to the destination agent and never mutate a checkout or forge review.",
+        "A sent Review attachment is collapsed by default and expands in place to a bounded, selectable list of every comment and code-change entry with its file and line location."
       ],
       "contracts": [
-        "npx vitest run packages/app/src/review/store.test.ts packages/app/src/review/surface.test.tsx packages/server/src/server/agent/prompt-attachments.test.ts"
+        "npx vitest run packages/app/src/review/store.test.ts packages/app/src/review/surface.test.tsx packages/app/src/attachments/review-attachment-items.test.ts packages/server/src/server/agent/prompt-attachments.test.ts",
+        "npm run test:e2e --workspace=@getpaseo/app -- e2e/review-attachment-widget.spec.ts"
       ],
       "paths": [
         "packages/app/src/review",
+        "packages/app/src/attachments/review-attachment-items.ts",
+        "packages/app/src/components/review-attachment-card.tsx",
+        "packages/app/src/components/message.tsx",
         "packages/app/src/git/diff-pane.tsx",
         "packages/protocol/src/messages.ts",
         "packages/server/src/server/agent/prompt-attachments.ts"
@@ -85,37 +91,71 @@
     {
       "id": "branch-file-review-state",
       "permanent": false,
-      "intent": "Let reviewers mark branch files reviewed while preserving checks only for identical branch-side content.",
+      "intent": "Let reviewers mark branch files or individual edited lines reviewed while preserving checks only for identical branch-side content.",
       "invariants": [
         "Review state is private local app data scoped by host, main repository, branch and exact file path, independent of commit SHA, comparison base and diff mode.",
         "Every reviewable diff entry has a daemon-provided content revision, including untracked, binary, oversized and deleted files.",
         "Marking a file reviewed collapses it; marking that file unreviewed expands it; newly changed reviewed content is unchecked and reopened, while identical amended content keeps its check.",
         "Committed and Uncommitted views share per-branch checks, and a bulk control marks or clears the active diff.",
+        "Every physical added and removed line has an always-visible 22px checkbox slot inside the fixed line-number gutter in unified, wrapped and split layouts; context and hunk rows reserve the slot without showing a checkbox.",
+        "Replacement sides are reviewed independently, partial files are mixed, file-level controls synchronize all edited lines, and completing the final edited line collapses the file.",
+        "A dedicated toolbar action expands every incomplete file, collapses every fully reviewed file, and opens ancestor folders in tree view.",
+        "Keyboard review uses M to approve and move down and comma to approve and move up; J and K are not review navigation keys. A compact accent marker follows the selected line in the fixed review gutter, and an off-screen destination is centered without moving a destination that is already fully visible.",
+        "Line identity includes side, change type, exact content and surrounding context; unique unchanged edits survive revisions while changed or ambiguous duplicate edits are cleared.",
         "The feature is capability-gated and never infers unreliable content identity from an older daemon."
       ],
       "contracts": [
-        "npx vitest run packages/app/src/review/file-review.test.ts packages/app/src/git/file-review-expansion.test.ts packages/server/src/utils/checkout-git.context.test.ts packages/server/src/utils/checkout-git.test.ts"
+        "npx vitest run packages/app/src/review/file-review.test.ts packages/app/src/review/line-review.test.ts packages/app/src/review/line-review-navigation.test.ts packages/app/src/git/file-review-expansion.test.ts packages/server/src/utils/checkout-git.context.test.ts packages/server/src/utils/checkout-git.test.ts",
+        "npm run test:e2e --workspace=@getpaseo/app -- e2e/diff-row-alignment.spec.ts"
       ],
       "paths": [
         "packages/app/src/review/file-review.ts",
+        "packages/app/src/review/line-review-navigation.ts",
         "packages/app/src/git/diff-pane.tsx",
         "packages/protocol/src/messages.ts",
         "packages/server/src/utils/checkout-git.ts"
       ]
     },
     {
+      "id": "changes-file-tree-navigator",
+      "permanent": false,
+      "intent": "Navigate large working diffs from a dedicated right-hand file tree in the full desktop Changes tab.",
+      "invariants": [
+        "Only the full working Changes tab on desktop renders the 240px right-hand navigator; commit diffs, inline Changes and compact layouts remain unchanged.",
+        "The navigator starts open, persists only its whole-rail collapsed preference and suppresses itself below an 800px containing-pane width without changing that preference.",
+        "Compressed directory folders expand independently and retain their local state for the lifetime of the retained Changes tab.",
+        "Selecting a file expands its diff, reissues a monotonic focus request, aligns its header to the top and focuses the diff scroll surface; repeated selections work.",
+        "Manual diff scrolling does not follow-select another tree row, and selection clears only when the selected path disappears from the active comparison."
+      ],
+      "contracts": [
+        "npx vitest run packages/app/src/hooks/use-changes-preferences/storage.test.ts packages/app/src/git/changes-file-tree-navigation.test.ts --bail=1",
+        "npm run test:e2e --workspace=@getpaseo/app -- e2e/changes-file-tree-navigator.spec.ts"
+      ],
+      "paths": [
+        "packages/app/src/git/changes-file-tree-navigation.ts",
+        "packages/app/src/git/changes-file-tree-navigator.tsx",
+        "packages/app/src/git/diff-pane.tsx",
+        "packages/app/src/panels/diff-panel.tsx",
+        "packages/app/src/hooks/use-changes-preferences",
+        "docs/paseito-changes.md"
+      ]
+    },
+    {
       "id": "lens-shared-editor-lsp",
       "permanent": false,
-      "intent": "Add C/C++ and Python editor intelligence by attaching to the language server already owned by Lens without creating a second server fleet.",
+      "intent": "Provide editor intelligence through the existing Lens language server when available and a daemon-owned clangd fallback for ordinary C/C++ workspaces.",
       "invariants": [
-        "Paseito only attaches to the Lens-owned per-workspace broker and disables only LSP when Lens is absent; it never auto-starts another Lens service.",
+        "Paseito prefers the Lens-owned per-workspace broker, never starts Lens itself, and starts one shared workspace-scoped clangd only for C/C++ when that broker is absent.",
+        "Standalone clangd automatically selects a root compile_commands.json or build/compile_commands.json, is reused across editor leases, and shuts down when the final lease closes.",
         "LSP is opt-in per host and workspace, while format-on-save is separately opt-in per workspace and language.",
-        "Diagnostics, automatic and manual completion, hover and definition use exact in-memory document versions; stale responses are rejected.",
+        "Diagnostics, automatic and manual completion, token hover, F12, Command/Ctrl-click and the Electron Go to Definition / Declaration context-menu action use exact in-memory document versions; stale responses are rejected.",
+        "Hover and definition allow a 15-second cold-index deadline, and a transient interactive request failure never permanently disables an established editor session.",
         "Formatting has a 1.5-second deadline and any failure saves the original buffer unchanged in one write.",
         "The UI is capability-gated and isolated in a reconfigurable CodeMirror compartment so ordinary editing remains independent."
       ],
       "contracts": [
-        "npx vitest run packages/app/src/file-pane/editor/lsp-session.test.ts packages/app/src/file-pane/editor/model.test.ts packages/client/src/daemon-client.test.ts packages/protocol/src/messages.workspace-lsp.test.ts packages/server/src/server/session/lsp/workspace-lsp-session.test.ts"
+        "npx vitest run packages/app/src/file-pane/editor/lsp-session.test.ts packages/app/src/file-pane/editor/model.test.ts packages/client/src/daemon-client.test.ts packages/protocol/src/messages.workspace-lsp.test.ts packages/server/src/server/session/lsp/clangd-client.test.ts packages/server/src/server/session/lsp/workspace-lsp-session.test.ts",
+        "npx vitest run packages/server/src/server/session/lsp/clangd-client.local.e2e.test.ts --bail=1"
       ],
       "paths": [
         "packages/app/src/file-pane/editor",
@@ -123,6 +163,51 @@
         "packages/protocol/src/messages.ts",
         "packages/server/src/server/session/lsp",
         "docs/paseito-lsp.md"
+      ]
+    },
+    {
+      "id": "markdown-preview-source-links",
+      "permanent": false,
+      "intent": "Open source locations from a Markdown file preview in a reusable split pane to the left without replacing the preview.",
+      "invariants": [
+        "Preview prose and inline code auto-link whitespace-delimited relative or absolute file paths only when a line location is present; fenced code and unrelated prose remain plain.",
+        "Colon path suffixes use path:start-end for a 1-based line range and reserve only a final :column segment for a column; preview and assistant-message parsing share this rule, while #Lx-Ly and lines x-y remain supported ranges.",
+        "Ordinary clicks open source mode in an existing pane immediately to the left when available, or create a left split when none exists; preview links never create or target a right pane.",
+        "The editor clamps invalid positions, centers and focuses the requested 1-based line and column, and missing files leave the Markdown preview visible while showing the existing file-not-found toast.",
+        "Explicit Markdown links retain their displayed text, web URLs stay external, and absolute readable files outside the active workspace are supported."
+      ],
+      "contracts": [
+        "npx vitest run packages/app/src/assistant-file-links/parse.test.ts packages/app/src/file-pane/markdown-file-links.test.ts packages/app/src/workspace/file-open/index.test.ts packages/app/src/screens/workspace/workspace-pane-state.test.ts packages/app/src/workspace-tabs/identity.test.ts --bail=1",
+        "npm run test:e2e --workspace=@getpaseo/app -- e2e/markdown-preview-file-links.spec.ts"
+      ],
+      "paths": [
+        "packages/app/src/assistant-file-links",
+        "packages/app/src/file-pane",
+        "packages/app/src/screens/workspace/workspace-pane-state.ts",
+        "packages/app/src/screens/workspace/workspace-screen.tsx",
+        "packages/app/src/workspace/file-open"
+      ]
+    },
+    {
+      "id": "retained-chat-scroll-position",
+      "permanent": false,
+      "intent": "Preserve a chat's reading position while switching agent tabs or workspaces on desktop.",
+      "invariants": [
+        "An inactive retained chat freezes stream presentation, scroll listeners, measurements, pagination checks and scheduled bottom corrections until it becomes active again.",
+        "Reactivating a chat that was following output returns to the latest content and continues following, while a chat intentionally scrolled upward restores the same viewport offset within rendering tolerance.",
+        "Only explicit upward wheel, keyboard, touch, scrollbar-drag or middle-button autoscroll input detaches output following; geometry changes, browser zoom, editable controls and nested scrollers do not.",
+        "Hidden zero-sized containers cannot change scroll mode, and deactivation cancels pending animation frames and scroll gestures.",
+        "Agent-tab and workspace switching share the same viewport contract."
+      ],
+      "contracts": [
+        "npx vitest run packages/app/src/agent-stream/strategy-web.test.tsx --bail=1",
+        "npm run test:e2e --workspace=@getpaseo/app -- e2e/agent-scroll-return.spec.ts"
+      ],
+      "paths": [
+        "packages/app/src/agent-stream/strategy-web.tsx",
+        "packages/app/src/agent-stream/view.tsx",
+        "packages/app/src/components/retained-panel.tsx",
+        "packages/app/e2e/agent-scroll-return.spec.ts"
       ]
     },
     {

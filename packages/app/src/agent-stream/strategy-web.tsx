@@ -50,14 +50,7 @@ const USER_SCROLL_DELTA_EPSILON = 1;
 const BOTTOM_OVERSCROLL_TOLERANCE_PX = 2;
 const AUTO_SCROLL_BOTTOM_THRESHOLD_PX = 64;
 const AUTO_SCROLL_RESUME_THRESHOLD_PX = 1;
-const HISTORY_START_SETTLE_FRAMES = 2;
-const HISTORY_START_SLOT_HEIGHT_PX = 32;
-const CONTENT_PADDING_TOP_PX = 16;
 const UPWARD_INPUT_EVIDENCE_TIMEOUT_MS = 100;
-const VIRTUALIZER_SCROLL_MARGIN_PX = HISTORY_START_SLOT_HEIGHT_PX + CONTENT_PADDING_TOP_PX;
-// A row has to clear this much of the viewport top before the next one takes over as the
-// reading position, so a row resting exactly on the edge does not flip back and forth.
-const READING_POSITION_OFFSET_PX = 8;
 
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
 const foregroundMutedColorMapping = (theme: Theme) => ({
@@ -323,7 +316,7 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
   const getHistoryStartPaginationInput = useStableEvent((): HistoryStartPaginationInput | null => {
     const scrollContainer = scrollContainerRef.current;
     if (!isActiveRef.current || !scrollContainer || !isScrollContainerMeasurable(scrollContainer)) {
-      return null;
+      return;
     }
     const bottomAnchorSettled =
       !followOutputRef.current || isScrollContainerNearBottom(scrollContainer);
@@ -548,7 +541,6 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
       return;
     }
     cancelPendingStickToBottom();
-    historyStartSettleSchedulerRef.current?.cancel();
     for (const frame of pendingVirtualRowMeasureFramesRef.current.values()) {
       window.cancelAnimationFrame(frame);
     }
@@ -666,6 +658,18 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
     rearmHistoryStartFromUserIntent();
   });
 
+  const stopFollowingOutputFromUserIntent = useStableEvent(() => {
+    cancelPendingStickToBottom();
+    if (followOutputRef.current) {
+      setFollowOutput(false);
+    }
+    if (!isLoadingOlderHistory) {
+      historyStartPaginationStateRef.current = rearmHistoryStartPagination(
+        historyStartPaginationStateRef.current,
+      );
+    }
+  });
+
   const handleDomScroll = useCallback(() => {
     const scrollContainer = scrollContainerRef.current;
     if (!isActiveRef.current || !scrollContainer || !isScrollContainerMeasurable(scrollContainer)) {
@@ -692,12 +696,7 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
     lastKnownScrollTopRef.current = currentScrollTop;
     updateScrollMetrics();
     evaluateHistoryStart();
-  }, [
-    evaluateHistoryStart,
-    isJumpSettling,
-    stopFollowingOutputFromUserIntent,
-    updateScrollMetrics,
-  ]);
+  }, [evaluateHistoryStart, stopFollowingOutputFromUserIntent, updateScrollMetrics]);
 
   useEffect(() => {
     const initialHistoryStartState = createHistoryStartPaginationState();
@@ -750,8 +749,6 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
     scheduleStickToBottom,
   ]);
 
-  // Following output is a layout invariant: rows, footer, and bottom offset must
-  // reach the browser in the same paint.
   useLayoutEffect(() => {
     if (!isActive || !followOutputRef.current) {
       return;
@@ -761,6 +758,7 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
   }, [
     cancelPendingStickToBottom,
     isActive,
+    liveHeadRowRevision,
     renderLiveAuxiliary,
     scrollMessagesToBottom,
     segments.historyMounted,
@@ -768,6 +766,13 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
     segments.liveHead,
     virtualTotalSize,
   ]);
+
+  useEffect(() => {
+    if (!isActive || !followOutputRef.current || !shouldUseVirtualizer) {
+      return;
+    }
+    scheduleStickToBottom();
+  }, [isActive, scheduleStickToBottom, shouldUseVirtualizer, virtualTotalSize]);
 
   useEffect(() => {
     if (!isActive) {
@@ -825,14 +830,7 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
     return () => {
       observer.disconnect();
     };
-  }, [
-    applyHistoryStartPrependAnchor,
-    evaluateHistoryStart,
-    isActive,
-    scheduleHistoryStartPrependSettle,
-    scheduleStickToBottom,
-    updateScrollMetrics,
-  ]);
+  }, [evaluateHistoryStart, isActive, scheduleStickToBottom, updateScrollMetrics]);
 
   useLayoutEffect(() => {
     if (!isActive) {
@@ -845,8 +843,11 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
 
     const markUpwardViewportInput = () => {
       markUpwardInputEvidence();
-      if (scrollContainer.scrollTop <= USER_SCROLL_DELTA_EPSILON) {
-        rearmHistoryStartFromUserIntent();
+      if (!isLoadingOlderHistory) {
+        historyStartPaginationStateRef.current = rearmHistoryStartPagination(
+          historyStartPaginationStateRef.current,
+        );
+        evaluateHistoryStart();
       }
     };
     const handleWheel = (event: WheelEvent) => {
@@ -977,10 +978,11 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
   }, [
     clearMouseScrollGesture,
     clearUpwardInputEvidence,
+    evaluateHistoryStart,
     handleDomScroll,
     isActive,
+    isLoadingOlderHistory,
     markUpwardInputEvidence,
-    rearmHistoryStartFromUserIntent,
   ]);
 
   useEffect(() => {

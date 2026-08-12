@@ -94,7 +94,6 @@ export class EditorLspSession {
       });
       return result.kind === "diagnostics" ? result.items : [];
     } catch {
-      this.disable();
       return [];
     }
   }
@@ -114,7 +113,6 @@ export class EditorLspSession {
       });
       return result.kind === "completion" ? result : { isIncomplete: false, items: [] };
     } catch {
-      this.disable();
       return { isIncomplete: false, items: [] };
     }
   }
@@ -131,7 +129,6 @@ export class EditorLspSession {
       });
       return result.kind === "hover" ? result.hover : null;
     } catch {
-      this.disable();
       return null;
     }
   }
@@ -148,7 +145,6 @@ export class EditorLspSession {
       });
       return result.kind === "definition" ? result.locations : [];
     } catch {
-      this.disable();
       return [];
     }
   }

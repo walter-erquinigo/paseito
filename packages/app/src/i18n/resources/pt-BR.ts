@@ -812,6 +812,14 @@ export const ptBR: TranslationResources = {
       diff: {
         openChangesTab: "Abrir a aba Alterações",
         closeChangesTab: "Fechar a aba Alterações",
+        fileNavigator: "Arquivos",
+        showFileNavigator: "Mostrar navegador de arquivos",
+        hideFileNavigator: "Ocultar navegador de arquivos",
+        fileStatus: {
+          added: "Adicionado",
+          deleted: "Excluído",
+          modified: "Modificado",
+        },
         binaryFile: "Arquivo binário",
         tooLarge: "Diff grande demais para exibir",
         previewTooLargeTitle: "Este diff é grande demais para visualizar",
@@ -829,6 +837,7 @@ export const ptBR: TranslationResources = {
         wrapLongLines: "Quebrar linhas longas",
         collapseAll: "Recolher todos os arquivos",
         expandAll: "Expandir todos os arquivos",
+        expandUnreviewed: "Expandir arquivos não revisados e recolher arquivos revisados",
         collapseAllFolders: "Recolher todas as pastas",
         expandAllFolders: "Expandir todas as pastas",
         refreshing: "Atualizando",
@@ -858,6 +867,12 @@ export const ptBR: TranslationResources = {
         clearAllReviewed: "Limpar todos os arquivos revisados",
         reviewUpdateHost: "Atualize o host para marcar arquivos como revisados",
         reviewBranchRequired: "Alterne para uma branch para marcar arquivos como revisados",
+        markLineReviewed: "Marcar a linha {{line}} como revisada",
+        markLineUnreviewed: "Marcar a linha {{line}} como não revisada",
+        editLineUnavailable: "Esta linha não pode ser aberta no editor integrado",
+        noUncheckedLines: "Não há linhas desmarcadas nessa direção",
+        lineReviewShortcuts:
+          "M / , aprovar e mover · Espaço alternar · E editar · U desfazer · Esc limpar",
         context: {
           hiddenLines: "{{count}} linhas ocultas",
           expandUp: "Mostrar 20 linhas acima",
@@ -1710,6 +1725,10 @@ export const ptBR: TranslationResources = {
     accessibility: "Janela de contexto {{percentage}}% usada",
   },
   review: {
+    composer: {
+      comment: "Comentário",
+      codeChange: "Alteração de código",
+    },
     comment: {
       add: "Adicionar comentário de revisão",
       edit: "Editar comentário de revisão",

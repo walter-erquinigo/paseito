@@ -43,4 +43,13 @@ export {
   type FileReviewActions,
   type FileReviewRecord,
   type FileReviewSnapshot,
+  type FileLineReviewProgress,
 } from "./file-review";
+
+export {
+  buildChangedLineFingerprint,
+  buildReviewableChangedFile,
+  buildReviewableChangedFiles,
+  type ReviewableChangedFile,
+  type ReviewableChangedLine,
+} from "./line-review";

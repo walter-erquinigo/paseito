@@ -22,6 +22,8 @@ export interface ReviewableDiffTarget {
   lineNumber: number;
   lineType: ReviewableLineType;
   content: string;
+  /** Best current-file line to focus when this diff target is opened for editing. */
+  editLineNumber?: number;
   sourceRevision?: string;
 }
 
@@ -106,6 +108,7 @@ function toReviewTarget(cell: NumberedDiffCell): ReviewableDiffTarget {
     lineNumber: cell.lineNumber,
     lineType: cell.lineType,
     content: cell.content,
+    ...(cell.editLineNumber ? { editLineNumber: cell.editLineNumber } : {}),
     ...(cell.sourceRevision ? { sourceRevision: cell.sourceRevision } : {}),
   };
 }
@@ -126,6 +129,9 @@ export function buildNumberedDiffHunks(file: ParsedDiffFile): NumberedDiffHunk[]
     for (const [lineIndex, line] of hunk.lines.entries()) {
       let oldLineNumber: number | null = null;
       let newLineNumber: number | null = null;
+      const currentEditLineNumber = file.isDeleted
+        ? undefined
+        : Math.max(1, Math.min(newLineNo, file.newLineCount ?? newLineNo));
 
       if (line.type === "remove") {
         oldLineNumber = oldLineNo;
@@ -149,6 +155,8 @@ export function buildNumberedDiffHunks(file: ParsedDiffFile): NumberedDiffHunk[]
         oldLineNumber,
         newLineNumber,
         side: "old",
+        editLineNumber:
+          line.type === "remove" ? currentEditLineNumber : (newLineNumber ?? undefined),
         sourceRevision: file.revision,
       });
       const newCell = buildNumberedCell({
@@ -160,6 +168,7 @@ export function buildNumberedDiffHunks(file: ParsedDiffFile): NumberedDiffHunk[]
         oldLineNumber,
         newLineNumber,
         side: "new",
+        editLineNumber: newLineNumber ?? undefined,
         sourceRevision: file.revision,
       });
 
@@ -193,6 +202,7 @@ function buildNumberedCell(input: {
   oldLineNumber: number | null;
   newLineNumber: number | null;
   side: ReviewSide;
+  editLineNumber?: number;
   sourceRevision?: string;
 }): NumberedDiffCell | null {
   if (input.line.type === "header") {
@@ -226,6 +236,7 @@ function buildNumberedCell(input: {
     lineNumber,
     lineType: input.line.type,
     content: input.line.content,
+    ...(input.editLineNumber ? { editLineNumber: input.editLineNumber } : {}),
     ...(input.sourceRevision ? { sourceRevision: input.sourceRevision } : {}),
     line: input.line,
   };

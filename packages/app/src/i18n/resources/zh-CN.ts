@@ -782,6 +782,14 @@ export const zhCN: TranslationResources = {
       diff: {
         openChangesTab: "打开“更改”标签页",
         closeChangesTab: "关闭“更改”标签页",
+        fileNavigator: "文件",
+        showFileNavigator: "显示文件导航器",
+        hideFileNavigator: "隐藏文件导航器",
+        fileStatus: {
+          added: "已添加",
+          deleted: "已删除",
+          modified: "已修改",
+        },
         binaryFile: "二进制文件",
         tooLarge: "Diff 过大，无法显示",
         previewTooLargeTitle: "此 diff 过大，无法预览",
@@ -799,6 +807,7 @@ export const zhCN: TranslationResources = {
         wrapLongLines: "自动换行长行",
         collapseAll: "折叠所有文件",
         expandAll: "展开所有文件",
+        expandUnreviewed: "展开未审阅文件并折叠已审阅文件",
         collapseAllFolders: "折叠所有文件夹",
         expandAllFolders: "展开所有文件夹",
         refreshing: "正在刷新",
@@ -828,6 +837,11 @@ export const zhCN: TranslationResources = {
         clearAllReviewed: "清除所有已审阅标记",
         reviewUpdateHost: "更新主机以标记已审阅文件",
         reviewBranchRequired: "签出一个分支以标记已审阅文件",
+        markLineReviewed: "将第 {{line}} 行标记为已审阅",
+        markLineUnreviewed: "将第 {{line}} 行标记为未审阅",
+        editLineUnavailable: "无法在内置编辑器中打开此行",
+        noUncheckedLines: "该方向没有未审阅的行",
+        lineReviewShortcuts: "M / , 审阅并移动 · 空格切换 · E 编辑 · U 撤销 · Esc 清除",
         context: {
           hiddenLines: "{{count}} 行已隐藏",
           expandUp: "显示上方 20 行",
@@ -1661,6 +1675,10 @@ export const zhCN: TranslationResources = {
     accessibility: "上下文窗口已使用 {{percentage}}%",
   },
   review: {
+    composer: {
+      comment: "评论",
+      codeChange: "代码更改",
+    },
     comment: {
       add: "添加 review 评论",
       edit: "编辑 review 评论",

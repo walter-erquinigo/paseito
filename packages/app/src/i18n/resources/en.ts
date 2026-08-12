@@ -800,6 +800,14 @@ export const en = {
       diff: {
         openChangesTab: "Open Changes tab",
         closeChangesTab: "Close Changes tab",
+        fileNavigator: "Files",
+        showFileNavigator: "Show file navigator",
+        hideFileNavigator: "Hide file navigator",
+        fileStatus: {
+          added: "Added",
+          deleted: "Deleted",
+          modified: "Modified",
+        },
         binaryFile: "Binary file",
         tooLarge: "Diff too large to display",
         previewTooLargeTitle: "This diff is too large to preview",
@@ -817,6 +825,7 @@ export const en = {
         wrapLongLines: "Wrap long lines",
         collapseAll: "Collapse all files",
         expandAll: "Expand all files",
+        expandUnreviewed: "Expand unreviewed files and collapse reviewed files",
         collapseAllFolders: "Collapse all folders",
         expandAllFolders: "Expand all folders",
         refreshing: "Refreshing",
@@ -846,6 +855,11 @@ export const en = {
         clearAllReviewed: "Clear all reviewed files",
         reviewUpdateHost: "Update the host to mark files reviewed",
         reviewBranchRequired: "Check out a branch to mark files reviewed",
+        markLineReviewed: "Mark line {{line}} reviewed",
+        markLineUnreviewed: "Mark line {{line}} unreviewed",
+        editLineUnavailable: "This line cannot be opened in the built-in editor",
+        noUncheckedLines: "No unchecked lines remain in that direction",
+        lineReviewShortcuts: "M / , approve and move · Space toggle · E edit · U undo · Esc clear",
         context: {
           hiddenLines: "{{count}} hidden lines",
           expandUp: "Show 20 lines above",
@@ -1692,6 +1706,10 @@ export const en = {
     accessibility: "Context window {{percentage}}% used",
   },
   review: {
+    composer: {
+      comment: "Comment",
+      codeChange: "Code change",
+    },
     comment: {
       add: "Add review comment",
       edit: "Edit review comment",

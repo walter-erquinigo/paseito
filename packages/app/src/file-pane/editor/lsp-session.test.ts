@@ -107,4 +107,31 @@ describe("EditorLspSession", () => {
     await expect(session.hover({ line: 0, character: 4 })).resolves.toBeNull();
     expect(statuses).toEqual(["connecting", "ready"]);
   });
+
+  test("a transient hover timeout does not permanently disable the session", async () => {
+    let hoverAttempts = 0;
+    const requestWorkspaceLsp = vi.fn(async (request: { operation: { kind: string } }) => {
+      if (request.operation.kind !== "hover") return { kind: "ack" } as const;
+      hoverAttempts += 1;
+      if (hoverAttempts === 1) throw new Error("hover timed out");
+      return {
+        kind: "hover",
+        hover: { contents: { kind: "plaintext", value: "int answer" } },
+      } as const;
+    });
+    const statuses: string[] = [];
+    const session = new EditorLspSession({
+      client: { requestWorkspaceLsp } as unknown as DaemonClient,
+      cwd: "/repo",
+      path: "main.cpp",
+      onStatus: (status) => statuses.push(status),
+    });
+
+    await session.open("int answer;\n");
+    await expect(session.hover({ line: 0, character: 4 })).resolves.toBeNull();
+    await expect(session.hover({ line: 0, character: 4 })).resolves.toMatchObject({
+      contents: { value: "int answer" },
+    });
+    expect(statuses).toEqual(["connecting", "ready"]);
+  });
 });

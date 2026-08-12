@@ -821,6 +821,14 @@ export const es: TranslationResources = {
       diff: {
         openChangesTab: "Abrir la pestaña Cambios",
         closeChangesTab: "Cerrar la pestaña Cambios",
+        fileNavigator: "Archivos",
+        showFileNavigator: "Mostrar navegador de archivos",
+        hideFileNavigator: "Ocultar navegador de archivos",
+        fileStatus: {
+          added: "Añadido",
+          deleted: "Eliminado",
+          modified: "Modificado",
+        },
         binaryFile: "archivo binario",
         tooLarge: "La diferencia es demasiado grande para mostrarse",
         previewTooLargeTitle: "Este diff es demasiado grande para previsualizarlo",
@@ -838,6 +846,7 @@ export const es: TranslationResources = {
         wrapLongLines: "Envolver largas filas",
         collapseAll: "Contraer todos los archivos",
         expandAll: "Expandir todos los archivos",
+        expandUnreviewed: "Expandir archivos sin revisar y contraer archivos revisados",
         collapseAllFolders: "Contraer todas las carpetas",
         expandAllFolders: "Expandir todas las carpetas",
         refreshing: "Refrescante",
@@ -867,6 +876,12 @@ export const es: TranslationResources = {
         clearAllReviewed: "Desmarcar todos los archivos revisados",
         reviewUpdateHost: "Actualiza el host para marcar archivos como revisados",
         reviewBranchRequired: "Cambia a una rama para marcar archivos como revisados",
+        markLineReviewed: "Marcar la línea {{line}} como revisada",
+        markLineUnreviewed: "Marcar la línea {{line}} como no revisada",
+        editLineUnavailable: "Esta línea no se puede abrir en el editor integrado",
+        noUncheckedLines: "No quedan líneas sin revisar en esa dirección",
+        lineReviewShortcuts:
+          "M / , aprobar y mover · Espacio alternar · E editar · U deshacer · Esc borrar",
         context: {
           hiddenLines: "{{count}} líneas ocultas",
           expandUp: "Mostrar 20 líneas anteriores",
@@ -1724,6 +1739,10 @@ export const es: TranslationResources = {
     accessibility: "Ventana de contexto{{percentage}}% utilizada",
   },
   review: {
+    composer: {
+      comment: "Comentario",
+      codeChange: "Cambio de código",
+    },
     comment: {
       add: "Agregar comentario de revisión",
       edit: "Editar comentario de revisión",

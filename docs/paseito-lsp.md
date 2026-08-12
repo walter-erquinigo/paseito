@@ -1,22 +1,28 @@
 # Paseito editor LSP
 
-Paseito's source-file editor can attach to the language server already owned by Lens. The first
-supported languages are C/C++ and Python. The initial surface provides diagnostics, automatic and
-manual completion, hover, go-to-definition, and optional format-on-save.
+Paseito's source-file editor uses the language server already owned by Lens when one is available.
+When Lens is absent, C and C++ workspaces fall back to one daemon-owned clangd process. Python still
+requires Lens. The editor surface provides diagnostics, automatic and manual completion, hover,
+go-to-definition, and optional format-on-save.
 
 ## Ownership and transport
 
-Lens remains the only owner of the language-server process. Its extension publishes the existing
-in-process LSP service through a versioned NDJSON Unix socket (or Windows named pipe) with a stable
-endpoint derived from the workspace. Paseito's daemon is only a transport bridge:
+Lens owns the language-server process whenever its extension publishes the existing in-process LSP
+service through a versioned NDJSON Unix socket (or Windows named pipe). The endpoint is derived from
+the workspace. Paseito's daemon selects that transport when present and owns the clangd fallback
+otherwise:
 
 ```text
 CodeMirror editor -> Paseito WebSocket RPC -> Paseito daemon -> Lens broker -> Lens LSPService
+                                                  \-> clangd stdio fallback
 ```
 
-Paseito never starts a Lens service. If Lens is not active for the workspace, only editor LSP is
-marked unavailable; editing and saving continue normally. This attach-only rule prevents a second
-clangd or Python server from appearing when Lens starts after Paseito.
+Paseito never starts a Lens service. It probes the workspace's Lens broker first. If the broker is
+absent and the opened document is C or C++, the daemon starts clangd in the workspace, reuses that
+process across connected editor sessions, and stops it after the final lease closes. If
+`compile_commands.json` exists at the workspace root it is used; otherwise
+`build/compile_commands.json` is selected automatically. Other languages remain unavailable when
+Lens is absent, while editing and saving continue normally.
 
 The broker restricts paths to its workspace, uses a mode-0600 Unix socket, gives an open document to
 one connected client, and rejects non-monotonic document versions. A disconnected client releases
@@ -31,8 +37,14 @@ buffer. Formatting is applied once before the file write and never creates an ex
 
 The CodeMirror integration is isolated in one reconfigurable compartment. Turning LSP off removes
 the completion, hover, definition, diagnostics, and formatting integration without replacing the
-editor or affecting file editing. The daemon advertises `features.workspaceLsp`; older daemons do
-not expose the controls.
+editor or affecting file editing. In Electron, right-clicking a source token adds a native **Go to
+Definition / Declaration** action while preserving the ordinary cut, copy, paste, and select-all
+actions. `F12` and Command/Ctrl-click use the same definition request. The daemon advertises
+`features.workspaceLsp`; older daemons do not expose the controls.
+
+Hover and definition requests allow 15 seconds for large C++ workspaces that are still building a
+background index. A timeout returns no result for that interaction but does not permanently disable
+an otherwise healthy editor session; later requests can succeed as clangd warms up.
 
 ## Compatibility boundary
 

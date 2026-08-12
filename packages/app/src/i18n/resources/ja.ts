@@ -801,6 +801,14 @@ export const ja: TranslationResources = {
       diff: {
         openChangesTab: "変更タブを開く",
         closeChangesTab: "変更タブを閉じる",
+        fileNavigator: "ファイル",
+        showFileNavigator: "ファイルナビゲーターを表示",
+        hideFileNavigator: "ファイルナビゲーターを非表示",
+        fileStatus: {
+          added: "追加",
+          deleted: "削除",
+          modified: "変更",
+        },
         binaryFile: "バイナリファイル",
         tooLarge: "差分が大きすぎて表示できません",
         previewTooLargeTitle: "この差分は大きすぎるためプレビューできません",
@@ -818,6 +826,7 @@ export const ja: TranslationResources = {
         wrapLongLines: "長い行を折り返す",
         collapseAll: "すべて折りたたむ",
         expandAll: "すべて展開",
+        expandUnreviewed: "未レビューのファイルを展開し、レビュー済みのファイルを折りたたむ",
         collapseAllFolders: "すべてのフォルダを折りたたむ",
         expandAllFolders: "すべてのフォルダを展開",
         refreshing: "更新中",
@@ -848,6 +857,11 @@ export const ja: TranslationResources = {
         reviewUpdateHost: "ファイルをレビュー済みにするにはホストを更新してください",
         reviewBranchRequired:
           "ファイルをレビュー済みにするにはブランチをチェックアウトしてください",
+        markLineReviewed: "{{line}}行目をレビュー済みにする",
+        markLineUnreviewed: "{{line}}行目を未レビューにする",
+        editLineUnavailable: "この行は内蔵エディターで開けません",
+        noUncheckedLines: "この方向に未レビューの行はありません",
+        lineReviewShortcuts: "M / , 承認して移動 · Space 切替 · E 編集 · U 元に戻す · Esc 解除",
         context: {
           hiddenLines: "非表示の {{count}} 行",
           expandUp: "上の20行を表示",
@@ -1698,6 +1712,10 @@ export const ja: TranslationResources = {
     accessibility: "コンテキストウィンドウ{{percentage}}%使用",
   },
   review: {
+    composer: {
+      comment: "コメント",
+      codeChange: "コード変更",
+    },
     comment: {
       add: "レビューコメントを追加",
       edit: "レビューコメントを編集",

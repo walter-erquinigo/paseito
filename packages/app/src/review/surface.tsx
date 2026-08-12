@@ -60,8 +60,8 @@ function getWebTextInputElement(input: TextInput | null): HTMLElement | null {
 }
 
 export const INLINE_REVIEW_COMMENT_HEIGHT = 72;
-export const INLINE_REVIEW_EDITOR_HEIGHT = 132;
-export const INLINE_SUGGESTION_EDITOR_HEIGHT = 280;
+export const INLINE_REVIEW_EDITOR_HEIGHT = 168;
+export const INLINE_SUGGESTION_EDITOR_HEIGHT = 316;
 export const INLINE_SUGGESTION_HEIGHT = 112;
 const INLINE_REVIEW_GAP = 6;
 export const SMALL_ACTION_HIT_SLOP = 8;
@@ -101,6 +101,7 @@ interface InlineSuggestionSelectionState {
 
 export interface InlineReviewActions {
   canSuggest: boolean;
+  composerMode: "comment" | "suggestion" | null;
   commentsByTarget: ReadonlyMap<string, ReviewDraftComment[]>;
   editor: InlineReviewEditorState | null;
   suggestionsByTarget: ReadonlyMap<string, ReviewDraftSuggestion[]>;
@@ -112,7 +113,8 @@ export interface InlineReviewActions {
   onCancelEditor: () => void;
   onSaveEditor: (body: string) => void;
   onDeleteComment: (id: string) => void;
-  onStartSuggestion: (target: ReviewableDiffTarget) => void;
+  onStartSuggestion: (target: ReviewableDiffTarget, note?: string) => void;
+  onSwitchSuggestionToComment: (replacement: string, note: string) => void;
   onBeginSuggestionDrag: (target: ReviewableDiffTarget) => void;
   onUpdateSuggestionDrag: (target: ReviewableDiffTarget) => void;
   onShiftSuggestionRange: (target: ReviewableDiffTarget) => void;
@@ -174,6 +176,7 @@ export function useInlineReviewController(input: {
   const [suggestionEditor, setSuggestionEditor] = useState<InlineSuggestionEditorState | null>(
     null,
   );
+  const [composerMode, setComposerMode] = useState<"comment" | "suggestion" | null>(null);
   const [suggestionSelection, setSuggestionSelectionState] =
     useState<InlineSuggestionSelectionState | null>(null);
   const suggestionSelectionRef = useRef<InlineSuggestionSelectionState | null>(null);
@@ -193,6 +196,7 @@ export function useInlineReviewController(input: {
   useEffect(() => {
     setEditor(null);
     setSuggestionEditor(null);
+    setComposerMode(null);
     suggestionSelectionRef.current = null;
     setSuggestionSelectionState(null);
     setSuggestionRangeError(null);
@@ -222,17 +226,18 @@ export function useInlineReviewController(input: {
   }, []);
 
   const openSuggestionEditor = useCallback(
-    (targets: ReviewableDiffTarget[]) => {
+    (targets: ReviewableDiffTarget[], note = "", preserveComment = false) => {
       const first = targets[0];
       if (!first?.sourceRevision) return;
-      setEditor(null);
+      if (!preserveComment) setEditor(null);
       setSuggestionEditor({
         targets,
         suggestionId: null,
         replacement: targets.map(editableSuggestionTargetContent).join("\n"),
-        note: "",
+        note,
         sourceRevision: first.sourceRevision,
       });
+      setComposerMode("suggestion");
       setSuggestionSelection(null);
     },
     [setSuggestionSelection],
@@ -261,19 +266,24 @@ export function useInlineReviewController(input: {
       setSuggestionEditor(null);
       setSuggestionSelection(null);
       setEditor({ target, commentId: null, body: "" });
+      setComposerMode("comment");
     },
     [setSuggestionSelection],
   );
 
   const handleEditComment = useCallback(
     (target: ReviewableDiffTarget, comment: ReviewDraftComment) => {
+      setSuggestionEditor(null);
       setEditor({ target, commentId: comment.id, body: comment.body });
+      setComposerMode("comment");
     },
     [],
   );
 
   const handleCancelEditor = useCallback(() => {
     setEditor(null);
+    setSuggestionEditor(null);
+    setComposerMode(null);
   }, []);
 
   const handleSaveEditor = useCallback(
@@ -301,6 +311,8 @@ export function useInlineReviewController(input: {
         });
       }
       setEditor(null);
+      setSuggestionEditor(null);
+      setComposerMode(null);
     },
     [addComment, editor, input.reviewDraftKey, updateComment],
   );
@@ -314,11 +326,39 @@ export function useInlineReviewController(input: {
   );
 
   const handleStartSuggestion = useCallback(
-    (target: ReviewableDiffTarget) => {
+    (target: ReviewableDiffTarget, note = "") => {
       if (!input.suggestionsSupported || !isSuggestibleTarget(target)) return;
-      openSuggestionEditor([target]);
+      if (
+        suggestionEditor &&
+        suggestionEditor.suggestionId === null &&
+        suggestionEditor.targets.at(-1)?.key === target.key
+      ) {
+        setEditor((current) => (current ? { ...current, body: note } : current));
+        setSuggestionEditor({ ...suggestionEditor, note });
+        setComposerMode("suggestion");
+        return;
+      }
+      const preserveComment = Boolean(
+        editor && editor.commentId === null && editor.target.key === target.key,
+      );
+      if (preserveComment) setEditor((current) => (current ? { ...current, body: note } : current));
+      openSuggestionEditor([target], note, preserveComment);
     },
-    [input.suggestionsSupported, openSuggestionEditor],
+    [editor, input.suggestionsSupported, openSuggestionEditor, suggestionEditor],
+  );
+
+  const handleSwitchSuggestionToComment = useCallback(
+    (replacement: string, note: string) => {
+      if (!suggestionEditor || suggestionEditor.suggestionId) return;
+      const target = suggestionEditor.targets.at(-1);
+      if (!target) return;
+      setSuggestionEditor({ ...suggestionEditor, replacement, note });
+      setEditor((current) =>
+        current ? { ...current, body: note } : { target, commentId: null, body: note },
+      );
+      setComposerMode("comment");
+    },
+    [suggestionEditor],
   );
 
   const handleBeginSuggestionDrag = useCallback(
@@ -327,6 +367,7 @@ export function useInlineReviewController(input: {
       setSuggestionRangeError(null);
       setEditor(null);
       setSuggestionEditor(null);
+      setComposerMode(null);
       setSuggestionSelection({ kind: "drag", anchor: target, focus: target, moved: false });
     },
     [input.suggestionsSupported, setSuggestionSelection],
@@ -364,6 +405,7 @@ export function useInlineReviewController(input: {
       setSuggestionRangeError(null);
       setEditor(null);
       setSuggestionEditor(null);
+      setComposerMode(null);
       setSuggestionSelection({ kind: "shift", anchor: target, focus: target, moved: false });
     },
     [
@@ -460,6 +502,7 @@ export function useInlineReviewController(input: {
         note: suggestion.note,
         sourceRevision: suggestion.sourceRevision,
       });
+      setComposerMode("suggestion");
     },
     [input.availableTargets],
   );
@@ -534,6 +577,8 @@ export function useInlineReviewController(input: {
         });
       }
       setSuggestionEditor(null);
+      setEditor(null);
+      setComposerMode(null);
     },
     [addSuggestion, input.reviewDraftKey, suggestionEditor, updateSuggestion],
   );
@@ -546,7 +591,9 @@ export function useInlineReviewController(input: {
     [deleteSuggestion, input.reviewDraftKey],
   );
   const handleCancelSuggestion = useCallback(() => {
+    setEditor(null);
     setSuggestionEditor(null);
+    setComposerMode(null);
     setSuggestionSelection(null);
   }, [setSuggestionSelection]);
 
@@ -560,7 +607,7 @@ export function useInlineReviewController(input: {
   }, [input.availableTargets, setSuggestionSelection]);
 
   const selectedSuggestionTargetKeys = useMemo<ReadonlySet<string>>(() => {
-    if (suggestionEditor) {
+    if (composerMode === "suggestion" && suggestionEditor) {
       return new Set(suggestionEditor.targets.map((target) => target.key));
     }
     if (!suggestionSelection) return new Set();
@@ -571,12 +618,13 @@ export function useInlineReviewController(input: {
     });
     if (result.ok) return new Set(result.targets.map((target) => target.key));
     return new Set([suggestionSelection.anchor.key, suggestionSelection.focus.key]);
-  }, [input.availableTargets, suggestionEditor, suggestionSelection]);
+  }, [composerMode, input.availableTargets, suggestionEditor, suggestionSelection]);
 
   return useMemo<InlineReviewActions>(
     () => ({
       commentsByTarget,
       canSuggest: input.suggestionsSupported === true,
+      composerMode,
       editor,
       suggestionsByTarget,
       suggestionEditor,
@@ -588,6 +636,7 @@ export function useInlineReviewController(input: {
       onSaveEditor: handleSaveEditor,
       onDeleteComment: handleDeleteComment,
       onStartSuggestion: handleStartSuggestion,
+      onSwitchSuggestionToComment: handleSwitchSuggestionToComment,
       onBeginSuggestionDrag: handleBeginSuggestionDrag,
       onUpdateSuggestionDrag: handleUpdateSuggestionDrag,
       onShiftSuggestionRange: handleShiftSuggestionRange,
@@ -603,6 +652,7 @@ export function useInlineReviewController(input: {
     [
       commentsByTarget,
       input.suggestionsSupported,
+      composerMode,
       editor,
       suggestionsByTarget,
       suggestionEditor,
@@ -614,6 +664,7 @@ export function useInlineReviewController(input: {
       handleSaveEditor,
       handleStartComment,
       handleStartSuggestion,
+      handleSwitchSuggestionToComment,
       handleBeginSuggestionDrag,
       handleUpdateSuggestionDrag,
       handleShiftSuggestionRange,
@@ -640,6 +691,26 @@ export function isInlineReviewEditorForTarget(
   );
 }
 
+function activeCommentEditorForTarget(
+  reviewActions: InlineReviewActions,
+  reviewTarget: ReviewableDiffTarget,
+): InlineReviewEditorState | null {
+  if (reviewActions.composerMode !== "comment") return null;
+  return isInlineReviewEditorForTarget(reviewActions.editor, reviewTarget)
+    ? reviewActions.editor
+    : null;
+}
+
+function activeSuggestionEditorForTarget(
+  reviewActions: InlineReviewActions,
+  reviewTarget: ReviewableDiffTarget,
+): InlineSuggestionEditorState | null {
+  if (reviewActions.composerMode !== "suggestion") return null;
+  return reviewActions.suggestionEditor?.targets.at(-1)?.key === reviewTarget.key
+    ? reviewActions.suggestionEditor
+    : null;
+}
+
 export function getInlineReviewThreadState(input: {
   reviewTarget: ReviewableDiffTarget | null | undefined;
   reviewActions?: InlineReviewActions;
@@ -659,18 +730,13 @@ export function getInlineReviewThreadState(input: {
 
   const comments = reviewActions.commentsByTarget.get(reviewTarget.key) ?? [];
   const suggestions = reviewActions.suggestionsByTarget.get(reviewTarget.key) ?? [];
-  const editorForTarget = isInlineReviewEditorForTarget(reviewActions.editor, reviewTarget)
-    ? reviewActions.editor
-    : null;
+  const editorForTarget = activeCommentEditorForTarget(reviewActions, reviewTarget);
   const hasEditor = editorForTarget !== null;
   const editingCommentId = editorForTarget?.commentId ?? null;
   const editingExisting =
     editingCommentId !== null && comments.some((comment) => comment.id === editingCommentId);
 
-  const suggestionEditorForTarget =
-    reviewActions.suggestionEditor?.targets.at(-1)?.key === reviewTarget.key
-      ? reviewActions.suggestionEditor
-      : null;
+  const suggestionEditorForTarget = activeSuggestionEditorForTarget(reviewActions, reviewTarget);
   const hasSuggestionEditor = suggestionEditorForTarget !== null;
   const editingSuggestionId = suggestionEditorForTarget?.suggestionId ?? null;
   const editingExistingSuggestion =
@@ -741,6 +807,7 @@ export function InlineReviewGutterCell({
   reviewActions,
   style,
   actionTestID,
+  testID,
 }: {
   children: ReactNode;
   reviewTarget: ReviewableDiffTarget | null | undefined;
@@ -752,6 +819,7 @@ export function InlineReviewGutterCell({
   reviewActions?: InlineReviewActions;
   style?: StyleProp<ViewStyle>;
   actionTestID?: string;
+  testID?: string;
 }) {
   const { t } = useTranslation();
   const canComment = Boolean(reviewTarget);
@@ -879,6 +947,7 @@ export function InlineReviewGutterCell({
       onPressIn={handlePressIn}
       onPressOut={handlePressOut}
       style={pressableStyle}
+      testID={testID}
     >
       <View style={innerStyle}>
         <View style={labelStyle}>
@@ -911,19 +980,14 @@ export function InlineReviewThread({
 }) {
   const comments = reviewActions.commentsByTarget.get(reviewTarget.key) ?? [];
   const suggestions = reviewActions.suggestionsByTarget.get(reviewTarget.key) ?? [];
-  const editor = isInlineReviewEditorForTarget(reviewActions.editor, reviewTarget)
-    ? reviewActions.editor
-    : null;
+  const editor = activeCommentEditorForTarget(reviewActions, reviewTarget);
   const handleSuggestEdit = useCallback(
-    () => reviewActions.onStartSuggestion(reviewTarget),
+    (note: string) => reviewActions.onStartSuggestion(reviewTarget, note),
     [reviewActions, reviewTarget],
   );
   const canStartSuggestion =
     reviewActions.canSuggest && editor?.commentId === null && isSuggestibleTarget(reviewTarget);
-  const suggestionEditor =
-    reviewActions.suggestionEditor?.targets.at(-1)?.key === reviewTarget.key
-      ? reviewActions.suggestionEditor
-      : null;
+  const suggestionEditor = activeSuggestionEditorForTarget(reviewActions, reviewTarget);
   const containerStyle = useMemo<StyleProp<ViewStyle>>(
     () => [
       styles.threadContainer,
@@ -961,7 +1025,7 @@ function InlineCommentBlocks({
 }: {
   comments: ReviewDraftComment[];
   editor: InlineReviewEditorState | null;
-  onSuggestEdit?: () => void;
+  onSuggestEdit?: (body: string) => void;
   reviewTarget: ReviewableDiffTarget;
   reviewActions: InlineReviewActions;
 }) {
@@ -1015,6 +1079,9 @@ function InlineSuggestionBlocks({
       onCancel={reviewActions.onCancelSuggestion}
       onExtend={reviewActions.onExtendSuggestion}
       onSave={reviewActions.onSaveSuggestion}
+      onSwitchToComment={
+        editor.suggestionId ? undefined : reviewActions.onSwitchSuggestionToComment
+      }
     />
   ) : null;
   const blocks = suggestions.map((suggestion) => {
@@ -1139,16 +1206,68 @@ function SuggestionRow({
   );
 }
 
+function ReviewComposerTabs({
+  mode,
+  onSelect,
+}: {
+  mode: "comment" | "suggestion";
+  onSelect: (mode: "comment" | "suggestion") => void;
+}) {
+  const { t } = useTranslation();
+  const selectComment = useCallback(() => onSelect("comment"), [onSelect]);
+  const selectSuggestion = useCallback(() => onSelect("suggestion"), [onSelect]);
+  const commentAccessibilityState = useMemo(() => ({ selected: mode === "comment" }), [mode]);
+  const suggestionAccessibilityState = useMemo(() => ({ selected: mode === "suggestion" }), [mode]);
+  return (
+    <View
+      accessibilityRole="tablist"
+      style={styles.composerTabs}
+      testID="inline-review-composer-tabs"
+    >
+      <Pressable
+        accessibilityRole="tab"
+        accessibilityLabel={t("review.composer.comment")}
+        accessibilityState={commentAccessibilityState}
+        aria-selected={mode === "comment"}
+        onPress={selectComment}
+        style={[styles.composerTab, mode === "comment" && styles.composerTabSelected]}
+      >
+        <Text
+          style={[styles.composerTabText, mode === "comment" && styles.composerTabTextSelected]}
+        >
+          {t("review.composer.comment")}
+        </Text>
+      </Pressable>
+      <Pressable
+        accessibilityRole="tab"
+        accessibilityLabel={t("review.composer.codeChange")}
+        accessibilityState={suggestionAccessibilityState}
+        aria-selected={mode === "suggestion"}
+        onPress={selectSuggestion}
+        style={[styles.composerTab, mode === "suggestion" && styles.composerTabSelected]}
+      >
+        <Text
+          style={[styles.composerTabText, mode === "suggestion" && styles.composerTabTextSelected]}
+        >
+          {t("review.composer.codeChange")}
+        </Text>
+      </Pressable>
+    </View>
+  );
+}
+
 function InlineSuggestionEditor({
   editor,
   onCancel,
   onExtend,
   onSave,
+  onSwitchToComment,
 }: {
   editor: InlineSuggestionEditorState;
   onCancel: () => void;
   onExtend: (direction: "up" | "down") => void;
   onSave: (replacement: string, note: string) => void;
+  onSwitchToComment?: (replacement: string, note: string) => void;
 }) {
   const { t } = useTranslation();
   const original = editor.targets.map(editableSuggestionTargetContent).join("\n");
@@ -1160,8 +1279,17 @@ function InlineSuggestionEditor({
   const extendUp = useCallback(() => onExtend("up"), [onExtend]);
   const extendDown = useCallback(() => onExtend("down"), [onExtend]);
   const handleSave = useCallback(() => onSave(replacement, note), [note, onSave, replacement]);
+  const handleSelectMode = useCallback(
+    (mode: "comment" | "suggestion") => {
+      if (mode === "comment") onSwitchToComment?.(replacement, note);
+    },
+    [note, onSwitchToComment, replacement],
+  );
   return (
     <View style={styles.suggestionEditorBlock} testID="inline-suggestion-editor">
+      {onSwitchToComment ? (
+        <ReviewComposerTabs mode="suggestion" onSelect={handleSelectMode} />
+      ) : null}
       <View style={styles.suggestionEditorHeader}>
         <ThemedCode2 size={14} uniProps={foregroundMutedIconColorMapping} />
         <Text style={styles.suggestionLabel}>
@@ -1234,7 +1362,7 @@ export function InlineReviewEditor({
   initialBody: string;
   onCancel: () => void;
   onSave: (body: string) => void;
-  onSuggestEdit?: () => void;
+  onSuggestEdit?: (body: string) => void;
   testID?: string;
 }) {
   const { t } = useTranslation();
@@ -1260,6 +1388,12 @@ export function InlineReviewEditor({
     focus.restore();
   }, [focus]);
   const handleSave = useCallback(() => onSave(trimmedBody), [onSave, trimmedBody]);
+  const handleSelectMode = useCallback(
+    (mode: "comment" | "suggestion") => {
+      if (mode === "suggestion") onSuggestEdit?.(body);
+    },
+    [body, onSuggestEdit],
+  );
   const cancelShortcut = useMemo(
     () => (showKeyboardHints ? <Shortcut keys={REVIEW_CANCEL_SHORTCUT_KEYS} /> : null),
     [showKeyboardHints],
@@ -1310,6 +1444,7 @@ export function InlineReviewEditor({
 
   return (
     <View style={styles.editorBlock} testID={testID}>
+      {onSuggestEdit ? <ReviewComposerTabs mode="comment" onSelect={handleSelectMode} /> : null}
       <TextInput
         ref={inputRef}
         accessibilityLabel={t("review.comment.label")}
@@ -1324,16 +1459,6 @@ export function InlineReviewEditor({
         style={inputStyle}
       />
       <View style={styles.editorActions}>
-        {onSuggestEdit ? (
-          <Button
-            accessibilityLabel={t("review.suggestion.start")}
-            onPress={onSuggestEdit}
-            variant="ghost"
-            size="xs"
-          >
-            {t("review.suggestion.start")}
-          </Button>
-        ) : null}
         <Button
           accessibilityLabel={t("review.comment.cancelAccessibility")}
           testID={testID ? `${testID}-cancel` : undefined}
@@ -1403,6 +1528,29 @@ const styles = StyleSheet.create((theme) => ({
     gap: INLINE_REVIEW_GAP,
     paddingVertical: theme.spacing[2],
     paddingHorizontal: theme.spacing[3],
+  },
+  composerTabs: {
+    flexDirection: "row",
+    alignSelf: "flex-start",
+    gap: theme.spacing[1],
+    padding: 2,
+    borderRadius: theme.borderRadius.md,
+    backgroundColor: theme.colors.surface1,
+  },
+  composerTab: {
+    paddingHorizontal: theme.spacing[2],
+    paddingVertical: theme.spacing[1],
+    borderRadius: theme.borderRadius.base,
+  },
+  composerTabSelected: {
+    backgroundColor: theme.colors.surface3,
+  },
+  composerTabText: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.xs,
+  },
+  composerTabTextSelected: {
+    color: theme.colors.foreground,
   },
   commentBlock: {
     backgroundColor: theme.colors.surface2,

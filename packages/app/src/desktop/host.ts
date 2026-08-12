@@ -88,7 +88,9 @@ export interface DesktopWebUtilsBridge {
 }
 
 export interface DesktopMenuBridge {
-  showContextMenu?: (input?: { kind?: "terminal"; hasSelection?: boolean }) => Promise<void>;
+  showContextMenu?: (
+    input?: { kind?: "terminal"; hasSelection?: boolean } | { kind: "editor-lsp" },
+  ) => Promise<"go-to-definition" | null | void>;
   setCapturingShortcut?: (capturing: boolean) => Promise<void>;
 }
 
