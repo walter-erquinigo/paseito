@@ -13,10 +13,12 @@ from unittest.mock import patch
 from semantic_sync import (
     SyncError,
     codex_environment,
+    complete_deferred_browser_contracts,
     conflict_prompt,
     controller_skill_path,
     rebase_candidate,
     reconciliation_prompt,
+    reconciliation_retry_prompt,
     review_prompt,
     validate_artifacts,
 )
@@ -170,6 +172,79 @@ class SemanticSyncTests(unittest.TestCase):
         )
         self.assertIn("Run every registry contract as its own command", prompt)
         self.assertIn("Do not combine contracts", prompt)
+        self.assertIn("loopback-listener EPERM", prompt)
+        self.assertIn("run npm run typecheck", prompt)
+
+    def test_reconciliation_retry_keeps_identity_and_surfaces_previous_blockers(self) -> None:
+        values = {
+            "old_upstream_commit": "a" * 40,
+            "upstream_tag": "v1.0.0",
+            "upstream_commit": "b" * 40,
+        }
+        prompt = reconciliation_retry_prompt(
+            values,
+            "c" * 40,
+            {"blockers": ["typecheck failed"]},
+            2,
+        )
+        self.assertIn("repair attempt 2", prompt)
+        self.assertIn("typecheck failed", prompt)
+        self.assertIn("complete decision for every registry feature", prompt)
+
+    def test_controller_completes_only_exact_deferred_browser_contracts(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            registry = root / "registry.json"
+            browser_command = (
+                "npm run test:e2e --workspace=@getpaseo/app -- e2e/browser-proof.spec.ts"
+            )
+            registry.write_text(
+                json.dumps(
+                    {
+                        "features": [
+                            {"id": "browser-proof", "contracts": [browser_command, "npm run typecheck"]}
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            decision = {
+                "features": [
+                    {
+                        "id": "browser-proof",
+                        "contractChecks": [{"command": browser_command, "result": "not_run"}],
+                    }
+                ]
+            }
+            log = root / "evidence.jsonl"
+            completed = subprocess.CompletedProcess([], 0, stdout="1 passed\n", stderr="")
+            with patch("semantic_sync.command", return_value=completed) as invoked:
+                complete_deferred_browser_contracts(root, decision, registry, log)
+            invoked.assert_called_once_with(
+                [
+                    "npm",
+                    "run",
+                    "test:e2e",
+                    "--workspace=@getpaseo/app",
+                    "--",
+                    "e2e/browser-proof.spec.ts",
+                ],
+                cwd=root,
+                check=False,
+                timeout=1800,
+            )
+            self.assertEqual(
+                decision["features"][0]["contractChecks"][0]["result"], "passed"
+            )
+            evidence = json.loads(log.read_text(encoding="utf-8"))
+            self.assertEqual(evidence["exitCode"], 0)
+
+            decision["features"][0]["contractChecks"][0] = {
+                "command": "npm run typecheck",
+                "result": "not_run",
+            }
+            with self.assertRaisesRegex(SyncError, "requires sandboxed proof"):
+                complete_deferred_browser_contracts(root, decision, registry, log)
 
     def test_codex_environment_does_not_delegate_promotion_credentials(self) -> None:
         sensitive = {

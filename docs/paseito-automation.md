@@ -35,6 +35,10 @@ invariant and executable contract. A changelog or similarly named upstream featu
 
 A second, read-only Codex invocation independently reviews the committed candidate and its evidence.
 Both invocations run without GitHub or API-token environment variables and have no promotion role.
+The write pass may repair its own structured blockers twice in the same private candidate. Browser
+contracts that cannot bind a loopback listener in the sandbox are the only checks it may defer; the
+controller accepts only exact registry commands, runs them outside the sandbox, and records their
+full result before independent review.
 The controller then runs local formatting, lint, and focused contract checks before pushing only an
 ephemeral candidate branch.
 
