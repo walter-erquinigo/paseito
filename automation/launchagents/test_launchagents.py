@@ -10,6 +10,7 @@ class LaunchAgentTests(unittest.TestCase):
     def test_agent_can_find_homebrew_gh_without_embedding_credentials(self) -> None:
         value = agent("dev.werquinigo.paseito.test", Path("/tmp/test.py"), interval=3600)
         environment = value["EnvironmentVariables"]
+        self.assertIn(str(Path.home() / ".local/bin"), environment["PATH"])
         self.assertIn("/opt/homebrew/bin", environment["PATH"])
         self.assertNotIn("TOKEN", str(value).upper())
         self.assertEqual(value["StartInterval"], 3600)
