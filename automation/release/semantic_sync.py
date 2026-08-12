@@ -30,6 +30,11 @@ class SyncError(RuntimeError):
         self.category = category
 
 
+def controller_skill_path() -> Path:
+    """Return the controller-owned skill available before candidate commits replay."""
+    return Path(__file__).resolve().parents[2] / ".agents/skills/paseito-upstream-sync"
+
+
 def command(
     args: Sequence[str],
     *,
@@ -635,10 +640,10 @@ def synchronize(control_repo: Path, state_root: Path, force: bool = False) -> in
     branch = f"automation/candidate/{safe_tag}-{stamp.lower()}"
     git(candidate, "switch", "-c", branch)
 
-    skill = candidate / ".agents/skills/paseito-upstream-sync"
     git(candidate, "config", "user.name", "Paseito Local Automation")
     git(candidate, "config", "user.email", "werquinigo@users.noreply.github.com")
-    rebase_candidate(candidate, values, skill, run_root)
+    rebase_candidate(candidate, values, controller_skill_path(), run_root)
+    skill = candidate / ".agents/skills/paseito-upstream-sync"
     command(["npm", "ci"], cwd=candidate, timeout=1800)
     if git(candidate, "status", "--porcelain", "--untracked-files=no"):
         raise SyncError("verification", "dependency installation changed tracked candidate files")
