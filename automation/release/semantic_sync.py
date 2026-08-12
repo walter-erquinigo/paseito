@@ -9,6 +9,7 @@ import hashlib
 import json
 import os
 import re
+import shlex
 import subprocess
 import sys
 import time
@@ -98,8 +99,37 @@ features. Do not stage, commit, or modify Git metadata. Never push, tag, publish
 workflows, or open issues.
 Run every registry contract as its own command. Do not combine contracts with shell loops, `&&`, or
 command groups; the independent reviewer must see a complete exit status and transcript for each
-individual contract.
+individual contract. The workspace-write sandbox cannot bind loopback listeners. If and only if an
+exact registry Playwright contract fails before test execution with a loopback-listener EPERM, keep
+the feature's semantic classification, record that one check as not_run, and do not block solely for
+that sandbox limitation. The controller will run that exact registry command outside the sandbox,
+capture its transcript, and fail closed before review if it does not pass. Never defer a unit test,
+typecheck, lint, formatting check, or a browser test that actually began executing.
+
+Before returning, run npm run typecheck and repair every rebase integration error. In particular,
+adapt fork-added E2E specs to any upstream E2E directory move, reconcile every locale against the
+English resource shape, remove stale send-behavior values, and restore imports lost during conflict
+resolution. A typecheck failure is a blocker, not a deferred check.
 Return the decision object required by the skill schema. Set blocked=true rather than guessing.
+"""
+
+
+def reconciliation_retry_prompt(
+    values: dict[str, str], input_commit: str, previous: dict[str, Any], attempt: int
+) -> str:
+    blockers = previous.get("blockers")
+    rendered = "\n".join(
+        f"- {item}" for item in blockers if isinstance(item, str)
+    ) if isinstance(blockers, list) else "- The previous result was blocked."
+    return reconciliation_prompt(values, input_commit) + f"""
+
+This is repair attempt {attempt} in the same candidate worktree. Preserve correct edits from the
+previous pass and resolve these reported blockers before returning a fresh complete decision:
+{rendered}
+
+Do not repeat a sandbox-only Playwright listener failure as a blocker; use the narrowly allowed
+not_run handoff described above. All source, unit, typecheck, lint, and formatting failures must be
+fixed and rerun. Return the complete decision for every registry feature, not a partial update.
 """
 
 
@@ -270,6 +300,61 @@ def focused_verification(candidate: Path) -> None:
         )
     if git(candidate, "status", "--porcelain"):
         raise SyncError("verification", "verification changed the candidate worktree")
+
+
+def complete_deferred_browser_contracts(
+    candidate: Path,
+    decision: dict[str, Any],
+    registry_path: Path,
+    evidence_log: Path,
+) -> None:
+    """Run only sandbox-blocked, exact registry Playwright commands outside Codex."""
+    registry = load_object(registry_path)
+    allowed = {
+        command_text
+        for feature in registry.get("features", [])
+        if isinstance(feature, dict)
+        for command_text in feature.get("contracts", [])
+        if isinstance(command_text, str)
+        and command_text.startswith("npm run test:e2e --workspace=@getpaseo/app -- ")
+    }
+    deferred: list[dict[str, Any]] = []
+    for feature in decision.get("features", []):
+        if not isinstance(feature, dict):
+            continue
+        checks = feature.get("contractChecks")
+        if not isinstance(checks, list):
+            continue
+        for check in checks:
+            if isinstance(check, dict) and check.get("result") == "not_run":
+                deferred.append(check)
+    for check in deferred:
+        command_text = check.get("command")
+        if not isinstance(command_text, str) or command_text not in allowed:
+            raise SyncError("semantic-sync", "Codex deferred a contract that requires sandboxed proof")
+        result = command(
+            shlex.split(command_text),
+            cwd=candidate,
+            check=False,
+            timeout=1800,
+        )
+        with evidence_log.open("a", encoding="utf-8") as stream:
+            stream.write(
+                json.dumps(
+                    {
+                        "type": "controller_contract",
+                        "command": command_text,
+                        "exitCode": result.returncode,
+                        "stdout": result.stdout,
+                        "stderr": result.stderr,
+                    },
+                    sort_keys=True,
+                )
+                + "\n"
+            )
+        if result.returncode:
+            raise SyncError("verification", "a controller-run deferred browser contract failed")
+        check["result"] = "passed"
 
 
 def discover(control_repo: Path, force: bool) -> dict[str, str]:
@@ -657,23 +742,46 @@ def synchronize(control_repo: Path, state_root: Path, force: bool = False) -> in
     review_path = candidate / ".paseito-semantic-review.json"
     evidence_path = candidate / ".paseito-reconcile-evidence.jsonl"
     reconcile_log = run_root / "codex-reconcile.jsonl"
-    invoke_codex(
-        candidate=candidate,
-        prompt=reconciliation_prompt(values, input_commit),
-        schema=skill / "references/decision-schema.json",
-        output=decision_path,
-        sandbox="workspace-write",
-        log=reconcile_log,
-    )
+    reconcile_log.unlink(missing_ok=True)
+    decision: dict[str, Any] = {}
+    for attempt in range(1, 4):
+        decision_path.unlink(missing_ok=True)
+        step_log = run_root / f"codex-reconcile-{attempt}.jsonl"
+        prompt = (
+            reconciliation_prompt(values, input_commit)
+            if attempt == 1
+            else reconciliation_retry_prompt(values, input_commit, decision, attempt)
+        )
+        invoke_codex(
+            candidate=candidate,
+            prompt=prompt,
+            schema=skill / "references/decision-schema.json",
+            output=decision_path,
+            sandbox="workspace-write",
+            log=step_log,
+        )
+        with reconcile_log.open("ab") as stream:
+            stream.write(step_log.read_bytes())
+        decision = load_object(decision_path)
+        if (
+            decision.get("inputCommit") != input_commit
+            or decision.get("upstreamTag") != values["upstream_tag"]
+            or decision.get("upstreamCommit") != values["upstream_commit"]
+        ):
+            raise SyncError("semantic-sync", "Codex reported a different candidate")
+        if not decision.get("blocked"):
+            break
     evidence_path.write_bytes(reconcile_log.read_bytes())
-    decision = load_object(decision_path)
-    if (
-        decision.get("inputCommit") != input_commit
-        or decision.get("upstreamTag") != values["upstream_tag"]
-        or decision.get("upstreamCommit") != values["upstream_commit"]
-        or decision.get("blocked")
-    ):
-        raise SyncError("semantic-sync", "Codex blocked reconciliation or reported a different candidate")
+    if decision.get("blocked"):
+        raise SyncError("semantic-sync", "Codex blocked reconciliation after repair attempts")
+    complete_deferred_browser_contracts(
+        candidate,
+        decision,
+        candidate / "automation/feature-registry.json",
+        reconcile_log,
+    )
+    decision_path.write_text(json.dumps(decision, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    evidence_path.write_bytes(reconcile_log.read_bytes())
     command(
         [sys.executable, str(skill / "scripts/validate_decisions.py"), "--registry", "automation/feature-registry.json", "--decision", str(decision_path)],
         cwd=candidate,
