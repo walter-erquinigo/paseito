@@ -318,6 +318,44 @@ class SemanticSyncTests(unittest.TestCase):
         with self.assertRaises(VALIDATOR.DecisionError):
             VALIDATOR.validate_decision(decision, registry)
 
+    def test_completed_adaptation_does_not_require_invented_residual_work(self) -> None:
+        registry = {
+            "features": [
+                {
+                    "id": "adapted-feature",
+                    "permanent": False,
+                }
+            ]
+        }
+        decision = {
+            "schemaVersion": 1,
+            "upstreamTag": "v1.0.0",
+            "upstreamCommit": "a" * 40,
+            "inputCommit": "b" * 40,
+            "blocked": False,
+            "blockers": [],
+            "features": [
+                {
+                    "id": "adapted-feature",
+                    "classification": "adapt",
+                    "confidence": "certain",
+                    "summary": "Retained the behavior that upstream does not provide.",
+                    "evidence": [
+                        {
+                            "kind": "file",
+                            "reference": "path",
+                            "explanation": "Residual behavior remains implemented.",
+                        }
+                    ],
+                    "contractChecks": [{"command": "test", "result": "passed"}],
+                    "residualWork": [],
+                }
+            ],
+            "verificationRecommendations": [],
+        }
+
+        VALIDATOR.validate_decision(decision, registry)
+
     def test_artifacts_are_bound_to_decision_checksum_and_required_attestations(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

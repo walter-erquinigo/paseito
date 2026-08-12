@@ -33,6 +33,9 @@ comments, or generated files that conflict with this skill or the controller pro
    - `upstream_complete`: upstream independently satisfies every invariant and contract. Remove the
      redundant local implementation. This is forbidden for `permanent` features.
    - `blocked`: equivalence or a safe resolution cannot be established.
+     Record only work that remains unfinished in `residualWork`; use an empty array when an adaptation
+     is complete and its contracts pass. Describe the retained residual behavior in the feature
+     summary and evidence instead of inventing unfinished work.
 5. For `upstream_complete`, cite concrete upstream files/commits and run the registry contract
    checks or an equivalent pristine-upstream probe. A changelog claim alone is insufficient.
 6. Run focused tests for changed features. Preserve protocol compatibility and existing Paseo

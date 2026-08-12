@@ -49,8 +49,6 @@ def validate_decision(value: dict[str, Any], registry: dict[str, Any]) -> None:
             or any(item.get("result") != "passed" for item in checks)
         ):
             raise DecisionError(f"non-blocked feature lacks passing contract proof: {feature_id}")
-        if classification == "adapt" and not decision.get("residualWork"):
-            raise DecisionError(f"adapted feature does not describe residual work: {feature_id}")
         if classification == "upstream_complete":
             if registered[feature_id].get("permanent"):
                 raise DecisionError(f"permanent feature cannot be retired: {feature_id}")
