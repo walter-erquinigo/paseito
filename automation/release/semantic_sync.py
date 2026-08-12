@@ -97,6 +97,11 @@ carry forward, adapt, or remove local behavior as the evidence requires. Retire 
 feature only with passing behavioral proof and concrete upstream evidence. Preserve permanent
 features. Do not stage, commit, or modify Git metadata. Never push, tag, publish, install, dispatch
 workflows, or open issues.
+The rebased input commit identifies the tree before your semantic worktree edits. Never claim that
+candidate HEAD or the final candidate matches that input commit when you changed the worktree. Cite
+the input commit only for facts it actually proves; use file and test evidence for the resulting
+worktree. The controller creates the reviewed commit only after your decision, so do not invent its
+SHA or claim equality with it.
 Run every registry contract as its own command. Do not combine contracts with shell loops, `&&`, or
 command groups; the independent reviewer must see a complete exit status and transcript for each
 individual contract. The workspace-write sandbox cannot bind loopback listeners. If and only if an

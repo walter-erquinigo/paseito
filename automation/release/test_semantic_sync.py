@@ -289,6 +289,20 @@ class SemanticSyncTests(unittest.TestCase):
             environment = codex_environment()
         self.assertTrue(set(sensitive).isdisjoint(environment))
 
+    def test_reconciliation_prompt_distinguishes_input_from_reviewed_tree(self) -> None:
+        prompt = reconciliation_prompt(
+            {
+                "old_upstream_commit": "a" * 40,
+                "upstream_tag": "v1.0.0",
+                "upstream_commit": "b" * 40,
+            },
+            "c" * 40,
+        )
+
+        self.assertIn("tree before your semantic worktree edits", prompt)
+        self.assertIn("Never claim that\ncandidate HEAD", prompt)
+        self.assertIn("controller creates the reviewed commit only after your decision", prompt)
+
     def test_permanent_feature_cannot_be_classified_upstream_complete(self) -> None:
         registry = json.loads((ROOT / "automation/feature-registry.json").read_text(encoding="utf-8"))
         features = []
