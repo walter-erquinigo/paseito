@@ -13,6 +13,7 @@ from unittest.mock import patch
 from semantic_sync import (
     SyncError,
     codex_environment,
+    controller_skill_path,
     rebase_candidate,
     reconciliation_prompt,
     review_prompt,
@@ -28,6 +29,14 @@ SPEC.loader.exec_module(VALIDATOR)
 
 
 class SemanticSyncTests(unittest.TestCase):
+    def test_controller_skill_is_independent_of_the_candidate_checkout(self) -> None:
+        self.assertEqual(
+            controller_skill_path(), ROOT / ".agents/skills/paseito-upstream-sync"
+        )
+        self.assertTrue(
+            (controller_skill_path() / "references/conflict-schema.json").is_file()
+        )
+
     def test_controller_performs_clean_mechanical_rebase(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             repo = Path(directory) / "repo"
@@ -66,6 +75,65 @@ class SemanticSyncTests(unittest.TestCase):
             )
             self.assertEqual(git("merge-base", "HEAD", "main"), new)
             self.assertEqual((repo / "feature.txt").read_text(encoding="utf-8"), "local\n")
+
+    def test_conflict_resolution_can_use_a_skill_outside_the_candidate(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            repo = root / "repo"
+            repo.mkdir()
+
+            def git(*args: str) -> str:
+                return subprocess.run(
+                    ["git", *args],
+                    cwd=repo,
+                    check=True,
+                    text=True,
+                    stdout=subprocess.PIPE,
+                ).stdout.strip()
+
+            git("init", "-b", "main")
+            git("config", "user.name", "Test")
+            git("config", "user.email", "test@example.invalid")
+            (repo / "shared.txt").write_text("old\n", encoding="utf-8")
+            git("add", ".")
+            git("commit", "-m", "old upstream")
+            old = git("rev-parse", "HEAD")
+            git("switch", "-c", "candidate")
+            (repo / "shared.txt").write_text("local\n", encoding="utf-8")
+            git("commit", "-am", "local identity")
+            git("switch", "main")
+            (repo / "shared.txt").write_text("upstream\n", encoding="utf-8")
+            git("commit", "-am", "new upstream")
+            new = git("rev-parse", "HEAD")
+            git("switch", "candidate")
+
+            skill = root / "controller-skill"
+            schema = skill / "references/conflict-schema.json"
+            schema.parent.mkdir(parents=True)
+            schema.write_text("{}\n", encoding="utf-8")
+            run_root = root / "run"
+            run_root.mkdir()
+
+            def resolve_conflict(**kwargs: object) -> None:
+                self.assertEqual(kwargs["schema"], schema)
+                (repo / "shared.txt").write_text("resolved\n", encoding="utf-8")
+                output = kwargs["output"]
+                assert isinstance(output, Path)
+                output.write_text(
+                    json.dumps({"schemaVersion": 1, "resolved": True, "blockers": []}) + "\n",
+                    encoding="utf-8",
+                )
+
+            with patch("semantic_sync.invoke_codex", side_effect=resolve_conflict):
+                rebase_candidate(
+                    repo,
+                    {"old_upstream_commit": old, "upstream_commit": new},
+                    skill,
+                    run_root,
+                )
+
+            self.assertEqual((repo / "shared.txt").read_text(encoding="utf-8"), "resolved\n")
+            self.assertEqual(git("merge-base", "HEAD", "main"), new)
 
     def test_review_prompt_explains_read_only_handoff_and_controller_verification(self) -> None:
         prompt = review_prompt(
