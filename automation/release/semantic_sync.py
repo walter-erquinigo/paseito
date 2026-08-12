@@ -103,9 +103,10 @@ Return the decision object required by the skill schema. Set blocked=true rather
 """
 
 
-def conflict_prompt(values: dict[str, str], files: list[str]) -> str:
+def conflict_prompt(values: dict[str, str], files: list[str], skill: Path) -> str:
     rendered = "\n".join(f"- {path}" for path in files)
-    return f"""Use $paseito-upstream-sync to resolve the current mechanical rebase conflict.
+    return f"""Resolve the current mechanical rebase conflict using the controller-owned
+Paseito upstream-sync instructions at {skill / 'SKILL.md'}.
 
 Exact new upstream commit: {values['upstream_commit']}
 Unmerged paths:
@@ -114,7 +115,11 @@ Unmerged paths:
 Inspect the old upstream, new upstream, feature registry, conflict stages, and surrounding code.
 Edit the worktree to resolve every listed path semantically while preserving permanent behavior.
 Do not run git add, git commit, git rebase, or any command that modifies Git metadata. Do not access
-the network. Return the conflict-resolution schema object. Set resolved=false rather than guessing.
+the network. Dependencies are intentionally not installed during this mechanical conflict phase;
+do not run package scripts or report missing dependencies as blockers. The controller installs
+dependencies and performs all required verification after the rebase completes. Validate conflict
+markers, syntax, and metadata with dependency-free checks only. Return the conflict-resolution
+schema object. Set resolved=false only for an unresolved semantic ambiguity, not for absent tools.
 """
 
 
@@ -206,7 +211,7 @@ def rebase_candidate(candidate: Path, values: dict[str, str], skill: Path, run_r
         output = candidate / ".paseito-conflict-resolution.json"
         invoke_codex(
             candidate=candidate,
-            prompt=conflict_prompt(values, files),
+            prompt=conflict_prompt(values, files, skill),
             schema=skill / "references/conflict-schema.json",
             output=output,
             sandbox="workspace-write",
