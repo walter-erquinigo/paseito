@@ -38,7 +38,8 @@ Both invocations run without GitHub or API-token environment variables and have 
 The write pass may repair its own structured blockers twice in the same private candidate. Browser
 contracts that cannot bind a loopback listener in the sandbox are the only checks it may defer; the
 controller accepts only exact registry commands, runs them outside the sandbox, and records their
-full result before independent review.
+full result before independent review. A real browser failure is returned to the remaining semantic
+repair attempts with its transcript; exhausting those attempts still stops before review or push.
 The controller then runs local formatting, lint, and focused contract checks before pushing only an
 ephemeral candidate branch.
 
