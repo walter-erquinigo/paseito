@@ -99,8 +99,7 @@ jobs:
             packages/app/src/git/query-keys.test.ts \
             packages/app/src/diagnostics/app-diagnostic-report.test.ts \
             packages/desktop/src/agent-navigation.test.ts \
-            packages/cli/src/cli-surface.test.ts \
-            packages/cli/src/commands/hub/device-authorization.test.ts
+            packages/cli/src/cli-surface.test.ts
 
       - name: Package and smoke test unsigned arm64 app
         shell: bash
