@@ -20,6 +20,7 @@ from semantic_sync import (
     reconciliation_prompt,
     reconciliation_retry_prompt,
     review_prompt,
+    write_normalized_evidence,
     validate_artifacts,
 )
 
@@ -160,6 +161,37 @@ class SemanticSyncTests(unittest.TestCase):
         self.assertIn("controller-owned handoff files", prompt)
         self.assertIn("controller independently reruns all contracts", prompt)
         self.assertIn("They may be identical", prompt)
+        self.assertIn("controller_contract", prompt)
+        self.assertIn("authoritative execution result", prompt)
+
+    def test_normalized_evidence_preserves_contracts_and_wraps_diagnostics(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "raw.jsonl"
+            destination = root / "evidence.jsonl"
+            source.write_text(
+                '{"type":"item.completed","exitCode":0}\n'
+                "2026-08-13 ERROR failed patch context\n"
+                '{"type":"controller_contract","command":"browser","exitCode":0}\n',
+                encoding="utf-8",
+            )
+
+            write_normalized_evidence(source, destination)
+
+            records = [json.loads(line) for line in destination.read_text().splitlines()]
+            self.assertEqual(records[0], {"type": "item.completed", "exitCode": 0})
+            self.assertEqual(
+                records[1],
+                {
+                    "type": "codex_diagnostic",
+                    "sourceLine": 2,
+                    "text": "2026-08-13 ERROR failed patch context",
+                },
+            )
+            self.assertEqual(
+                records[2],
+                {"type": "controller_contract", "command": "browser", "exitCode": 0},
+            )
 
     def test_reconciliation_requires_separate_contract_evidence(self) -> None:
         prompt = reconciliation_prompt(
