@@ -19,6 +19,7 @@ from semantic_sync import (
     rebase_candidate,
     reconciliation_prompt,
     reconciliation_retry_prompt,
+    review_feature_ids_match,
     review_prompt,
     write_normalized_evidence,
     validate_artifacts,
@@ -157,12 +158,43 @@ class SemanticSyncTests(unittest.TestCase):
             Path(".paseito-reconcile-evidence.jsonl"),
             "b" * 40,
             {"old_upstream_commit": "a" * 40, "upstream_commit": "c" * 40},
+            ["first-feature", "second-feature"],
         )
         self.assertIn("controller-owned handoff files", prompt)
         self.assertIn("controller independently reruns all contracts", prompt)
         self.assertIn("They may be identical", prompt)
         self.assertIn("controller_contract", prompt)
         self.assertIn("authoritative execution result", prompt)
+        self.assertIn("exactly one finding", prompt)
+        self.assertIn("- first-feature\n- second-feature", prompt)
+        self.assertIn("no duplicates, omissions, synthetic summary findings, or additional IDs", prompt)
+
+    def test_review_feature_ids_require_exact_registry_coverage(self) -> None:
+        expected = ["first-feature", "second-feature"]
+        self.assertTrue(
+            review_feature_ids_match(
+                {"featureFindings": [{"id": "second-feature"}, {"id": "first-feature"}]},
+                expected,
+            )
+        )
+        self.assertFalse(
+            review_feature_ids_match(
+                {
+                    "featureFindings": [
+                        {"id": "first-feature"},
+                        {"id": "second-feature"},
+                        {"id": "synthetic-summary"},
+                    ]
+                },
+                expected,
+            )
+        )
+        self.assertFalse(
+            review_feature_ids_match(
+                {"featureFindings": [{"id": "first-feature"}, {"id": "first-feature"}]},
+                expected,
+            )
+        )
 
     def test_normalized_evidence_preserves_contracts_and_wraps_diagnostics(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -342,7 +374,7 @@ class SemanticSyncTests(unittest.TestCase):
         source = (ROOT / "automation/release/semantic_sync.py").read_text(encoding="utf-8")
         format_source = source.index('command(["npm", "run", "format"], cwd=candidate')
         commit_source = source.index('git(candidate, "commit", "-m", f"chore: reconcile Paseo')
-        review_source = source.index("prompt=review_prompt(")
+        review_source = source.index("base_review_prompt = review_prompt(")
 
         self.assertLess(format_source, commit_source)
         self.assertLess(commit_source, review_source)

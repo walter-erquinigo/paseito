@@ -162,8 +162,13 @@ schema object. Set resolved=false only for an unresolved semantic ambiguity, not
 
 
 def review_prompt(
-    decision_path: Path, evidence_path: Path, candidate_commit: str, values: dict[str, str]
+    decision_path: Path,
+    evidence_path: Path,
+    candidate_commit: str,
+    values: dict[str, str],
+    feature_ids: list[str],
 ) -> str:
+    rendered_feature_ids = "\n".join(f"- {feature_id}" for feature_id in feature_ids)
     return f"""Independently review the Paseito semantic reconciliation at commit {candidate_commit}.
 Read automation/feature-registry.json, {decision_path.name}, {evidence_path.name}, the old upstream commit
 {values['old_upstream_commit']}, and the new upstream commit {values['upstream_commit']}.
@@ -177,6 +182,11 @@ the authoritative execution result and substantiates the decision's final `passe
 Check every feature decision and its cited evidence. Pay special attention to features classified
 upstream_complete: confirm executable equivalence and passing contract evidence, not changelog
 similarity. Confirm permanent features remain and the new upstream commit is an ancestor.
+The featureFindings array must contain exactly one finding for each registry feature ID below, with
+no duplicates, omissions, synthetic summary findings, or additional IDs:
+{rendered_feature_ids}
+Record whole-candidate integrity evidence in the relevant feature explanations or blockers instead
+of creating an extra featureFinding.
 The controller already verified that tracked files are clean. The untracked decision, evidence, and
 review files are controller-owned handoff files and are not candidate changes. This sandbox is intentionally
 read-only, so audit the recorded commands and repository evidence but do not rerun tests that need a
@@ -184,6 +194,14 @@ writable temporary directory; the controller independently reruns all contracts 
 Do not modify files, push, tag, publish, install, dispatch workflows, or open issues. Return only the
 object required by the review schema; disapprove when any evidence is uncertain.
 """
+
+
+def review_feature_ids_match(review: dict[str, Any], expected_ids: list[str]) -> bool:
+    findings = review.get("featureFindings")
+    if not isinstance(findings, list):
+        return False
+    actual_ids = [finding.get("id") for finding in findings if isinstance(finding, dict)]
+    return len(actual_ids) == len(expected_ids) and sorted(actual_ids) == sorted(expected_ids)
 
 
 def codex_environment() -> dict[str, str]:
@@ -844,15 +862,38 @@ def synchronize(control_repo: Path, state_root: Path, force: bool = False) -> in
     decision_path.write_text(json.dumps(decision, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     write_normalized_evidence(reconcile_log, evidence_path)
 
-    invoke_codex(
-        candidate=candidate,
-        prompt=review_prompt(decision_path, evidence_path, candidate_commit, values),
-        schema=skill / "references/review-schema.json",
-        output=review_path,
-        sandbox="read-only",
-        log=run_root / "codex-review.jsonl",
+    registry = load_object(candidate / "automation/feature-registry.json")
+    feature_ids = [str(feature["id"]) for feature in registry["features"]]
+    review: dict[str, Any] = {}
+    base_review_prompt = review_prompt(
+        decision_path, evidence_path, candidate_commit, values, feature_ids
     )
-    review = load_object(review_path)
+    for attempt in range(1, 4):
+        review_path.unlink(missing_ok=True)
+        prompt = base_review_prompt
+        if attempt > 1:
+            previous_ids = [
+                finding.get("id")
+                for finding in review.get("featureFindings", [])
+                if isinstance(finding, dict)
+            ]
+            prompt += (
+                "\nYour previous response was rejected because its featureFinding IDs were "
+                f"{previous_ids!r}. Return exactly the listed registry IDs and no others.\n"
+            )
+        invoke_codex(
+            candidate=candidate,
+            prompt=prompt,
+            schema=skill / "references/review-schema.json",
+            output=review_path,
+            sandbox="read-only",
+            log=run_root / f"codex-review-{attempt}.jsonl",
+        )
+        review = load_object(review_path)
+        if review_feature_ids_match(review, feature_ids):
+            break
+    else:
+        raise SyncError("review", "independent Codex review did not cover every feature exactly once")
     command(
         [
             sys.executable,
