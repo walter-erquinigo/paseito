@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import subprocess
 import sys
 import urllib.error
 import urllib.request
@@ -17,6 +18,20 @@ from release_model import choose_latest_stable, decide_release
 API = "https://api.github.com"
 UPSTREAM_REPOSITORY = "getpaseo/paseo"
 FORK_REPOSITORY = "walter-erquinigo/paseito"
+
+
+def github_token() -> str | None:
+    token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
+    if token:
+        return token
+    result = subprocess.run(
+        ["gh", "auth", "token"],
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        check=False,
+    )
+    return result.stdout.strip() if result.returncode == 0 and result.stdout.strip() else None
 
 
 def api_json(path_or_url: str, token: str | None) -> Any:
@@ -76,7 +91,7 @@ def main() -> int:
     parser.add_argument("--output", type=Path, default=None)
     args = parser.parse_args()
 
-    token = os.environ.get("GITHUB_TOKEN")
+    token = github_token()
     metadata = json.loads(args.metadata.read_text(encoding="utf-8"))
     provenance = latest_paseito_provenance(token)
     recorded = provenance or {
