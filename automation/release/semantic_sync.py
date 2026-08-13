@@ -167,7 +167,10 @@ Read automation/feature-registry.json, {decision_path.name}, {evidence_path.name
 The decision's inputCommit is the mechanically rebased tree before Codex's semantic worktree edits;
 the reviewed commit above is the resulting tree. They may be identical when every decision is
 carry_forward and no semantic edit is needed. The evidence JSONL is the first pass's captured command
-transcript; use it to substantiate recorded contract results.
+transcript plus controller-owned contract records; use it to substantiate recorded contract results.
+The transcript may contain multiple repair attempts. For an exact Playwright command that was
+`not_run` after a sandbox listener failure, a later `controller_contract` record with exitCode 0 is
+the authoritative execution result and substantiates the decision's final `passed` result.
 Check every feature decision and its cited evidence. Pay special attention to features classified
 upstream_complete: confirm executable equivalence and passing contract evidence, not changelog
 similarity. Confirm permanent features remain and the new upstream commit is an ancestor.
@@ -364,6 +367,21 @@ def complete_deferred_browser_contracts(
                 f"deferred browser contract failed: {command_text}\n{transcript[-4000:]}",
             )
         check["result"] = "passed"
+
+
+def write_normalized_evidence(source: Path, destination: Path) -> None:
+    """Write independently parseable JSONL while retaining non-JSON Codex diagnostics."""
+    with destination.open("w", encoding="utf-8") as stream:
+        for line_number, line in enumerate(source.read_text(encoding="utf-8").splitlines(), 1):
+            try:
+                record = json.loads(line)
+            except json.JSONDecodeError:
+                record = {
+                    "type": "codex_diagnostic",
+                    "sourceLine": line_number,
+                    "text": line,
+                }
+            stream.write(json.dumps(record, sort_keys=True) + "\n")
 
 
 def discover(control_repo: Path, force: bool) -> dict[str, str]:
@@ -797,11 +815,11 @@ def synchronize(control_repo: Path, state_root: Path, force: bool = False) -> in
             ]
             continue
         break
-    evidence_path.write_bytes(reconcile_log.read_bytes())
+    write_normalized_evidence(reconcile_log, evidence_path)
     if decision.get("blocked"):
         raise SyncError("semantic-sync", "Codex blocked reconciliation after repair attempts")
     decision_path.write_text(json.dumps(decision, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    evidence_path.write_bytes(reconcile_log.read_bytes())
+    write_normalized_evidence(reconcile_log, evidence_path)
     command(
         [sys.executable, str(skill / "scripts/validate_decisions.py"), "--registry", "automation/feature-registry.json", "--decision", str(decision_path)],
         cwd=candidate,
@@ -821,7 +839,7 @@ def synchronize(control_repo: Path, state_root: Path, force: bool = False) -> in
     if git(candidate, "status", "--porcelain"):
         raise SyncError("semantic-sync", "semantic reconciliation left uncommitted changes")
     decision_path.write_text(json.dumps(decision, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    evidence_path.write_bytes(reconcile_log.read_bytes())
+    write_normalized_evidence(reconcile_log, evidence_path)
 
     invoke_codex(
         candidate=candidate,
