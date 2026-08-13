@@ -114,7 +114,10 @@ typecheck, lint, formatting check, or a browser test that actually began executi
 Before returning, run npm run typecheck and repair every rebase integration error. In particular,
 adapt fork-added E2E specs to any upstream E2E directory move, reconcile every locale against the
 English resource shape, remove stale send-behavior values, and restore imports lost during conflict
-resolution. A typecheck failure is a blocker, not a deferred check.
+resolution. For `branch-file-review-state`, port only Paseito's line/file review assertions into
+upstream's `e2e/browser/changes-pane.spec.ts`, update that registry contract, and do not retain the
+fork's superseded host-layout, kebab-menu, or shared-rail assertions in a separate
+`diff-row-alignment.spec.ts`. A typecheck failure is a blocker, not a deferred check.
 Return the decision object required by the skill schema. Set blocked=true rather than guessing.
 """
 

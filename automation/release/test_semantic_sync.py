@@ -206,6 +206,9 @@ class SemanticSyncTests(unittest.TestCase):
         self.assertIn("Do not combine contracts", prompt)
         self.assertIn("loopback-listener EPERM", prompt)
         self.assertIn("run npm run typecheck", prompt)
+        self.assertIn("port only Paseito's line/file review assertions", prompt)
+        self.assertIn("e2e/browser/changes-pane.spec.ts", prompt)
+        self.assertIn("do not retain the\nfork's superseded host-layout", prompt)
 
     def test_reconciliation_retry_keeps_identity_and_surfaces_previous_blockers(self) -> None:
         values = {
