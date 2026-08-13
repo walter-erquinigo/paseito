@@ -2936,7 +2936,9 @@ export function SharedDiffView({ files, displayPreferences, mode }: SharedDiffVi
     }
     const scrollElement = diffListRef.current?.getNativeScrollRef();
     if (scrollElement instanceof HTMLElement) {
-      scrollElement.focus();
+      // File navigation is a focus handoff: keyboard scrolling must continue in
+      // the diff rather than remaining on the file-tree activation control.
+      scrollElement.focus({ preventScroll: true });
     }
   }, []);
 

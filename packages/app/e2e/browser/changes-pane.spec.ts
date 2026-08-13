@@ -697,14 +697,19 @@ async function readVisibleDiffRowGeometry(page: Page): Promise<{
     }
 
     const readRows = (prefix: string, textPrefix: string) =>
-      Array.from(root.querySelectorAll<HTMLElement>(`[data-testid^="${prefix}"]`)).map((row) => {
-        const testId = row.getAttribute("data-testid") ?? "";
-        const index = Number(testId.slice(prefix.length));
-        const rect = row.getBoundingClientRect();
-        const text = root.querySelector<HTMLElement>(`[data-testid="${textPrefix}${index}"]`);
-        const lineHeight = text ? Number.parseFloat(getComputedStyle(text).lineHeight) : 0;
-        return { index, top: rect.top, height: rect.height, lineHeight };
-      });
+      Array.from(root.querySelectorAll<HTMLElement>(`[data-testid^="${prefix}"]`))
+        .map((row) => {
+          const testId = row.getAttribute("data-testid") ?? "";
+          const index = Number(testId.slice(prefix.length));
+          const rect = row.getBoundingClientRect();
+          const text = root.querySelector<HTMLElement>(`[data-testid="${textPrefix}${index}"]`);
+          if (!text) {
+            return null;
+          }
+          const lineHeight = Number.parseFloat(getComputedStyle(text).lineHeight);
+          return { index, top: rect.top, height: rect.height, lineHeight };
+        })
+        .filter((row): row is NonNullable<typeof row> => row !== null);
 
     const gutters = new Map(
       readRows("diff-gutter-row-", "diff-gutter-text-").map((row) => [row.index, row]),
