@@ -806,6 +806,10 @@ def synchronize(control_repo: Path, state_root: Path, force: bool = False) -> in
         [sys.executable, str(skill / "scripts/validate_decisions.py"), "--registry", "automation/feature-registry.json", "--decision", str(decision_path)],
         cwd=candidate,
     )
+    # Codex may make semantically correct edits that are not byte-for-byte formatter output. Format
+    # before committing so the independent reviewer examines the exact source tree that later gates
+    # and packaging will consume.
+    command(["npm", "run", "format"], cwd=candidate, timeout=600)
     if command(["git", "merge-base", "--is-ancestor", values["upstream_commit"], "HEAD"], cwd=candidate, check=False).returncode:
         raise SyncError("semantic-sync", "new upstream commit is not an ancestor of the candidate")
     decision_path.unlink()
@@ -858,6 +862,11 @@ def synchronize(control_repo: Path, state_root: Path, force: bool = False) -> in
     decisions_dir.mkdir(parents=True, exist_ok=True)
     record_path = decisions_dir / f"{values['paseito_version']}.json"
     record_path.write_text(json.dumps({"decision": decision, "review": review}, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    command(
+        ["npm", "run", "format:files", "--", str(record_path.relative_to(candidate))],
+        cwd=candidate,
+        timeout=600,
+    )
     git(candidate, "add", "package.json", "package-lock.json", "packages/desktop/package.json", "automation/upstream.json", str(record_path.relative_to(candidate)))
     git(candidate, "commit", "-m", f"chore: prepare {values['paseito_version']}")
     final_commit = git(candidate, "rev-parse", "HEAD")
