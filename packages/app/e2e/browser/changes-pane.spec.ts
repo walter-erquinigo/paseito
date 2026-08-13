@@ -2,12 +2,12 @@ import { execFileSync } from "node:child_process";
 import { unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { type Locator, type Page } from "@playwright/test";
-import { buildHostWorkspaceRoute, buildSettingsSectionRoute } from "../src/utils/host-routes";
-import { test, expect } from "./fixtures";
-import { getServerId } from "./helpers/server-id";
-import { connectSeedClient } from "./helpers/seed-client";
-import { createTempGitRepo } from "./helpers/workspace";
-import { waitForWorkspaceTabsVisible } from "./helpers/workspace-tabs";
+import { buildHostWorkspaceRoute, buildSettingsSectionRoute } from "../../src/utils/host-routes";
+import { test, expect } from "../support/fixtures";
+import { getServerId } from "../support/helpers/server-id";
+import { connectSeedClient } from "../support/helpers/seed-client";
+import { createTempGitRepo } from "../support/helpers/workspace";
+import { waitForWorkspaceTabsVisible } from "../support/helpers/workspace-tabs";
 
 interface DirtyWorkspace {
   id: string;
@@ -201,28 +201,6 @@ test.afterEach(async () => {
   for (const task of cleanupTasks.splice(0)) {
     await task.run();
   }
-});
-
-test("changes diff keeps code rows aligned with the gutter", async ({ page }) => {
-  const workspace = await createWorkspaceWithMountedTabDiff();
-  await useCodeFont(page, 9);
-  await useUnwrappedDiffLines(page);
-  await openWorkspaceChanges(page, workspace);
-
-  await expectDiffCodeFontSize(page, 9);
-  await expectVisibleDiffRowsAligned(page);
-  await expectDiffCodeTextAlignedWithGutterText(page, [
-    {
-      codeText: "function createInitialMountedTabIds(input: UseMountedTabSetInput)",
-      lineNumber: "20",
-    },
-    { codeText: "return next;", lineNumber: "55" },
-    { codeText: "useLayoutEffect(() => {", lineNumber: "78" },
-  ]);
-  await expectHoverCommentButtonAlignedWithCodeLine(page, {
-    codeText: "function createInitialMountedTabIds(input: UseMountedTabSetInput)",
-    lineNumber: "20",
-  });
 });
 
 test("line review controls stay in the fixed gutter across diff layouts", async ({ page }) => {

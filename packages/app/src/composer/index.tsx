@@ -1124,7 +1124,6 @@ export function Composer({
     (state) => state.queuesByServer[serverId]?.[agentId],
   );
   const queuedMessages = queuedMessagesRaw ?? EMPTY_ARRAY;
-  const setQueuedMessages = useSessionStore((state) => state.setQueuedMessages);
 
   const isCompactFormFactor = useIsCompactFormFactor();
   const isCompactLayout = resolveCompactLayout(isCompactLayoutOverride, isCompactFormFactor);

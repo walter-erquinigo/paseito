@@ -1,12 +1,12 @@
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { type Page } from "@playwright/test";
-import { buildHostWorkspaceRoute } from "../src/utils/host-routes";
-import { test, expect } from "./fixtures";
-import { getServerId } from "./helpers/server-id";
-import { connectSeedClient } from "./helpers/seed-client";
-import { createTempGitRepo } from "./helpers/workspace";
-import { waitForWorkspaceTabsVisible } from "./helpers/workspace-tabs";
+import { buildHostWorkspaceRoute } from "../../src/utils/host-routes";
+import { test, expect } from "../support/fixtures";
+import { getServerId } from "../support/helpers/server-id";
+import { connectSeedClient } from "../support/helpers/seed-client";
+import { createTempGitRepo } from "../support/helpers/workspace";
+import { waitForWorkspaceTabsVisible } from "../support/helpers/workspace-tabs";
 
 interface NavigatorWorkspace {
   id: string;

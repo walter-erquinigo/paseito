@@ -43,7 +43,6 @@ import {
   RotateCw,
   Square,
   SquareCheckBig,
-  Upload,
   WrapText,
 } from "lucide-react-native";
 import { type ParsedDiffFile, type DiffLine, type HighlightToken } from "@/git/use-diff-query";
@@ -2608,6 +2607,7 @@ interface SharedDiffViewProps {
 export function SharedDiffView({ files, displayPreferences, mode }: SharedDiffViewProps) {
   const { t } = useTranslation();
   const toast = useToast();
+  const isCompact = useIsCompactFormFactor();
   const { layout, wrapLines, codeFontSize, monoFontFamily } = displayPreferences;
   const diffBodyLineHeight = Math.round(codeFontSize * 1.5);
   const typographyKey = [monoFontFamily, codeFontSize, diffBodyLineHeight].join(":");
@@ -2894,14 +2894,18 @@ export function SharedDiffView({ files, displayPreferences, mode }: SharedDiffVi
     [updateScrollbarOffset],
   );
 
-  const handleDiffListLayout = useCallback((event: LayoutChangeEvent) => {
-    const height = event.nativeEvent.layout.height;
-    if (!Number.isFinite(height) || height <= 0) {
-      return;
-    }
-    diffListViewportHeightRef.current = height;
-    setDiffListViewportHeight(height);
-  }, []);
+  const handleDiffListLayout = useCallback(
+    (event: LayoutChangeEvent) => {
+      updateScrollbarLayout(event);
+      const height = event.nativeEvent.layout.height;
+      if (!Number.isFinite(height) || height <= 0) {
+        return;
+      }
+      diffListViewportHeightRef.current = height;
+      setDiffListViewportHeight(height);
+    },
+    [updateScrollbarLayout],
+  );
 
   const diffListContentStyle = useMemo(
     () => [
@@ -3440,6 +3444,7 @@ export function SharedDiffView({ files, displayPreferences, mode }: SharedDiffVi
         tabIndex={-1}
         onLayout={handleDiffListLayout}
         onScroll={handleDiffListScroll}
+        onContentSizeChange={scrollbar.onContentSizeChange}
         scrollEventThrottle={16}
         showsVerticalScrollIndicator
         removeClippedSubviews={false}
@@ -3447,6 +3452,7 @@ export function SharedDiffView({ files, displayPreferences, mode }: SharedDiffVi
         maxToRenderPerBatch={12}
         windowSize={10}
       />
+      {scrollbar.overlay}
       {selectedLine ? (
         <View
           style={styles.lineReviewShortcutHint}

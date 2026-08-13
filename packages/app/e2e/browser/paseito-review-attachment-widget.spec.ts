@@ -1,9 +1,9 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { expect, test, type Page } from "./fixtures";
-import { expectAgentIdle } from "./helpers/agent-stream";
-import { submitMessage } from "./helpers/composer";
-import { openAgentRoute, seedMockAgentWorkspace } from "./helpers/mock-agent";
+import { expect, test, type Page } from "../support/fixtures";
+import { expectAgentIdle } from "../support/helpers/agent-stream";
+import { submitMessage } from "../support/helpers/composer";
+import { openAgentRoute, seedMockAgentWorkspace } from "../support/helpers/mock-agent";
 
 async function addInlineReviewComment(
   page: Page,

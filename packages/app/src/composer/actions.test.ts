@@ -624,7 +624,7 @@ describe("dispatchComposerAgentMessage", () => {
       text: "steer this",
       attachments: [],
       encodeImages: passthroughEncodeImages,
-      stream,
+      submission: stream,
       deliveryHint: "steering",
     });
 
@@ -644,7 +644,7 @@ describe("dispatchComposerAgentMessage", () => {
       text: "no steering",
       attachments: [],
       encodeImages: passthroughEncodeImages,
-      stream,
+      submission: stream,
     });
 
     const tail = stream.tail.get("agent");

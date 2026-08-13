@@ -50,7 +50,12 @@ const USER_SCROLL_DELTA_EPSILON = 1;
 const BOTTOM_OVERSCROLL_TOLERANCE_PX = 2;
 const AUTO_SCROLL_BOTTOM_THRESHOLD_PX = 64;
 const AUTO_SCROLL_RESUME_THRESHOLD_PX = 1;
+const HISTORY_START_SETTLE_FRAMES = 2;
+const HISTORY_START_SLOT_HEIGHT_PX = 32;
+const CONTENT_PADDING_TOP_PX = 16;
 const UPWARD_INPUT_EVIDENCE_TIMEOUT_MS = 100;
+const VIRTUALIZER_SCROLL_MARGIN_PX = HISTORY_START_SLOT_HEIGHT_PX + CONTENT_PADDING_TOP_PX;
+const READING_POSITION_OFFSET_PX = 8;
 
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
 const foregroundMutedColorMapping = (theme: Theme) => ({
@@ -316,7 +321,7 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
   const getHistoryStartPaginationInput = useStableEvent((): HistoryStartPaginationInput | null => {
     const scrollContainer = scrollContainerRef.current;
     if (!isActiveRef.current || !scrollContainer || !isScrollContainerMeasurable(scrollContainer)) {
-      return;
+      return null;
     }
     const bottomAnchorSettled =
       !followOutputRef.current || isScrollContainerNearBottom(scrollContainer);
@@ -658,18 +663,6 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
     rearmHistoryStartFromUserIntent();
   });
 
-  const stopFollowingOutputFromUserIntent = useStableEvent(() => {
-    cancelPendingStickToBottom();
-    if (followOutputRef.current) {
-      setFollowOutput(false);
-    }
-    if (!isLoadingOlderHistory) {
-      historyStartPaginationStateRef.current = rearmHistoryStartPagination(
-        historyStartPaginationStateRef.current,
-      );
-    }
-  });
-
   const handleDomScroll = useCallback(() => {
     const scrollContainer = scrollContainerRef.current;
     if (!isActiveRef.current || !scrollContainer || !isScrollContainerMeasurable(scrollContainer)) {
@@ -696,7 +689,12 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
     lastKnownScrollTopRef.current = currentScrollTop;
     updateScrollMetrics();
     evaluateHistoryStart();
-  }, [evaluateHistoryStart, stopFollowingOutputFromUserIntent, updateScrollMetrics]);
+  }, [
+    evaluateHistoryStart,
+    isJumpSettling,
+    stopFollowingOutputFromUserIntent,
+    updateScrollMetrics,
+  ]);
 
   useEffect(() => {
     const initialHistoryStartState = createHistoryStartPaginationState();
@@ -830,7 +828,14 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
     return () => {
       observer.disconnect();
     };
-  }, [evaluateHistoryStart, isActive, scheduleStickToBottom, updateScrollMetrics]);
+  }, [
+    applyHistoryStartPrependAnchor,
+    evaluateHistoryStart,
+    isActive,
+    scheduleHistoryStartPrependSettle,
+    scheduleStickToBottom,
+    updateScrollMetrics,
+  ]);
 
   useLayoutEffect(() => {
     if (!isActive) {
@@ -843,11 +848,8 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
 
     const markUpwardViewportInput = () => {
       markUpwardInputEvidence();
-      if (!isLoadingOlderHistory) {
-        historyStartPaginationStateRef.current = rearmHistoryStartPagination(
-          historyStartPaginationStateRef.current,
-        );
-        evaluateHistoryStart();
+      if (scrollContainer.scrollTop <= USER_SCROLL_DELTA_EPSILON) {
+        rearmHistoryStartFromUserIntent();
       }
     };
     const handleWheel = (event: WheelEvent) => {
@@ -978,11 +980,10 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
   }, [
     clearMouseScrollGesture,
     clearUpwardInputEvidence,
-    evaluateHistoryStart,
     handleDomScroll,
     isActive,
-    isLoadingOlderHistory,
     markUpwardInputEvidence,
+    rearmHistoryStartFromUserIntent,
   ]);
 
   useEffect(() => {

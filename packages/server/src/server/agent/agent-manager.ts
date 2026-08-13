@@ -2009,7 +2009,7 @@ export class AgentManager {
     // Out-of-band commands (e.g. /goal pause) must run WITHOUT canceling an
     // in-flight turn. Keeping this policy here makes every send surface share
     // the same replace-vs-stream decision.
-    if (this.tryRunOutOfBand(agentId, prompt)) {
+    if (this.tryRunOutOfBand(agentId, prompt, options?.runOptions)) {
       return { outOfBand: true };
     }
 

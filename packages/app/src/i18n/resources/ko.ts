@@ -1,4 +1,4 @@
-import type { TranslationResources } from "./en";
+import { en, type TranslationResources } from "./en";
 
 export const ko: TranslationResources = {
   common: {
@@ -94,6 +94,13 @@ export const ko: TranslationResources = {
       sendMessage: "메시지 보내기",
       queue: "대기열",
       send: "보내기",
+    },
+    queue: {
+      ...en.composer.queue,
+      steer: "조종",
+      steeringConversation: "진행 중인 작업 조종",
+      steerHint: "진행 중인 실행에 안내로 즉시 보냅니다",
+      replaceFallbackHint: "이 제공자는 이 메시지로 진행 중인 실행을 다시 시작합니다",
     },
     cancel: {
       cancelingAgent: "에이전트 취소 중",
@@ -789,6 +796,7 @@ export const ko: TranslationResources = {
         },
       },
       diff: {
+        ...en.workspace.git.diff,
         openChangesTab: "변경사항 탭 열기",
         closeChangesTab: "변경사항 탭 닫기",
         binaryFile: "바이너리 파일",
@@ -961,7 +969,7 @@ export const ko: TranslationResources = {
       discord: "Discord",
       github: "GitHub 이슈 만들기",
       whatsNew: "새로운 소식",
-      appName: "Paseo",
+      version: "Paseito {{version}}",
     },
     sections: {
       sessions: "기록",
@@ -1252,6 +1260,7 @@ export const ko: TranslationResources = {
     },
   },
   rootError: {
+    kicker: "문제가 발생했습니다",
     title: "Paseo에 문제가 발생했습니다.",
     body: "앱을 다시 로드해 보세요. 이런 일이 계속 발생하면 신고할 때 아래 세부정보를 포함하세요.",
     details: "세부",
@@ -1662,6 +1671,10 @@ export const ko: TranslationResources = {
     accessibility: "컨텍스트 윈도우 {{percentage}}% 사용됨",
   },
   review: {
+    composer: {
+      comment: "댓글",
+      codeChange: "코드 변경",
+    },
     comment: {
       add: "리뷰 댓글 추가",
       edit: "리뷰 댓글 편집",
@@ -1672,6 +1685,13 @@ export const ko: TranslationResources = {
       cancelAccessibility: "리뷰 댓글 취소",
       save: "댓글",
       saveAccessibility: "리뷰 댓글 저장",
+    },
+    suggestion: {
+      ...en.review.suggestion,
+      start: "편집 제안",
+      edit: "제안 편집",
+      delete: "제안 삭제",
+      save: "제안 추가",
     },
   },
   settings: {
@@ -1751,13 +1771,13 @@ export const ko: TranslationResources = {
       defaultSend: {
         label: "기본 전송",
         descriptions: {
-          interrupt:
-            "에이전트가 실행 중일 때 Enter는 중단합니다. Command/Ctrl+Enter는 대기열에 추가합니다.",
+          steer:
+            "에이전트가 실행 중일 때 Enter는 조종합니다. Command/Ctrl+Enter는 대기열에 추가합니다.",
           queue:
             "에이전트가 실행 중일 때 Enter는 대기열에 추가합니다. Command/Ctrl+Enter는 제출합니다.",
         },
         options: {
-          interrupt: "중단",
+          steer: "조종",
           queue: "대기열",
         },
       },
