@@ -10,8 +10,8 @@ async function addInlineReviewComment(
   gutterIndex: number,
   body: string,
 ): Promise<void> {
-  const gutter = page.getByTestId(`diff-gutter-cell-${gutterIndex}`);
-  await expect(gutter).toHaveAccessibleName("Add review comment");
+  const gutter = page.getByRole("button", { name: "Add review comment" }).nth(gutterIndex - 1);
+  await expect(gutter).toBeVisible();
   await gutter.click();
 
   const editor = page.getByTestId("inline-review-editor");
