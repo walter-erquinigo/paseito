@@ -303,6 +303,24 @@ class SemanticSyncTests(unittest.TestCase):
         self.assertIn("Never claim that\ncandidate HEAD", prompt)
         self.assertIn("controller creates the reviewed commit only after your decision", prompt)
 
+    def test_semantic_source_is_formatted_before_independent_review(self) -> None:
+        source = (ROOT / "automation/release/semantic_sync.py").read_text(encoding="utf-8")
+        format_source = source.index('command(["npm", "run", "format"], cwd=candidate')
+        commit_source = source.index('git(candidate, "commit", "-m", f"chore: reconcile Paseo')
+        review_source = source.index("prompt=review_prompt(")
+
+        self.assertLess(format_source, commit_source)
+        self.assertLess(commit_source, review_source)
+
+    def test_generated_decision_record_is_formatted_before_prepare_commit(self) -> None:
+        source = (ROOT / "automation/release/semantic_sync.py").read_text(encoding="utf-8")
+        write_record = source.index("record_path.write_text(")
+        format_record = source.index('["npm", "run", "format:files", "--",')
+        prepare_commit = source.index('git(candidate, "commit", "-m", f"chore: prepare')
+
+        self.assertLess(write_record, format_record)
+        self.assertLess(format_record, prepare_commit)
+
     def test_permanent_feature_cannot_be_classified_upstream_complete(self) -> None:
         registry = json.loads((ROOT / "automation/feature-registry.json").read_text(encoding="utf-8"))
         features = []
