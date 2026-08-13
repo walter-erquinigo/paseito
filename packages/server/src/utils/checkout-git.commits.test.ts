@@ -275,7 +275,7 @@ describe("listCheckoutCommits", () => {
     git(["checkout", "-b", "feature"], repoDir);
 
     await expect(listCheckoutCommits({ cwd: repoDir, baseRef: "missing" })).rejects.toThrow(
-      "Base branch not found locally: missing",
+      "Base branch not found locally or on origin: missing",
     );
   });
 

@@ -436,7 +436,7 @@ describe("createWebStreamStrategy", () => {
       scrollContainer.dispatchEvent(new WheelEvent("wheel", { deltaY: -1 }));
     });
 
-    expect(onNearHistoryStart).toHaveBeenCalledTimes(2);
+    expect(onNearHistoryStart).toHaveBeenCalledTimes(1);
   });
   it("waits for bottom anchoring before evaluating a delayed initial tail", async () => {
     HTMLElement.prototype.scrollTo = vi.fn(function (

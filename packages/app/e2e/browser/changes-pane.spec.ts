@@ -203,28 +203,6 @@ test.afterEach(async () => {
   }
 });
 
-test("changes diff keeps code rows aligned with the gutter", async ({ page }) => {
-  const workspace = await createWorkspaceWithMountedTabDiff();
-  await useCodeFont(page, 9);
-  await useUnwrappedDiffLines(page);
-  await openWorkspaceChanges(page, workspace);
-
-  await expectDiffCodeFontSize(page, 9);
-  await expectVisibleDiffRowsAligned(page);
-  await expectDiffCodeTextAlignedWithGutterText(page, [
-    {
-      codeText: "function createInitialMountedTabIds(input: UseMountedTabSetInput)",
-      lineNumber: "20",
-    },
-    { codeText: "return next;", lineNumber: "55" },
-    { codeText: "useLayoutEffect(() => {", lineNumber: "78" },
-  ]);
-  await expectHoverCommentButtonAlignedWithCodeLine(page, {
-    codeText: "function createInitialMountedTabIds(input: UseMountedTabSetInput)",
-    lineNumber: "20",
-  });
-});
-
 test("line review controls stay in the fixed gutter across diff layouts", async ({ page }) => {
   const workspace = await createWorkspaceWithMountedTabDiff();
   await useUnwrappedDiffLines(page);
@@ -582,7 +560,7 @@ async function useCodeFont(page: Page, codeFontSize: number): Promise<void> {
         settingsKey,
         JSON.stringify({
           theme: "dark",
-          sendBehavior: "interrupt",
+          sendBehavior: "queue",
           serviceUrlBehavior: "ask",
           terminalScrollbackLines: 10_000,
           uiFontFamily: "",

@@ -1,12 +1,16 @@
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
-import { buildHostWorkspaceRoute } from "../src/utils/host-routes";
-import { expect, test, type Page } from "./fixtures";
-import { expectFileTabOpen, openFileExplorer, openFileFromExplorer } from "./helpers/file-explorer";
-import { getServerId } from "./helpers/server-id";
-import { connectSeedClient } from "./helpers/seed-client";
-import { createTempDirectory, createTempGitRepo } from "./helpers/workspace";
-import { waitForWorkspaceTabsVisible } from "./helpers/workspace-tabs";
+import { buildHostWorkspaceRoute } from "../../src/utils/host-routes";
+import { expect, test, type Page } from "../support/fixtures";
+import {
+  expectFileTabOpen,
+  openFileExplorer,
+  openFileFromExplorer,
+} from "../support/helpers/file-explorer";
+import { getServerId } from "../support/helpers/server-id";
+import { connectSeedClient } from "../support/helpers/seed-client";
+import { createTempDirectory, createTempGitRepo } from "../support/helpers/workspace";
+import { waitForWorkspaceTabsVisible } from "../support/helpers/workspace-tabs";
 
 function sourceEditor(page: Page) {
   return page.getByTestId("file-source-editor").filter({ visible: true });

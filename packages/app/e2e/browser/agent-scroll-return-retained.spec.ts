@@ -1,20 +1,23 @@
 import { expect, type Page } from "@playwright/test";
-import { test } from "./fixtures";
-import { readScrollMetrics, scrollChatAwayFromBottom } from "./helpers/agent-bottom-anchor";
-import { expectAgentTabActive } from "./helpers/launcher";
+import { test } from "../support/fixtures";
+import {
+  readScrollMetrics,
+  scrollChatAwayFromBottom,
+} from "../support/helpers/agent-bottom-anchor";
+import { expectAgentTabActive } from "../support/helpers/launcher";
 import {
   buildAgentRoute,
   seedMockAgentWorkspace,
   type MockAgentWorkspace,
-} from "./helpers/mock-agent";
-import { getServerId } from "./helpers/server-id";
-import { openMobileAgentSidebar } from "./helpers/sidebar";
+} from "../support/helpers/mock-agent";
+import { getServerId } from "../support/helpers/server-id";
+import { openMobileAgentSidebar } from "../support/helpers/sidebar";
 import {
   expectTimelinePromptVisible,
   openAgentTimeline,
   seedLongMockAgentTimeline,
-} from "./helpers/timeline-pagination";
-import { switchWorkspaceViaSidebar } from "./helpers/workspace-ui";
+} from "../support/helpers/timeline-pagination";
+import { switchWorkspaceViaSidebar } from "../support/helpers/workspace-ui";
 
 async function expectChatAtBottom(page: Page): Promise<void> {
   await expect

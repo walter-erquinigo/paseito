@@ -170,7 +170,7 @@ describe("dictation transcript behavior", () => {
 
     applyDictationTranscript("spoken prompt", {
       value: "typed context",
-      defaultSendBehavior: "interrupt",
+      defaultSendBehavior: "steer",
       isAgentRunning: false,
       onQueue: undefined,
       onChangeText: (text) => actions.push(`change:${text}`),

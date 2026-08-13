@@ -2901,6 +2901,7 @@ export function SharedDiffView({ files, displayPreferences, mode }: SharedDiffVi
         return;
       }
       diffListViewportHeightRef.current = height;
+      setDiffListViewportHeight(height);
       updateScrollbarLayout(event);
     },
     [updateScrollbarLayout],
@@ -3428,6 +3429,7 @@ export function SharedDiffView({ files, displayPreferences, mode }: SharedDiffVi
   );
 
   return (
+    <View dataSet={DIFF_REVIEW_SURFACE_DATASET} style={styles.diffReviewSurface}>
       <FlatList
         ref={diffListRef}
         data={flatItems}

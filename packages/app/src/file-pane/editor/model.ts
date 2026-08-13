@@ -227,15 +227,9 @@ export class FileEditorModel {
     const hasBom = this.hasBom;
     this.observedWhileSaving = null;
     this.setSnapshot({ ...this.snapshot, status: "saving", error: null });
-    let preparedContent = content;
-    if (this.session.prepareWrite) {
-      try {
-        preparedContent = (await this.session.prepareWrite(content)) ?? content;
-      } catch {
-        // Formatting is optional. Its failure must never block or alter a save.
-        preparedContent = content;
-      }
-    }
+    const preparedContent = this.session.prepareWrite
+      ? await this.prepareContentForWrite(content)
+      : content;
     const serializedContent = hasBom ? `\uFEFF${preparedContent}` : preparedContent;
     let result: FileWriteResult;
     try {
@@ -307,6 +301,17 @@ export class FileEditorModel {
       error: null,
     });
     if (modified) this.scheduleAutosave();
+  }
+
+  private async prepareContentForWrite(content: string): Promise<string> {
+    const prepareWrite = this.session.prepareWrite;
+    if (!prepareWrite) return content;
+    try {
+      return (await prepareWrite(content)) ?? content;
+    } catch {
+      // Formatting is optional. Its failure must never block or alter a save.
+      return content;
+    }
   }
 
   private applyFile(file: FileEditorFile): void {

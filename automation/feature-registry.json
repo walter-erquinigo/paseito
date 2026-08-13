@@ -76,7 +76,7 @@
       ],
       "contracts": [
         "npx vitest run packages/app/src/review/store.test.ts packages/app/src/review/surface.test.tsx packages/app/src/attachments/review-attachment-items.test.ts packages/server/src/server/agent/prompt-attachments.test.ts",
-        "npm run test:e2e --workspace=@getpaseo/app -- e2e/review-attachment-widget.spec.ts"
+        "npm run test:e2e --workspace=@getpaseo/app -- e2e/browser/review-attachment-widget.spec.ts"
       ],
       "paths": [
         "packages/app/src/review",
@@ -106,7 +106,7 @@
       ],
       "contracts": [
         "npx vitest run packages/app/src/review/file-review.test.ts packages/app/src/review/line-review.test.ts packages/app/src/review/line-review-navigation.test.ts packages/app/src/git/file-review-expansion.test.ts packages/server/src/utils/checkout-git.context.test.ts packages/server/src/utils/checkout-git.test.ts",
-        "npm run test:e2e --workspace=@getpaseo/app -- e2e/diff-row-alignment.spec.ts"
+        "npm run test:e2e --workspace=@getpaseo/app -- e2e/browser/changes-pane.spec.ts"
       ],
       "paths": [
         "packages/app/src/review/file-review.ts",
@@ -129,7 +129,7 @@
       ],
       "contracts": [
         "npx vitest run packages/app/src/hooks/use-changes-preferences/storage.test.ts packages/app/src/git/changes-file-tree-navigation.test.ts --bail=1",
-        "npm run test:e2e --workspace=@getpaseo/app -- e2e/changes-file-tree-navigator.spec.ts"
+        "npm run test:e2e --workspace=@getpaseo/app -- e2e/browser/changes-file-tree-navigator.spec.ts"
       ],
       "paths": [
         "packages/app/src/git/changes-file-tree-navigation.ts",
@@ -180,7 +180,7 @@
       ],
       "contracts": [
         "npx vitest run packages/app/src/assistant-file-links/parse.test.ts packages/app/src/file-pane/markdown-file-links.test.ts packages/app/src/workspace/file-open/index.test.ts packages/app/src/workspace/markdown-changes-navigation.test.ts packages/app/src/screens/workspace/workspace-pane-state.test.ts packages/app/src/workspace-tabs/identity.test.ts --bail=1",
-        "npm run test:e2e --workspace=@getpaseo/app -- e2e/markdown-preview-file-links.spec.ts"
+        "npm run test:e2e --workspace=@getpaseo/app -- e2e/browser/markdown-preview-file-links.spec.ts"
       ],
       "paths": [
         "packages/app/src/assistant-file-links",
@@ -190,7 +190,7 @@
         "packages/app/src/screens/workspace/workspace-screen.tsx",
         "packages/app/src/workspace/file-open",
         "packages/app/src/workspace/markdown-changes-navigation.ts",
-        "packages/app/e2e/markdown-preview-file-links.spec.ts"
+        "packages/app/e2e/browser/markdown-preview-file-links.spec.ts"
       ]
     },
     {
@@ -206,13 +206,13 @@
       ],
       "contracts": [
         "npx vitest run packages/app/src/agent-stream/strategy-web.test.tsx --bail=1",
-        "npm run test:e2e --workspace=@getpaseo/app -- e2e/agent-scroll-return.spec.ts"
+        "npm run test:e2e --workspace=@getpaseo/app -- e2e/browser/agent-scroll-return-retained.spec.ts"
       ],
       "paths": [
         "packages/app/src/agent-stream/strategy-web.tsx",
         "packages/app/src/agent-stream/view.tsx",
         "packages/app/src/components/retained-panel.tsx",
-        "packages/app/e2e/agent-scroll-return.spec.ts"
+        "packages/app/e2e/browser/agent-scroll-return-retained.spec.ts"
       ]
     },
     {

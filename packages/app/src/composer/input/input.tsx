@@ -63,7 +63,6 @@ import {
   resolveVoiceTooltipText,
 } from "./labels";
 import {
-  applyDictationTranscript,
   computeCanStartDictation,
   resolveComposerSurfacePresentation,
   runAlternateSendAction,
@@ -127,7 +126,7 @@ export interface MessageInputProps {
   /** When true and there's sendable content, calls onQueue instead of onSubmit */
   isAgentRunning?: boolean;
   /** Controls what the default send action (Enter, send button, dictation) does
-   *  when the agent is running. "interrupt" sends immediately, "queue" queues. */
+   *  when the agent is running. "steer" sends immediately, "queue" queues. */
   defaultSendBehavior?: "steer" | "queue";
   /** Callback for queue button when agent is running */
   onQueue?: (payload: MessagePayload) => void;

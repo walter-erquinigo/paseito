@@ -95,6 +95,12 @@ export const ko: TranslationResources = {
       queue: "대기열",
       send: "보내기",
     },
+    queue: {
+      steer: "조정",
+      steeringConversation: "활성 작업 조정 중",
+      steerHint: "현재 실행 중인 작업에 지침으로 즉시 전송",
+      replaceFallbackHint: "이 제공자는 이 메시지로 활성 작업을 다시 시작합니다",
+    },
     cancel: {
       cancelingAgent: "에이전트 취소 중",
       stopAgent: "에이전트 중지",
@@ -791,6 +797,14 @@ export const ko: TranslationResources = {
       diff: {
         openChangesTab: "변경사항 탭 열기",
         closeChangesTab: "변경사항 탭 닫기",
+        fileNavigator: "파일",
+        showFileNavigator: "파일 탐색기 표시",
+        hideFileNavigator: "파일 탐색기 숨기기",
+        fileStatus: {
+          added: "추가됨",
+          deleted: "삭제됨",
+          modified: "수정됨",
+        },
         binaryFile: "바이너리 파일",
         tooLarge: "표시하기에 diff가 너무 큽니다",
         previewTooLargeTitle: "Diff가 너무 커서 미리 볼 수 없습니다",
@@ -808,6 +822,7 @@ export const ko: TranslationResources = {
         wrapLongLines: "긴 줄 줄바꿈",
         collapseAll: "모든 파일 접기",
         expandAll: "모든 파일 펼치기",
+        expandUnreviewed: "검토되지 않은 파일을 펼치고 검토된 파일 접기",
         collapseAllFolders: "모든 폴더 축소",
         expandAllFolders: "모든 폴더 확장",
         refreshing: "새로고침 중",
@@ -822,6 +837,33 @@ export const ko: TranslationResources = {
         diffMode: "Diff 모드",
         uncommitted: "커밋되지 않음",
         committed: "커밋됨",
+        baseSelectorLabel: "{{baseRef}} 기준 커밋된 변경 사항 비교",
+        baseSelectorTitle: "비교할 브랜치",
+        baseSelectorSearch: "브랜치 검색",
+        baseSelectorEmpty: "일치하는 브랜치가 없습니다",
+        baseSelectorMissing: "브랜치 {{baseRef}}이(가) 더 이상 존재하지 않습니다",
+        baseSelectorError: "비교 브랜치를 변경하지 못했습니다",
+        baseSelectorUpdateHost: "기준 브랜치를 선택하려면 호스트를 업데이트하세요",
+        markReviewed: "검토됨으로 표시",
+        markUnreviewed: "검토되지 않음으로 표시",
+        markFileReviewed: "{{file}} 검토됨으로 표시",
+        markFileUnreviewed: "{{file}} 검토되지 않음으로 표시",
+        markAllReviewed: "모든 파일 검토됨으로 표시",
+        clearAllReviewed: "모든 파일 검토 표시 지우기",
+        reviewUpdateHost: "파일을 검토됨으로 표시하려면 호스트를 업데이트하세요",
+        reviewBranchRequired: "파일을 검토됨으로 표시하려면 브랜치를 체크아웃하세요",
+        markLineReviewed: "{{line}}번 줄 검토됨으로 표시",
+        markLineUnreviewed: "{{line}}번 줄 검토되지 않음으로 표시",
+        editLineUnavailable: "이 줄은 기본 제공 편집기에서 열 수 없습니다",
+        noUncheckedLines: "해당 방향에 검토되지 않은 줄이 없습니다",
+        lineReviewShortcuts: "M / , 승인 및 이동 · Space 전환 · E 편집 · U 실행 취소 · Esc 지우기",
+        context: {
+          hiddenLines: "숨겨진 줄 {{count}}개",
+          expandUp: "위쪽 20줄 표시",
+          expandDown: "아래쪽 20줄 표시",
+          expandAll: "숨겨진 모든 줄 표시",
+          failedToExpand: "숨겨진 줄을 불러오지 못했습니다",
+        },
         branchUnknown: "알 수 없음",
         base: "기준",
         newFile: "신규",
@@ -961,6 +1003,7 @@ export const ko: TranslationResources = {
       discord: "Discord",
       github: "GitHub 이슈 만들기",
       whatsNew: "새로운 소식",
+      version: "Paseito {{version}}",
       appName: "Paseo",
     },
     sections: {
@@ -1252,6 +1295,7 @@ export const ko: TranslationResources = {
     },
   },
   rootError: {
+    kicker: "문제가 발생했습니다",
     title: "Paseo에 문제가 발생했습니다.",
     body: "앱을 다시 로드해 보세요. 이런 일이 계속 발생하면 신고할 때 아래 세부정보를 포함하세요.",
     details: "세부",
@@ -1642,8 +1686,8 @@ export const ko: TranslationResources = {
       other: "기타 도구 {{count}}개 사용함",
     },
     paseoCalls: {
-      one: "Paseo를 {{count}}회 호출함",
-      other: "Paseo를 {{count}}회 호출함",
+      one: "Paseito를 {{count}}회 호출함",
+      other: "Paseito를 {{count}}회 호출함",
     },
     and: "그리고",
   },
@@ -1662,6 +1706,10 @@ export const ko: TranslationResources = {
     accessibility: "컨텍스트 윈도우 {{percentage}}% 사용됨",
   },
   review: {
+    composer: {
+      comment: "댓글",
+      codeChange: "코드 변경",
+    },
     comment: {
       add: "리뷰 댓글 추가",
       edit: "리뷰 댓글 편집",
@@ -1672,6 +1720,23 @@ export const ko: TranslationResources = {
       cancelAccessibility: "리뷰 댓글 취소",
       save: "댓글",
       saveAccessibility: "리뷰 댓글 저장",
+    },
+    suggestion: {
+      start: "수정 제안",
+      edit: "제안 수정",
+      delete: "제안 삭제",
+      save: "제안 추가",
+      replacement: "제안된 교체 내용",
+      note: "제안 메모",
+      notePlaceholder: "선택적 설명",
+      lines: "{{start}}–{{end}}줄",
+      stale: "오래된 제안 — 보내기 전에 업데이트하세요",
+      deleteLines: "선택한 줄 삭제",
+      addLineAbove: "위에 줄 추가",
+      addLineBelow: "아래에 줄 추가",
+      rangeHidden: "이 범위를 선택하기 전에 숨겨진 줄을 펼치세요",
+      rangeTooLarge: "제안에는 최대 200줄까지 포함할 수 있습니다",
+      rangeInvalid: "같은 파일과 수정본의 현재 쪽 줄을 선택하세요",
     },
   },
   settings: {
@@ -1751,13 +1816,13 @@ export const ko: TranslationResources = {
       defaultSend: {
         label: "기본 전송",
         descriptions: {
-          interrupt:
-            "에이전트가 실행 중일 때 Enter는 중단합니다. Command/Ctrl+Enter는 대기열에 추가합니다.",
+          steer:
+            "에이전트가 실행 중일 때 Enter는 조정합니다. Command/Ctrl+Enter는 대기열에 추가합니다.",
           queue:
             "에이전트가 실행 중일 때 Enter는 대기열에 추가합니다. Command/Ctrl+Enter는 제출합니다.",
         },
         options: {
-          interrupt: "중단",
+          steer: "조정",
           queue: "대기열",
         },
       },

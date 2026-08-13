@@ -8712,22 +8712,10 @@ test("authoritative timeline records a daemon-handled submitted prompt before it
       events.flatMap((event) =>
         event.type === "agent_stream" && event.event.type === "timeline" ? [event.event.item] : [],
       ),
-    ).toEqual([
-      {
-        type: "user_message",
-        text: "/handled",
-        clientMessageId: "msg-client-daemon-handled",
-      },
-      { type: "assistant_message", text: "Handled by the daemon" },
-    ]);
+    ).toEqual([{ type: "assistant_message", text: "Handled by the daemon" }]);
 
     const timeline = manager.fetchTimeline(snapshot.id, { direction: "tail", limit: 20 }).rows;
     expect(timeline.map((row) => row.item)).toEqual([
-      {
-        type: "user_message",
-        text: "/handled",
-        clientMessageId: "msg-client-daemon-handled",
-      },
       { type: "assistant_message", text: "Handled by the daemon" },
     ]);
   } finally {

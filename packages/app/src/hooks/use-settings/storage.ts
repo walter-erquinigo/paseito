@@ -79,7 +79,7 @@ export interface Settings extends AppSettings {
  * `sidebarRowItems` is widened back to `unknown` because it is still read for a value the
  * current shape no longer has — see `isChecksHiddenByLegacyRowItem`.
  */
-type StoredAppSettings = Partial<Omit<AppSettings, "sidebarRowItems">> & {
+type StoredAppSettings = Partial<Omit<AppSettings, "sidebarRowItems" | "sendBehavior">> & {
   sendBehavior?: unknown;
   compactToolCalls?: unknown;
   sidebarRowItems?: unknown;
@@ -300,7 +300,6 @@ function parseSendBehavior(value: unknown): SendBehavior | null {
   if (value === "interrupt") return "steer";
   return null;
 }
-
 
 function pickAppSettings(stored: StoredAppSettings): Partial<AppSettings> {
   const result: Partial<AppSettings> = {};
