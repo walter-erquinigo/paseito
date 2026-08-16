@@ -106,3 +106,31 @@ survive a new file revision. Repeated edits survive only when their count and or
 the same uniquely anchored region are unchanged; inserted, removed, or moved ambiguous repetitions
 are cleared. Existing file-level records are materialized as reviewed lines the first time the
 upgraded client observes that diff.
+
+## Desktop file tree
+
+Changes uses the upstream resizable tree rail as its only desktop file navigator. The rail reuses the
+Changes directory hierarchy, compresses single-child folder chains, shows file status and diff
+counts, and persists its width and folder expansion in the retained Changes surface. Its toolbar
+toggle controls the same rail; Paseito does not add a second fixed-width navigator.
+
+Selecting a tree file expands and focuses its diff. Repeated selections issue new focus requests,
+while manual diff scrolling remains independent from tree selection. Compact layouts and commit
+diffs do not render the rail.
+
+`/` searches changed filenames and complete current-side source with smart-case matching after
+Enter. The daemon validates the displayed file set and content revisions, then returns at most
+10,000 matches without transferring the source corpus to the client. Revealing a hidden text match
+loads only a bounded surrounding context window. Deleted, binary, and oversized files remain
+searchable by name. Older hosts report that an update is required.
+
+Editor LSP now prefers the existing Lens broker but no longer depends on Lens for C and C++ files.
+When Lens is absent, the daemon starts one shared clangd for the workspace and automatically uses a
+compilation database from either the workspace root or its `build` directory. Hovering a token shows
+clangd information, while `F12`, Command/Ctrl-click, and the Electron **Go to Definition /
+Declaration** context-menu action open the source definition in Paseito. The top Diff toolbar shows
+one LSP action per applicable language-server kind, immediately before **Review**, rather than one
+per file. Wide panes show language and provider labels; narrow panes use accessible icon actions.
+LSP remains available with uncommitted changes, using the exact source revision displayed by each
+comparison. Conflicting unsaved editor buffers remain protected. See [paseito-lsp.md](paseito-lsp.md)
+for session ownership and retry behavior.

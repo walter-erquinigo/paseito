@@ -3,7 +3,7 @@ import { paintWebViewport } from "./paint.web";
 import type { DiffCell, DiffDocumentModel, DiffLineRow, DiffPalette, DiffSelection } from "./types";
 
 describe("web diff text shaping", () => {
-  it("matches the 30px file-header alignment rails exactly", () => {
+  it("matches the file-header rails without duplicating the overlay's diff counts", () => {
     const fills: Array<{ color: string; x: number; y: number; width: number; height: number }> = [];
     const labels: Array<{ text: string; x: number; y: number; color: string; font: string }> = [];
     let fillStyle = "";
@@ -88,8 +88,6 @@ describe("web diff text shaping", () => {
       { color: "header-border", x: 0, y: 29, width: 200, height: 1 },
     ]);
     expect(labels.filter((label) => label.text !== "fi")).toEqual([
-      { text: "+1", x: 142, y: 18, color: "success", font: "12px system-ui" },
-      { text: "-0", x: 158, y: 18, color: "danger", font: "12px system-ui" },
       { text: "a.ts", x: 12, y: 18, color: "foreground", font: "14px system-ui" },
       { text: "src", x: 40, y: 18, color: "muted", font: "14px system-ui" },
     ]);

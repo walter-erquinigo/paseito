@@ -18,12 +18,14 @@ import type { ReviewableChangedLine } from "@/review";
 import { createDiffPalette, retainDiffPalette } from "./palette";
 import { DiffSurface } from "./surface";
 import type { DiffDocumentProps, DiffHeaderTypography, DiffPalette } from "./types";
+import type { LspHoverVisualTheme } from "@/file-pane/editor/lsp-hover-markdown.web";
 
 export type { DiffDocumentProps, WorkingDiffMode } from "./types";
 
 type ThemedDiffDocumentProps = DiffDocumentProps & {
   palette: DiffPalette;
   headerTypography: DiffHeaderTypography;
+  hoverTheme: LspHoverVisualTheme;
 };
 
 const EMPTY_PATHS: string[] = [];
@@ -305,6 +307,16 @@ const StyledDiffDocument = withUnistyles(ThemedDiffDocument, (theme) => ({
     family: theme.fontFamily.ui,
     size: theme.fontSize.base,
     statSize: theme.fontSize.sm,
+  },
+  hoverTheme: {
+    border: theme.colors.border,
+    codeBackground: theme.colors.surface2,
+    codeFontSize: theme.fontSize.code,
+    foreground: theme.colors.foreground,
+    foregroundMuted: theme.colors.foregroundMuted,
+    monoFont: theme.fontFamily.mono,
+    surfaceRaised: theme.colors.surface3,
+    uiFont: theme.fontFamily.ui,
   },
 }));
 

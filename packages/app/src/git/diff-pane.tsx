@@ -8,6 +8,7 @@ import {
   View,
   Text,
   Pressable,
+  type LayoutChangeEvent,
   type PressableStateCallbackType,
   type StyleProp,
   type ViewStyle,
@@ -103,6 +104,10 @@ import {
   applyChangesBaseSelection,
   getChangesStackParentBadgeKind,
 } from "@/git/changes-base-selection";
+import type { WorkspaceFileOpenOptions } from "@/workspace/file-open";
+import { useChangesLsp } from "@/git/use-changes-lsp";
+import { ChangesLspToolbar } from "@/git/changes-lsp-toolbar";
+import type { ChangesSearchMatch } from "@/git/changes-search";
 
 export type { GitActionId, GitAction, GitActions } from "@/git/policy";
 
@@ -188,7 +193,7 @@ interface ChangesSurfaceProps {
   presentation?: ChangesPresentation;
   focusPath?: string;
   focusRequestId?: number;
-  onOpenFile?: (path: string) => void;
+  onOpenFile?: (path: string, options?: WorkspaceFileOpenOptions) => void;
   onOpenToSide?: (path: string) => void;
   onSelectDiffFile?: (path: string) => void;
   onAddToChat?: (path: string) => void;
@@ -485,6 +490,7 @@ interface ChangesComparisonToolbarModel {
 }
 
 interface ChangesHeaderProps {
+  lspControls: ReactNode;
   compact: boolean;
   repository: ChangesRepositoryToolbarModel;
   comparison: ChangesComparisonToolbarModel;
@@ -543,10 +549,17 @@ function buildChangesHeaderModel(input: BuildChangesHeaderModelInput): {
 
 // Presentation resolves into these two capability models before rendering. The rows
 // never infer which host or Changes presentation produced them.
-function ChangesHeader({ compact, repository, comparison, sidebarSurface }: ChangesHeaderProps) {
+function ChangesHeader({
+  lspControls,
+  compact,
+  repository,
+  comparison,
+  sidebarSurface,
+}: ChangesHeaderProps) {
   if (comparison.mode.kind === "diff") {
     return (
       <ChangesDiffOnlyToolbar
+        lspControls={lspControls}
         compact={compact}
         mode={comparison.mode}
         sidebarSurface={sidebarSurface}
@@ -570,12 +583,14 @@ function ChangesHeader({ compact, repository, comparison, sidebarSurface }: Chan
 }
 
 function ChangesDiffOnlyToolbar({
+  lspControls,
   compact,
   mode,
   sidebarSurface,
 }: {
   compact: boolean;
   mode: Extract<ChangesToolbarMode, { kind: "diff" }>;
+  lspControls: ReactNode;
   sidebarSurface: boolean;
 }) {
   return (
@@ -587,6 +602,7 @@ function ChangesDiffOnlyToolbar({
     >
       <ChangesToolbarLeading />
       <ChangesToolbarTrailing>
+        {lspControls}
         <ChangesToolbarActions mode={mode} compact={compact} />
       </ChangesToolbarTrailing>
     </ChangesToolbarRow>
@@ -1526,6 +1542,11 @@ export function ChangesSurface({
   const { preferences, updatePreferences } = useChangesPreferences();
   const { t } = useTranslation();
   const isMobile = useIsCompactFormFactor();
+  const [paneWidth, setPaneWidth] = useState(0);
+  const handlePaneLayout = useCallback(
+    (event: LayoutChangeEvent) => setPaneWidth(event.nativeEvent.layout.width),
+    [],
+  );
   const canUseSplitLayout = isWeb && !isMobile;
   const instanceState = changesState ?? defaultChangesState;
   const updateState = onStateChange ?? noopStateChange;
@@ -1766,6 +1787,32 @@ export function ChangesSurface({
     },
     [onSelectDiffFile, presentation],
   );
+  const handleOpenLspDefinition = useCallback(
+    (location: { path: string; lineStart: number; lineEnd: number }) => {
+      onOpenFile?.(location.path, {
+        lineStart: location.lineStart,
+        lineEnd: location.lineEnd,
+        openMode: "source",
+      });
+    },
+    [onOpenFile],
+  );
+  const loadChangesLspSource = contextExpansion.loadSource;
+  const expandSearchLine = contextExpansion.expandLine;
+  const searchChanges = contextExpansion.search;
+  const changesLsp = useChangesLsp({
+    serverId,
+    cwd,
+    active: enabled !== false,
+    loadSource: loadChangesLspSource,
+    onOpenDefinition: handleOpenLspDefinition,
+  });
+  const revealSearchMatch = useCallback(
+    async (match: ChangesSearchMatch) => {
+      if (match.kind === "text") await expandSearchLine(match.filePath, match.lineNumber);
+    },
+    [expandSearchLine],
+  );
   const workingMode = useMemo(
     () => ({
       kind: "working" as const,
@@ -1783,8 +1830,10 @@ export function ChangesSurface({
       onDownload: handleDownloadPath,
       onDuplicate: fsEntryDuplicateEnabled ? handleDuplicatePath : undefined,
       onRevert: onRevertPath,
-      onExpandContext: contextExpansion.expand,
-      onExpandFile: contextExpansionSupported ? contextExpansion.expandFile : undefined,
+      onSearch: searchChanges,
+      searchSupported: contextExpansionSupported,
+      onRevealSearchMatch: revealSearchMatch,
+      lsp: changesLsp,
     }),
     [
       reviewActions,
@@ -1803,9 +1852,9 @@ export function ChangesSurface({
       fileManagerTarget,
       fsEntryDuplicateEnabled,
       onRevertPath,
-      contextExpansion.expand,
-      contextExpansion.expandFile,
-      contextExpansionSupported,
+      searchChanges,
+      revealSearchMatch,
+      changesLsp,
     ],
   );
 
@@ -1995,6 +2044,16 @@ export function ChangesSurface({
       workspaceId,
     ],
   );
+  const lspControls = useMemo(
+    () => (
+      <ChangesLspToolbar
+        files={files}
+        lsp={changesLsp}
+        compact={isMobile || (paneWidth > 0 && paneWidth < 700)}
+      />
+    ),
+    [files, changesLsp, isMobile, paneWidth],
+  );
 
   return (
     <View
@@ -2002,9 +2061,11 @@ export function ChangesSurface({
         onContextMenu: (event: { preventDefault?: () => void }) => event.preventDefault?.(),
       }}
       style={styles.container}
+      onLayout={handlePaneLayout}
     >
       {isGit ? (
         <ChangesHeader
+          lspControls={lspControls}
           compact={isMobile}
           repository={changesHeaderModel.repository}
           comparison={changesHeaderModel.comparison}

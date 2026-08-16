@@ -4,10 +4,12 @@ import type { DiffFileSection } from "./types";
 export const HorizontalScroll = memo(function HorizontalScroll({
   file,
   initialOffset,
+  requestKey,
   onScroll,
 }: {
   file: DiffFileSection;
   initialOffset: number;
+  requestKey?: string;
   onScroll: (path: string, offset: number) => void;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -37,7 +39,7 @@ export const HorizontalScroll = memo(function HorizontalScroll({
     if (!element) return;
     element.scrollLeft = initialOffset;
     onScroll(file.path, element.scrollLeft);
-  }, [file.path, initialOffset, onScroll]);
+  }, [file.path, initialOffset, onScroll, requestKey]);
   return (
     <div
       ref={scrollRef}

@@ -9,6 +9,7 @@ import type {
   CheckoutCommitsListRequest,
   CheckoutCommitFileDiffRequest,
   CheckoutDiffGetContextRequest,
+  CheckoutDiffSearchRequest,
   CheckoutRefreshRequest,
   CheckoutRenameBranchRequest,
   CheckoutStatusRequest,
@@ -528,6 +529,39 @@ export class CheckoutSession {
       });
     }
   }
+
+  async handleDiffSearchRequest(msg: CheckoutDiffSearchRequest): Promise<void> {
+    const cwd = expandTilde(msg.cwd);
+    try {
+      const result = await this.workspaceGitService.searchCheckoutDiff(cwd, {
+        compare: msg.compare,
+        query: msg.query,
+        files: msg.files,
+        limit: msg.limit,
+      });
+      this.host.emit({
+        type: "checkout.diff.search.response",
+        payload: {
+          cwd: msg.cwd,
+          ...result,
+          error: null,
+          requestId: msg.requestId,
+        },
+      });
+    } catch (error) {
+      this.host.emit({
+        type: "checkout.diff.search.response",
+        payload: {
+          cwd: msg.cwd,
+          matches: [],
+          truncated: false,
+          error: toCheckoutError(error),
+          requestId: msg.requestId,
+        },
+      });
+    }
+  }
+
   async handleRefreshRequest(msg: CheckoutRefreshRequest): Promise<void> {
     const { cwd, requestId } = msg;
     const resolvedCwd = expandTilde(cwd);

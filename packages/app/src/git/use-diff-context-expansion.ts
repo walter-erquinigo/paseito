@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ParsedDiffFile } from "@getpaseo/protocol/messages";
+import { CryptoDigestAlgorithm, digestStringAsync } from "expo-crypto";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
 import {
   type DiffContextRegion,
@@ -7,6 +8,8 @@ import {
   buildDiffContextRegions,
   withExpandedDiffContext,
 } from "@/git/diff-context-expansion";
+import type { ChangesSearchResult } from "@/git/changes-search";
+import { reconstructRevisionedSource } from "@/git/revisioned-source";
 
 type ExpandDirection = "up" | "down" | "all";
 
@@ -46,6 +49,7 @@ export function useDiffContextExpansion(input: {
   compare: { mode: "uncommitted" | "base"; baseRef?: string; ignoreWhitespace?: boolean };
   files: ParsedDiffFile[];
   supported: boolean;
+  searchSupported: boolean;
   requestedLines?: ReadonlyArray<{ filePath: string; lineNumber: number }>;
 }) {
   const client = useHostRuntimeClient(input.serverId);
@@ -59,6 +63,7 @@ export function useDiffContextExpansion(input: {
     [input.compare, input.cwd, input.files],
   );
   const [state, setState] = useState<ExpansionState>(EMPTY_STATE);
+  const sourceCacheRef = useRef(new Map<string, string[]>());
   const activeState = useMemo(
     () => (state.scopeKey === scopeKey ? state : { ...EMPTY_STATE, scopeKey }),
     [scopeKey, state],
@@ -209,6 +214,78 @@ export function useDiffContextExpansion(input: {
     [activeState.linesByFile, expand, input.files, input.supported],
   );
 
+  const loadSourceLines = useCallback(
+    async (file: ParsedDiffFile): Promise<string[] | null> => {
+      if (
+        !input.supported ||
+        !client ||
+        !file.revision ||
+        file.isDeleted ||
+        file.status === "binary" ||
+        file.status === "too_large" ||
+        !file.newLineCount
+      ) {
+        return null;
+      }
+      const cacheKey = `${scopeKey}:${file.path}:${file.revision}`;
+      const cached = sourceCacheRef.current.get(cacheKey);
+      if (cached) return cached;
+      const lines: string[] = [];
+      const region = { oldStart: 1, newStart: 1, lineCount: file.newLineCount };
+      let offset = 0;
+      while (offset < region.lineCount) {
+        const payload = await client.getCheckoutDiffContext(input.cwd, {
+          compare: input.compare,
+          filePath: file.path,
+          expectedRevision: file.revision,
+          region,
+          offset,
+          limit: Math.min(CONTEXT_PAGE_SIZE, region.lineCount - offset),
+        });
+        if (payload.lines.length === 0) throw new Error("The host returned an empty source page");
+        lines.push(...payload.lines.map((line) => line.content));
+        offset += payload.lines.length;
+      }
+      sourceCacheRef.current.set(cacheKey, lines);
+      return lines;
+    },
+    [client, input.compare, input.cwd, input.supported, scopeKey],
+  );
+
+  const search = useCallback(
+    async (query: string): Promise<ChangesSearchResult> => {
+      if (!input.searchSupported || !client) {
+        throw new Error("Update this host to search Changes.");
+      }
+      const payload = await client.searchCheckoutDiff(input.cwd, {
+        compare: input.compare,
+        query,
+        files: input.files.map((file) => ({
+          path: file.path,
+          ...(file.revision ? { expectedRevision: file.revision } : {}),
+        })),
+        limit: 10_000,
+      });
+      return { matches: payload.matches, truncated: payload.truncated };
+    },
+    [client, input.compare, input.cwd, input.files, input.searchSupported],
+  );
+
+  const loadSource = useCallback(
+    async (filePath: string) => {
+      const file = input.files.find((candidate) => candidate.path === filePath);
+      if (!file) return null;
+      const lines = await loadSourceLines(file);
+      if (!lines || !file.revision) return null;
+      return reconstructRevisionedSource({
+        lines,
+        revision: file.revision,
+        digest: (content) => digestStringAsync(CryptoDigestAlgorithm.SHA256, content),
+      });
+    },
+    [input.files, loadSourceLines],
+  );
+
   useEffect(() => {
     if (!input.supported || activeState.loadingKeys.length > 0) return;
     for (const requested of input.requestedLines ?? []) {
@@ -228,6 +305,8 @@ export function useDiffContextExpansion(input: {
     expand,
     expandFile,
     expandLine,
+    search,
+    loadSource,
     expandingFilePaths,
     isLoading: activeState.loadingKeys.length > 0,
   };

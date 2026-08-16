@@ -2816,6 +2816,8 @@ export class Session {
         return this.checkoutSession.handleUnsubscribeDiffRequest(msg, this.delivery);
       case "checkout.diff.get_context.request":
         return this.checkoutSession.handleDiffGetContextRequest(msg);
+      case "checkout.diff.search.request":
+        return this.checkoutSession.handleDiffSearchRequest(msg);
       case "checkout_switch_branch_request":
         return this.checkoutSession.handleCheckoutSwitchBranchRequest(msg);
       case "checkout.rename_branch.request":
@@ -5033,13 +5035,22 @@ export class Session {
   }
 
   private async handleDirectorySuggestionsRequest(msg: DirectorySuggestionsRequest): Promise<void> {
-    const { query, limit, requestId, cwd, includeFiles, includeDirectories, matchMode } = msg;
+    const {
+      query,
+      limit,
+      requestId,
+      cwd,
+      includeFiles,
+      includeDirectories,
+      matchMode,
+    } = msg;
 
     try {
       const workspaceCwd = cwd?.trim();
       const searchesWorkspace = Boolean(workspaceCwd);
+      const workspaceRoot = workspaceCwd ? expandTilde(workspaceCwd) : null;
       const entries = await searchDirectoryEntries({
-        root: workspaceCwd ? expandTilde(workspaceCwd) : (process.env.HOME ?? homedir()),
+        root: workspaceRoot ?? process.env.HOME ?? homedir(),
         query,
         pathFormat: searchesWorkspace ? "relative" : "absolute",
         pathQueryPolicy: searchesWorkspace ? "slashes" : "rooted",

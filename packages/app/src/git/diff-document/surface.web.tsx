@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { ViewStyle } from "react-native";
+import type { WorkspaceLspHover } from "@getpaseo/protocol/messages";
 import { DomOverlayScrollbar } from "@/components/ui/overlay-scrollbar/dom-overlay-scrollbar";
 import {
   ContextMenu,
@@ -11,7 +12,11 @@ import {
 } from "@/components/ui/context-menu";
 import { useToast } from "@/contexts/toast-context";
 import { useStableEvent } from "@/hooks/use-stable-event";
-import { getInlineReviewThreadState, InlineReviewGutterCell, InlineReviewThread } from "@/review";
+import {
+  getInlineReviewThreadState,
+  InlineReviewGutterCell,
+  InlineReviewThread,
+} from "@/review";
 import { copyToClipboard } from "@/utils/copy-to-clipboard";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import type { ReviewableDiffTarget } from "@/utils/diff-layout";
@@ -36,7 +41,12 @@ import {
 } from "./review-checkbox";
 import { retainHorizontalOffsetMapForPaths } from "./horizontal-offsets";
 import { HorizontalScroll } from "./horizontal-scroll.web";
-import { buildDiffDocumentModel, FILE_HEADER_HEIGHT, resolveRelayoutScrollTop } from "./model";
+import {
+  buildDiffDocumentModel,
+  FILE_HEADER_HEIGHT,
+  fragmentWidthForRange,
+  resolveRelayoutScrollTop,
+} from "./model";
 import { paintWebFileHeader, paintWebViewport } from "./paint.web";
 import { hasPointerDragStarted } from "./pointer-gesture";
 import { createMeasuredAdvances } from "./text-measurement";
@@ -44,12 +54,20 @@ import { retainDiffViewport } from "./viewport";
 import type {
   DiffHit,
   DiffFileSection,
+  DiffCell,
+  DiffDocumentModel,
   DiffSelection,
   DiffSurfaceProps,
   DiffTypography,
   TextMeasurer,
 } from "./types";
 import { useDiffDocumentWorkspaceCache } from "./workspace-cache";
+import type { ChangesSearchMatch } from "@/git/changes-search";
+import {
+  createLspHoverMarkdownDom,
+  hasLspHoverContent,
+} from "@/file-pane/editor/lsp-hover-markdown.web";
+import { positionLspHover } from "./lsp-hover-position";
 
 const DEFAULT_MONO_STACK = "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace";
 const RESIZE_SETTLE_DELAY_MS = 120;
@@ -78,6 +96,136 @@ function emptyStickyHeaderCanvasSlot(): StickyHeaderCanvasSlot {
   };
 }
 
+interface ChangesSearchState {
+  open: boolean;
+  query: string;
+  matches: ChangesSearchMatch[];
+  selected: number;
+  status: "idle" | "loading" | "ready" | "error";
+  truncated: boolean;
+  error: string | null;
+}
+
+function changesSearchStatusLabel(search: ChangesSearchState): string | null {
+  if (search.status === "loading") return "Searching…";
+  if (search.status === "error") return search.error;
+  if (search.matches.length > 0) {
+    return `${search.selected + 1}/${search.matches.length}${search.truncated ? "+" : ""}`;
+  }
+  if (search.status === "ready") return "No matches";
+  return "Enter to search";
+}
+
+function horizontalOffsetForSourceColumn(input: {
+  cell: DiffCell;
+  column: number;
+  gutterWidth: number;
+  viewportWidth: number;
+}): number {
+  const sourceOffset = Math.min(input.cell.content.length, Math.max(0, input.column - 1));
+  const fragment =
+    input.cell.fragments.find(
+      (candidate) => candidate.start <= sourceOffset && sourceOffset <= candidate.end,
+    ) ?? input.cell.fragments.at(-1);
+  const textAdvance = fragment ? fragmentWidthForRange(fragment, fragment.start, sourceOffset) : 0;
+  const visibleCodeWidth = Math.max(1, input.viewportWidth - input.gutterWidth);
+  return Math.max(0, input.gutterWidth + 8 + textAdvance - visibleCodeWidth * 0.75);
+}
+
+function navigationColumnOffset(
+  model: DiffDocumentModel,
+  navigation: {
+    focusPath?: string;
+    focusRequestId?: number;
+    focusLineStart?: number;
+    focusLineEnd?: number;
+    focusColumn?: number;
+  } | null,
+): { path: string; offset: number; requestKey: string } | null {
+  if (
+    model.wrapLines ||
+    !navigation?.focusPath ||
+    !navigation.focusLineStart ||
+    !navigation.focusColumn
+  ) {
+    return null;
+  }
+  const lineEnd = navigation.focusLineEnd ?? navigation.focusLineStart;
+  const row = model.rows.find(
+    (candidate) =>
+      candidate.kind === "line" &&
+      candidate.path === navigation.focusPath &&
+      candidate.cells.some(
+        (cell) =>
+          cell?.sourceIdentity.side === "new" &&
+          cell.lineNumber !== null &&
+          cell.lineNumber >= navigation.focusLineStart! &&
+          cell.lineNumber <= lineEnd,
+      ),
+  );
+  if (row?.kind !== "line") return null;
+  const cell = row.cells.find(
+    (candidate) => candidate?.sourceIdentity.side === "new" && candidate.lineNumber !== null,
+  );
+  const file = model.files[row.fileIndex];
+  if (!cell || !file) return null;
+  return {
+    path: file.path,
+    offset: horizontalOffsetForSourceColumn({
+      cell,
+      column: navigation.focusColumn,
+      gutterWidth: file.gutterWidth,
+      viewportWidth: model.viewportWidth,
+    }),
+    requestKey: `${navigation.focusRequestId ?? "initial"}:${navigation.focusPath}:${navigation.focusLineStart}:${lineEnd}:${navigation.focusColumn}`,
+  };
+}
+
+function navigationMarkers(
+  model: DiffDocumentModel,
+  navigation: { filePath: string; lineStart: number; lineEnd: number },
+): Array<{
+  key: string;
+  path: string;
+  lineNumber: number;
+  style: React.CSSProperties;
+}> {
+  const markers: Array<{
+    key: string;
+    path: string;
+    lineNumber: number;
+    style: React.CSSProperties;
+  }> = [];
+  for (const row of model.rows) {
+    if (row.kind !== "line" || row.path !== navigation.filePath) continue;
+    const columnWidth = model.viewportWidth / row.cells.length;
+    row.cells.forEach((cell, cellIndex) => {
+      if (
+        cell?.sourceIdentity.side !== "new" ||
+        cell.lineNumber === null ||
+        cell.lineNumber < navigation.lineStart ||
+        cell.lineNumber > navigation.lineEnd
+      )
+        return;
+      markers.push({
+        key: `${row.index}:${cellIndex}`,
+        path: row.path,
+        lineNumber: cell.lineNumber,
+        style: {
+          position: "absolute",
+          top: row.top,
+          left: cellIndex * columnWidth,
+          width: columnWidth,
+          height: row.height - row.reviewHeight,
+          zIndex: 3,
+          pointerEvents: "none",
+        },
+      });
+    });
+  }
+  return markers;
+}
+
 export function DiffSurface(props: DiffSurfaceProps) {
   const { t } = useTranslation();
   const toast = useToast();
@@ -95,6 +243,7 @@ export function DiffSurface(props: DiffSurfaceProps) {
   const modelRef = useRef<ReturnType<typeof buildDiffDocumentModel> | null>(null);
   const previousModelRef = useRef<ReturnType<typeof buildDiffDocumentModel> | null>(null);
   const consumedFocusRef = useRef<string | null>(null);
+  const consumedReviewFocusRef = useRef<string | null>(null);
   const scrollTopRef = useRef(0);
   const horizontalOffsetsRef = useRef(new Map<string, number>());
   const selectionRef = useRef<DiffSelection | null>(null);
@@ -120,6 +269,22 @@ export function DiffSurface(props: DiffSurfaceProps) {
   >([]);
   const [hasSelection, setHasSelection] = useState(false);
   const [contextHit, setContextHit] = useState<Extract<DiffHit, { kind: "cell" }> | null>(null);
+  const [search, setSearch] = useState<ChangesSearchState>({
+    open: false,
+    query: "",
+    matches: [],
+    selected: -1,
+    status: "idle",
+    truncated: false,
+    error: null,
+  });
+  const [lspHover, setLspHover] = useState<{
+    hover: WorkspaceLspHover;
+    anchorX: number;
+    anchorY: number;
+  } | null>(null);
+  const lspHoverDomRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const family = props.displayPreferences.monoFontFamily.trim() || DEFAULT_MONO_STACK;
   useLayoutEffect(() => {
     const stats = (window as typeof window & { __PASEO_DIFF_REACT_STATS__?: { commits: number } })
@@ -165,7 +330,71 @@ export function DiffSurface(props: DiffSurfaceProps) {
   const reviewActions = props.mode.kind === "working" ? props.mode.reviewActions : undefined;
   const reviewIndicatorWidth = lineReviewDotGutterWidth(props.reviewPresentation !== undefined);
   const workingMode = props.mode.kind === "working" ? props.mode : null;
-  const expandContext = workingMode?.onExpandContext;
+  const navigationHighlight = useMemo(() => {
+    if (!workingMode?.focusPath || !workingMode.focusLineStart) return undefined;
+    return {
+      filePath: workingMode.focusPath,
+      lineStart: workingMode.focusLineStart,
+      lineEnd: Math.max(
+        workingMode.focusLineStart,
+        workingMode.focusLineEnd ?? workingMode.focusLineStart,
+      ),
+    };
+  }, [workingMode]);
+  const effectiveNavigationHighlight = useMemo(() => {
+    const selectedSearchMatch = search.matches[search.selected];
+    if (selectedSearchMatch?.kind === "text") {
+      return {
+        filePath: selectedSearchMatch.filePath,
+        lineStart: selectedSearchMatch.lineNumber,
+        lineEnd: selectedSearchMatch.lineNumber,
+      };
+    }
+    return navigationHighlight;
+  }, [navigationHighlight, search.matches, search.selected]);
+  const expandContext = props.reviewPresentation?.onExpandContext;
+  const searchStatusLabel = changesSearchStatusLabel(search);
+  const lspHoverStyle = useMemo<React.CSSProperties | undefined>(
+    () =>
+      lspHover
+        ? {
+            ...HOVER_STYLE,
+            ...positionLspHover({
+              anchorX: lspHover.anchorX,
+              anchorY: lspHover.anchorY,
+              viewportHeight: viewport.height,
+              viewportWidth: viewport.width,
+            }),
+          }
+        : undefined,
+    [lspHover, viewport.height, viewport.width],
+  );
+  useLayoutEffect(() => {
+    const host = lspHoverDomRef.current;
+    if (!host || !lspHover) return;
+    const dom = createLspHoverMarkdownDom(lspHover.hover, {
+      ...props.hoverTheme,
+      codeFontSize: props.displayPreferences.codeFontSize,
+      monoFont: family,
+    });
+    const position = positionLspHover({
+      anchorX: lspHover.anchorX,
+      anchorY: lspHover.anchorY,
+      viewportHeight: viewport.height,
+      viewportWidth: viewport.width,
+    });
+    dom.style.maxHeight = `${position.maxHeight}px`;
+    dom.style.maxWidth = `${position.maxWidth}px`;
+    host.replaceChildren(dom);
+    return () => host.replaceChildren();
+  }, [
+    family,
+    lspHover,
+    props.displayPreferences.codeFontSize,
+    props.hoverTheme,
+    viewport.height,
+    viewport.width,
+  ]);
   const model = useMemo(() => {
     if (!loadedTypography || !measurement) {
       return emptyDiffDocumentModel({
@@ -211,6 +440,10 @@ export function DiffSurface(props: DiffSurfaceProps) {
     workspaceCache,
   ]);
   modelRef.current = model;
+  const requestedColumnOffset = useMemo(
+    () => navigationColumnOffset(model, workingMode),
+    [model, workingMode],
+  );
 
   const paintStickyHeaderPool = useCallback(
     (currentModel: ReturnType<typeof buildDiffDocumentModel>, scrollTop: number) => {
@@ -348,11 +581,19 @@ export function DiffSurface(props: DiffSurfaceProps) {
       horizontalOffsets: horizontalOffsetsRef.current,
       selection: selectionRef.current,
       activeHeaderPath: activeHeaderPathRef.current,
+      navigationHighlight: effectiveNavigationHighlight,
       devicePixelRatio: ratio,
       paintTop,
       paintHeight,
     });
-  }, [loadedTypography, measurement, props.headerTypography, props.palette, viewport.height]);
+  }, [
+    effectiveNavigationHighlight,
+    loadedTypography,
+    measurement,
+    props.headerTypography,
+    props.palette,
+    viewport.height,
+  ]);
   const schedulePaint = useCallback(
     (force = true) => {
       if (force) forcePaintRef.current = true;
@@ -469,6 +710,7 @@ export function DiffSurface(props: DiffSurfaceProps) {
     paintStickyHeaderPool(model, scrollTopRef.current);
     updateInteractionFiles(scrollTopRef.current);
   }, [model, paintStickyHeaderPool, schedulePaint, updateInteractionFiles]);
+  useLayoutEffect(schedulePaint, [effectiveNavigationHighlight, schedulePaint]);
   useEffect(
     () => () => {
       if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
@@ -481,7 +723,7 @@ export function DiffSurface(props: DiffSurfaceProps) {
   const mode = props.mode;
   const collapsedFilePaths = props.collapsedFilePaths;
   useEffect(() => {
-    if (mode.kind !== "working") return;
+    if (mode.kind !== "working" || mode.focusLineStart) return;
     const focusPath = mode.focusPath;
     if (!focusPath) return;
     const requestKey = `${mode.focusRequestId ?? "initial"}:${focusPath}`;
@@ -498,6 +740,56 @@ export function DiffSurface(props: DiffSurfaceProps) {
       consumedFocusRef.current = requestKey;
     }
   }, [collapsedFilePaths, mode, model.files, onToggleFile]);
+  useEffect(() => {
+    if (mode.kind !== "working" || !mode.focusPath || !mode.focusLineStart) return;
+    const requestKey = `${mode.focusRequestId ?? "initial"}:${mode.focusPath}:${mode.focusLineStart}:${mode.focusLineEnd ?? mode.focusLineStart}`;
+    if (consumedFocusRef.current === requestKey) return;
+    if (collapsedFilePaths.has(mode.focusPath)) {
+      onToggleFile(mode.focusPath);
+      return;
+    }
+    const row = model.rows.find(
+      (candidate) =>
+        candidate.kind === "line" &&
+        candidate.path === mode.focusPath &&
+        candidate.cells.some(
+          (cell) =>
+            cell?.lineNumber !== null &&
+            cell?.lineNumber !== undefined &&
+            cell.lineNumber >= mode.focusLineStart! &&
+            cell.lineNumber <= (mode.focusLineEnd ?? mode.focusLineStart!),
+        ),
+    );
+    const scroll = scrollRef.current;
+    if (row?.kind === "line" && scroll) {
+      scroll.scrollTop = Math.max(0, row.top - FILE_HEADER_HEIGHT);
+      scroll.focus({ preventScroll: true });
+      consumedFocusRef.current = requestKey;
+    }
+  }, [collapsedFilePaths, mode, model, onToggleFile]);
+  useEffect(() => {
+    const presentation = props.reviewPresentation;
+    const selectedLineId = presentation?.selectedLineId;
+    if (!selectedLineId || !workingMode?.fileReviews) return;
+    const requestKey = `${presentation.focusRequest}:${selectedLineId}`;
+    if (consumedReviewFocusRef.current === requestKey) return;
+    const row = model.rows.find(
+      (candidate) =>
+        candidate.kind === "line" &&
+        candidate.cells.some((cell) => {
+          const targetKey = cell?.reviewTarget?.key;
+          return (
+            targetKey !== undefined &&
+            workingMode.fileReviews?.lineByTargetKey.get(targetKey)?.id === selectedLineId
+          );
+        }),
+    );
+    const scroll = scrollRef.current;
+    if (row?.kind !== "line" || !scroll) return;
+    scroll.scrollTop = Math.max(0, row.top - (viewport.height - row.height) / 2);
+    scroll.focus({ preventScroll: true });
+    consumedReviewFocusRef.current = requestKey;
+  }, [model, props.reviewPresentation, viewport.height, workingMode]);
 
   const handleVerticalScroll = useCallback(
     (scrollElement: HTMLDivElement) => {
@@ -587,6 +879,247 @@ export function DiffSurface(props: DiffSurfaceProps) {
     desiredTypography,
     setSelection,
   ]);
+  const lspTargetAt = useCallback(
+    (event: MouseEvent) => {
+      const hit = pointHit(event as unknown as React.PointerEvent<HTMLDivElement>);
+      if (hit?.kind !== "cell") return null;
+      const currentModel = modelRef.current;
+      const row = currentModel?.rows[hit.position.rowIndex];
+      const cell = row?.kind === "line" ? row.cells[hit.position.cellIndex] : null;
+      // Source offsets are from the measured UTF-16 cell content, not any gutter or canvas chrome.
+      if (!cell || cell.sourceIdentity.side !== "new" || cell.lineNumber === null) return null;
+      return {
+        filePath: currentModel?.files[hit.position.fileIndex]?.path,
+        lineNumber: cell.lineNumber,
+        column: hit.position.sourceOffset + 1,
+        clientX: event.clientX,
+        clientY: event.clientY,
+      };
+    },
+    [pointHit],
+  );
+  const centerSearchMatch = useCallback(
+    async (match: ChangesSearchMatch) => {
+      await workingMode?.onRevealSearchMatch?.(match);
+      const file = modelRef.current?.files.find((entry) => entry.path === match.filePath);
+      if (file?.isCollapsed) onToggleFile(match.filePath);
+      let attempts = 30;
+      const center = () => {
+        const current = modelRef.current;
+        const scroll = scrollRef.current;
+        if (!current || !scroll) return;
+        if (match.kind === "file") {
+          scroll.scrollTop = Math.max(
+            0,
+            current.files.find((entry) => entry.path === match.filePath)?.top ?? 0,
+          );
+          scroll.focus({ preventScroll: true });
+          return;
+        }
+        const row = current.rows.find(
+          (candidate) =>
+            candidate.kind === "line" &&
+            candidate.path === match.filePath &&
+            candidate.cells.some(
+              (cell) => cell?.sourceIdentity.side === "new" && cell.lineNumber === match.lineNumber,
+            ),
+        );
+        if (row) {
+          scroll.scrollTop = Math.max(0, row.top - viewport.height / 2 + row.height / 2);
+          scroll.focus({ preventScroll: true });
+        } else if (attempts-- > 0) requestAnimationFrame(center);
+      };
+      requestAnimationFrame(center);
+    },
+    [onToggleFile, viewport.height, workingMode],
+  );
+  const selectSearchMatch = useCallback(
+    (index: number) => {
+      setSearch((current) => {
+        if (current.matches.length === 0) return current;
+        const selected = (index + current.matches.length) % current.matches.length;
+        const match = current.matches[selected];
+        if (match) void centerSearchMatch(match);
+        return { ...current, selected };
+      });
+    },
+    [centerSearchMatch],
+  );
+  const submitSearch = useCallback(async () => {
+    const query = search.query.trim();
+    if (!query) return;
+    if (!workingMode?.searchSupported || !workingMode.onSearch) {
+      setSearch((current) => ({
+        ...current,
+        status: "error",
+        error: "Update this host to search Changes.",
+      }));
+      return;
+    }
+    setSearch((current) => ({ ...current, status: "loading", error: null }));
+    searchInputRef.current?.blur();
+    try {
+      const result = await workingMode.onSearch(query);
+      setSearch((current) => ({
+        ...current,
+        matches: result.matches,
+        selected: result.matches.length > 0 ? 0 : -1,
+        status: "ready",
+        truncated: result.truncated,
+      }));
+      if (result.matches[0]) void centerSearchMatch(result.matches[0]);
+    } catch (error) {
+      setSearch((current) => ({
+        ...current,
+        status: "error",
+        error: error instanceof Error ? error.message : "Changes search failed.",
+      }));
+    }
+  }, [centerSearchMatch, search.query, workingMode]);
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root || props.mode.kind !== "working") return;
+    const owns = (event: KeyboardEvent) =>
+      root.contains(event.target as Node | null) || root.contains(document.activeElement);
+    const keydown = (event: KeyboardEvent) => {
+      if (!owns(event) || event.isComposing || event.metaKey || event.ctrlKey || event.altKey)
+        return;
+      const editing =
+        event.target instanceof Element &&
+        event.target.closest("input, textarea, select, [contenteditable='true']");
+      if (!search.open) {
+        if (event.key !== "/" || editing) return;
+        event.preventDefault();
+        setSearch({
+          open: true,
+          query: "",
+          matches: [],
+          selected: -1,
+          status: "idle",
+          truncated: false,
+          error: null,
+        });
+        requestAnimationFrame(() => searchInputRef.current?.focus());
+        return;
+      }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setSearch((current) => ({ ...current, open: false }));
+        root
+          .querySelector<HTMLElement>("[data-testid='git-diff-scroll']")
+          ?.focus({ preventScroll: true });
+      } else if (!editing && event.key === "n") {
+        event.preventDefault();
+        selectSearchMatch(search.selected + 1);
+      } else if (!editing && event.key === "N") {
+        event.preventDefault();
+        selectSearchMatch(search.selected - 1);
+      }
+    };
+    window.addEventListener("keydown", keydown);
+    return () => window.removeEventListener("keydown", keydown);
+  }, [props.mode.kind, search.open, search.selected, selectSearchMatch]);
+  useEffect(() => {
+    const root = rootRef.current;
+    const scroll = scrollRef.current;
+    const lsp = workingMode?.lsp;
+    if (!root || !lsp?.enabled) return;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let last: ReturnType<typeof lspTargetAt> = null;
+    let requestSequence = 0;
+    const clear = () => {
+      if (timer) clearTimeout(timer);
+      timer = null;
+    };
+    const dismiss = () => {
+      requestSequence += 1;
+      clear();
+      last = null;
+      setLspHover(null);
+    };
+    const move = (event: MouseEvent) => {
+      if (
+        event.target instanceof Element &&
+        event.target.closest('[data-testid="changes-lsp-hover"]')
+      ) {
+        return;
+      }
+      const target = lspTargetAt(event);
+      if (!target || !target.filePath) {
+        dismiss();
+        return;
+      }
+      if (
+        last?.filePath === target.filePath &&
+        last.lineNumber === target.lineNumber &&
+        last.column === target.column
+      )
+        return;
+      last = target;
+      clear();
+      const sequence = ++requestSequence;
+      timer = setTimeout(
+        () =>
+          void lsp.hover(target.filePath!, target.lineNumber, target.column).then((hover) => {
+            if (
+              requestSequence === sequence &&
+              last === target &&
+              hover &&
+              hasLspHoverContent(hover)
+            ) {
+              const box = root.getBoundingClientRect();
+              setLspHover({
+                hover,
+                anchorX: target.clientX - box.left,
+                anchorY: target.clientY - box.top,
+              });
+            }
+            return undefined;
+          }),
+        350,
+      );
+    };
+    const click = (event: MouseEvent) => {
+      if (!(event.metaKey || event.ctrlKey) || event.button !== 0) return;
+      const target = lspTargetAt(event);
+      if (!target?.filePath) return;
+      event.preventDefault();
+      void lsp.definition(target.filePath, target.lineNumber, target.column);
+    };
+    const context = (event: MouseEvent) => {
+      const target = lspTargetAt(event);
+      const show = window.paseoDesktop?.menu?.showContextMenu;
+      if (!target?.filePath || typeof show !== "function") return;
+      event.preventDefault();
+      void show({ kind: "editor-lsp" }).then((action) => {
+        if (action === "go-to-definition") {
+          return lsp.definition(target.filePath!, target.lineNumber, target.column);
+        }
+        return undefined;
+      });
+    };
+    const keys = (event: KeyboardEvent) => {
+      if (event.key === "F12" && last?.filePath && root.contains(document.activeElement)) {
+        event.preventDefault();
+        void lsp.definition(last.filePath, last.lineNumber, last.column);
+      }
+    };
+    root.addEventListener("mousemove", move);
+    root.addEventListener("click", click);
+    root.addEventListener("contextmenu", context);
+    root.addEventListener("mouseleave", dismiss);
+    scroll?.addEventListener("scroll", dismiss);
+    window.addEventListener("keydown", keys);
+    return () => {
+      dismiss();
+      root.removeEventListener("mousemove", move);
+      root.removeEventListener("click", click);
+      root.removeEventListener("contextmenu", context);
+      root.removeEventListener("mouseleave", dismiss);
+      scroll?.removeEventListener("scroll", dismiss);
+      window.removeEventListener("keydown", keys);
+    };
+  }, [lspTargetAt, workingMode?.lsp]);
   const pointerDown = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
       if (event.button !== 0) return;
@@ -604,6 +1137,10 @@ export function DiffSurface(props: DiffSurfaceProps) {
       }
       const hit = pointHit(event);
       if (hit?.kind !== "cell") return;
+      const line = hit.target
+        ? workingMode?.fileReviews?.lineByTargetKey.get(hit.target.key)
+        : undefined;
+      if (line) props.reviewPresentation?.onSelectLine(line);
       dragRef.current = {
         anchor: hit.position,
         startX: event.clientX,
@@ -615,7 +1152,7 @@ export function DiffSurface(props: DiffSurfaceProps) {
       event.currentTarget.focus();
       event.currentTarget.setPointerCapture(event.pointerId);
     },
-    [pointHit, setSelection],
+    [pointHit, props.reviewPresentation, setSelection, workingMode?.fileReviews],
   );
   const updateActiveHeader = useCallback(
     (target: EventTarget | null) => {
@@ -751,6 +1288,22 @@ export function DiffSurface(props: DiffSurfaceProps) {
     },
     [selectAll, setSelection],
   );
+  const handleSearchChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    setSearch((current) => ({
+      ...current,
+      query: event.target.value,
+      status: "idle",
+      error: null,
+    }));
+  }, []);
+  const handleSearchKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLInputElement>) => {
+      if (event.key !== "Enter") return;
+      event.preventDefault();
+      void submitSearch();
+    },
+    [submitSearch],
+  );
   const focusDocument = useCallback(() => scrollRef.current?.focus({ preventScroll: true }), []);
   const rootStyle = useMemo<React.CSSProperties>(
     () => ({ ...ROOT_STYLE, background: props.palette.surface }),
@@ -777,6 +1330,9 @@ export function DiffSurface(props: DiffSurfaceProps) {
     <div
       data-testid="git-diff-canvas-root"
       data-paseito-diff-focus-path={workingMode?.focusPath}
+      data-paseito-diff-focus-line-start={workingMode?.focusLineStart}
+      data-paseito-diff-focus-line-end={workingMode?.focusLineEnd}
+      data-paseito-diff-focus-column={workingMode?.focusColumn}
       ref={rootRef}
       style={rootStyle}
     >
@@ -819,7 +1375,16 @@ export function DiffSurface(props: DiffSurfaceProps) {
               <HorizontalScroll
                 key={file.path}
                 file={file}
-                initialOffset={horizontalOffsetsRef.current.get(file.path) ?? 0}
+                initialOffset={
+                  requestedColumnOffset?.path === file.path
+                    ? requestedColumnOffset.offset
+                    : (horizontalOffsetsRef.current.get(file.path) ?? 0)
+                }
+                requestKey={
+                  requestedColumnOffset?.path === file.path
+                    ? requestedColumnOffset.requestKey
+                    : undefined
+                }
                 onScroll={handleHorizontalScroll}
               />
             ))}
@@ -882,6 +1447,17 @@ export function DiffSurface(props: DiffSurfaceProps) {
                 });
               })
             : null}
+          {effectiveNavigationHighlight
+            ? navigationMarkers(model, effectiveNavigationHighlight).map((marker) => (
+                <div
+                  key={marker.key}
+                  data-paseito-diff-current-line={marker.lineNumber}
+                  data-paseito-diff-file={marker.path}
+                  data-paseito-diff-navigation-selected="true"
+                  style={marker.style}
+                />
+              ))
+            : null}
           {workingMode && expandContext
             ? model.rows.map((row) => {
                 if (row.kind !== "line") return null;
@@ -905,6 +1481,29 @@ export function DiffSurface(props: DiffSurfaceProps) {
         </div>
       </div>
       <DomOverlayScrollbar scrollContainerRef={scrollRef} onUserScrollUp={noop} />
+      {search.open ? (
+        <div style={SEARCH_STYLE} data-testid="changes-search-bar">
+          <span>/</span>
+          <input
+            ref={searchInputRef}
+            value={search.query}
+            onChange={handleSearchChange}
+            onKeyDown={handleSearchKeyDown}
+            placeholder="Search changed files"
+            data-testid="changes-search-input"
+            style={SEARCH_INPUT_STYLE}
+          />
+          <span data-testid="changes-search-status">{searchStatusLabel}</span>
+        </div>
+      ) : null}
+      {lspHover ? (
+        <div ref={lspHoverDomRef} style={lspHoverStyle} data-testid="changes-lsp-hover" />
+      ) : null}
+      {props.reviewPresentation?.shortcutHint ? (
+        <div aria-live="polite" data-testid="line-review-shortcut-hint" style={SHORTCUT_HINT_STYLE}>
+          {props.reviewPresentation.shortcutHint}
+        </div>
+      ) : null}
     </div>
   );
 
@@ -1292,6 +1891,49 @@ const BODY_MARKER_STYLE: React.CSSProperties = {
   pointerEvents: "none",
 };
 const REVIEW_STYLE: React.CSSProperties = { position: "absolute", zIndex: 4, userSelect: "text" };
+const SEARCH_STYLE: React.CSSProperties = {
+  position: "absolute",
+  zIndex: 20,
+  left: 12,
+  top: 10,
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  maxWidth: "calc(100% - 24px)",
+  padding: "6px 8px",
+  border: "1px solid rgba(255,255,255,.18)",
+  borderRadius: 6,
+  background: "rgba(20,20,24,.96)",
+  color: "#ddd",
+  fontSize: 12,
+};
+const SEARCH_INPUT_STYLE: React.CSSProperties = {
+  minWidth: 220,
+  maxWidth: 420,
+  border: 0,
+  outline: 0,
+  background: "transparent",
+  color: "inherit",
+  font: "inherit",
+};
+const HOVER_STYLE: React.CSSProperties = {
+  position: "absolute",
+  zIndex: 30,
+  pointerEvents: "auto",
+};
+const SHORTCUT_HINT_STYLE: React.CSSProperties = {
+  position: "absolute",
+  zIndex: 30,
+  right: 12,
+  bottom: 12,
+  maxWidth: "calc(100% - 24px)",
+  padding: "6px 8px",
+  borderRadius: 6,
+  background: "rgba(20,20,24,.9)",
+  color: "#ddd",
+  fontSize: 12,
+  pointerEvents: "none",
+};
 const WEB_LINE_REVIEW_STYLE: ViewStyle = {
   width: LINE_REVIEW_DOT_GUTTER_WIDTH,
   height: 22,

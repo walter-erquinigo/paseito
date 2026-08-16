@@ -225,6 +225,8 @@ interface WorkspaceFileLocationFields {
   path: string | null;
   lineStart?: number;
   lineEnd?: number;
+  column?: number;
+  openMode?: "source";
 }
 
 function getWorkspaceFileLocationFields(
@@ -234,7 +236,13 @@ function getWorkspaceFileLocationFields(
   if (target?.kind !== "file") {
     return { path: null };
   }
-  return { path: target.path, lineStart: target.lineStart, lineEnd: target.lineEnd };
+  return {
+    path: target.path,
+    lineStart: target.lineStart,
+    lineEnd: target.lineEnd,
+    column: target.column,
+    openMode: target.openMode,
+  };
 }
 
 function buildWorkspaceFileLocation(
@@ -243,7 +251,13 @@ function buildWorkspaceFileLocation(
   if (fields.path === null) {
     return null;
   }
-  return { path: fields.path, lineStart: fields.lineStart, lineEnd: fields.lineEnd };
+  return {
+    path: fields.path,
+    lineStart: fields.lineStart,
+    lineEnd: fields.lineEnd,
+    column: fields.column,
+    openMode: fields.openMode,
+  };
 }
 
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
@@ -2203,6 +2217,27 @@ function WorkspaceScreenContent({
     normalizedWorkspaceId,
   ]);
 
+  const handleOpenFileFromExplorer = useCallback(
+    function handleOpenFileFromExplorer(
+      filePath: string,
+      options?: { lineStart: number; openMode: "source" },
+    ) {
+      if (!persistenceKey) {
+        return;
+      }
+      const location = normalizeWorkspaceFileLocation({ path: filePath, ...options });
+      if (!location) {
+        return;
+      }
+      const tabId = openWorkspaceTabFocused(persistenceKey, createWorkspaceFileTabTarget(location));
+      if (tabId) {
+        requestFileNavigation(tabId);
+        navigateToTabId(tabId);
+      }
+    },
+    [navigateToTabId, openWorkspaceTabFocused, persistenceKey, requestFileNavigation],
+  );
+
   const handleOpenFileFromChat = useCallback(
     (location: WorkspaceFileLocation, parentTabId?: string | null) => {
       const normalizedLocation = normalizeWorkspaceFileLocation(location);
@@ -3498,14 +3533,18 @@ function WorkspaceScreenContent({
   const activeFilePath = activeFileFields.path;
   const activeFileLineStart = activeFileFields.lineStart;
   const activeFileLineEnd = activeFileFields.lineEnd;
+  const activeFileColumn = activeFileFields.column;
+  const activeFileOpenMode = activeFileFields.openMode;
   const activeFileLocation = useMemo<WorkspaceFileLocation | null>(
     () =>
       buildWorkspaceFileLocation({
         path: activeFilePath,
         lineStart: activeFileLineStart,
         lineEnd: activeFileLineEnd,
+        column: activeFileColumn,
+        openMode: activeFileOpenMode,
       }),
-    [activeFileLineEnd, activeFileLineStart, activeFilePath],
+    [activeFileColumn, activeFileLineEnd, activeFileLineStart, activeFileOpenMode, activeFilePath],
   );
   const canRenderDesktopPaneSplits = supportsDesktopPaneSplits();
   const shouldRenderDesktopPaneFallback = useMemo(
@@ -3594,6 +3633,7 @@ function WorkspaceScreenContent({
             setWorkspaceTabState(persistenceKey, input.tab.tabId, state);
           }
         },
+        onFocusCurrentTab: () => navigateToTabId(input.tab.tabId),
         onOpenWorkspaceFile: (request: WorkspaceFileOpenRequest) => {
           handleOpenWorkspaceFileFromPane({
             request,

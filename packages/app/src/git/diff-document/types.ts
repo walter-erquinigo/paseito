@@ -1,8 +1,11 @@
 import type { ParsedDiffFile } from "@getpaseo/protocol/messages";
 import type { FileReviewActions, InlineReviewActions, ReviewableChangedLine } from "@/review";
 import type { DiffContextRegion } from "@/git/diff-context-expansion";
+import type { ChangesSearchMatch, ChangesSearchResult } from "@/git/changes-search";
+import type { ChangesLspController } from "@/git/use-changes-lsp";
 import type { ReviewableDiffTarget } from "@/utils/diff-layout";
 import type { WorkspaceFileOpenOptions } from "@/workspace/file-open";
+import type { LspHoverVisualTheme } from "@/file-pane/editor/lsp-hover-markdown.web";
 
 interface DiffDocumentBaseProps {
   files: ParsedDiffFile[];
@@ -19,6 +22,7 @@ interface DiffDocumentBaseProps {
 export interface WorkingDiffMode {
   kind: "working";
   reviewActions?: InlineReviewActions;
+  /** Capability-gated orchestration stays at ChangesSurface; the document only renders it. */
   fileReviews?: FileReviewActions;
   onExpandContext?: (
     filePath: string,
@@ -30,6 +34,10 @@ export interface WorkingDiffMode {
   onFilePress?: (path: string) => void;
   focusPath?: string;
   focusRequestId?: number;
+  focusLineStart?: number;
+  focusLineEnd?: number;
+  focusColumn?: number;
+  focusReveal?: "center-if-hidden";
   workspaceFileDragScope?: { serverId: string; workspaceId: string };
   onOpenFile?: (path: string, options?: WorkspaceFileOpenOptions) => void;
   onOpenToSide?: (path: string) => void;
@@ -42,6 +50,13 @@ export interface WorkingDiffMode {
   onDownload?: (path: string) => void;
   onDuplicate?: (path: string) => void;
   onRevert?: (path: string, oldPath?: string) => void;
+  /** Search stays daemon-owned: the document receives matches, never a source corpus. */
+  onSearch?: (query: string) => Promise<ChangesSearchResult>;
+  searchSupported?: boolean;
+  /** Loads a bounded hidden region before the canvas centers a text match. */
+  onRevealSearchMatch?: (match: ChangesSearchMatch) => void | Promise<void>;
+  /** The shared editor session controller. Only current-side canvas cells become targets. */
+  lsp?: ChangesLspController;
 }
 
 export interface DiffReviewPresentation {
@@ -247,6 +262,7 @@ export type DiffScrollAnchor =
 export type DiffSurfaceProps = DiffDocumentProps & {
   palette: DiffPalette;
   headerTypography: DiffHeaderTypography;
+  hoverTheme: LspHoverVisualTheme;
   collapsedFilePaths: ReadonlySet<string>;
   onToggleFile: (path: string) => void;
   selectedPath: string | null;

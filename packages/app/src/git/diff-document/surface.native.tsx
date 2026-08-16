@@ -46,6 +46,7 @@ import {
 } from "./horizontal-offsets";
 import {
   buildDiffDocumentModel,
+  FILE_HEADER_HEIGHT,
   resolveRelayoutScrollTop,
   retainReusableModels,
   shouldApplyRelayoutScroll,
@@ -95,6 +96,7 @@ export function DiffSurface(props: DiffSurfaceProps) {
     models: ReturnType<typeof buildDiffDocumentModel>[];
   } | null>(null);
   const consumedFocusRef = useRef<string | null>(null);
+  const consumedReviewFocusRef = useRef<string | null>(null);
   const scrollTop = useSharedValue(0);
   const { shift: keyboardShift } = useKeyboardShift();
   const keyboardSpacerStyle = useAnimatedStyle(
@@ -255,7 +257,7 @@ export function DiffSurface(props: DiffSurfaceProps) {
   const collapsedFilePaths = props.collapsedFilePaths;
   const onToggleFile = props.onToggleFile;
   useEffect(() => {
-    if (mode.kind !== "working") return;
+    if (mode.kind !== "working" || mode.focusLineStart) return;
     const focusPath = mode.focusPath;
     if (!focusPath) return;
     const requestKey = `${mode.focusRequestId ?? "initial"}:${focusPath}`;
@@ -269,6 +271,56 @@ export function DiffSurface(props: DiffSurfaceProps) {
     }
   }, [collapsedFilePaths, mode, model.files, onToggleFile, scrollTop]);
   const contentInsetBottom = props.contentInsetBottom ?? 0;
+  useEffect(() => {
+    if (mode.kind !== "working" || !mode.focusPath || !mode.focusLineStart) return;
+    const requestKey = `${mode.focusRequestId ?? "initial"}:${mode.focusPath}:${mode.focusLineStart}:${mode.focusLineEnd ?? mode.focusLineStart}`;
+    if (consumedFocusRef.current === requestKey) return;
+    if (collapsedFilePaths.has(mode.focusPath)) {
+      onToggleFile(mode.focusPath);
+      return;
+    }
+    const row = model.rows.find(
+      (candidate) =>
+        candidate.kind === "line" &&
+        candidate.path === mode.focusPath &&
+        candidate.cells.some(
+          (cell) =>
+            cell?.lineNumber !== null &&
+            cell?.lineNumber !== undefined &&
+            cell.lineNumber >= mode.focusLineStart! &&
+            cell.lineNumber <= (mode.focusLineEnd ?? mode.focusLineStart!),
+        ),
+    );
+    if (row) {
+      const offset = Math.max(0, row.top - FILE_HEADER_HEIGHT);
+      scrollTop.value = offset;
+      scrollRef.current?.scrollTo({ y: offset, animated: false });
+      consumedFocusRef.current = requestKey;
+    }
+  }, [collapsedFilePaths, mode, model.rows, onToggleFile, scrollTop]);
+  useEffect(() => {
+    const presentation = props.reviewPresentation;
+    const selectedLineId = presentation?.selectedLineId;
+    if (!selectedLineId || mode.kind !== "working" || !mode.fileReviews) return;
+    const requestKey = `${presentation.focusRequest}:${selectedLineId}`;
+    if (consumedReviewFocusRef.current === requestKey) return;
+    const row = model.rows.find(
+      (candidate) =>
+        candidate.kind === "line" &&
+        candidate.cells.some((cell) => {
+          const targetKey = cell?.reviewTarget?.key;
+          return (
+            targetKey !== undefined &&
+            mode.fileReviews?.lineByTargetKey.get(targetKey)?.id === selectedLineId
+          );
+        }),
+    );
+    if (row?.kind !== "line") return;
+    const offset = Math.max(0, row.top - (viewport.height - row.height) / 2);
+    scrollTop.value = offset;
+    scrollRef.current?.scrollTo({ y: offset, animated: false });
+    consumedReviewFocusRef.current = requestKey;
+  }, [mode, model.rows, props.reviewPresentation, scrollTop, viewport.height]);
   const contentStyle = useMemo(
     () => ({
       minHeight: Math.max(model.height, viewport.height) + contentInsetBottom,
@@ -318,6 +370,7 @@ export function DiffSurface(props: DiffSurfaceProps) {
             model={model}
             mode={props.mode}
             horizontalOffsets={horizontalOffsets}
+            presentation={props.reviewPresentation}
           />
         ))}
         <NativeReviewOverlays
@@ -327,6 +380,16 @@ export function DiffSurface(props: DiffSurfaceProps) {
         />
         <Animated.View pointerEvents="none" style={keyboardSpacerStyle} />
       </AnimatedScrollView>
+      {props.reviewPresentation?.shortcutHint ? (
+        <View
+          accessibilityLiveRegion="polite"
+          pointerEvents="none"
+          style={styles.shortcutHint}
+          testID="line-review-shortcut-hint"
+        >
+          <Text style={styles.shortcutHintText}>{props.reviewPresentation.shortcutHint}</Text>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -452,11 +515,13 @@ function NativeFileBody({
   model,
   mode,
   horizontalOffsets,
+  presentation,
 }: {
   file: DiffFileSection;
   model: DiffDocumentModel;
   mode: DiffSurfaceProps["mode"];
   horizontalOffsets: SharedValue<DiffHorizontalOffsets>;
+  presentation: DiffSurfaceProps["reviewPresentation"];
 }) {
   const touchRef = useRef<{ x: number; y: number; startedAt: number; moved: boolean } | null>(null);
   const reviewActions = mode.kind === "working" ? mode.reviewActions : undefined;
@@ -490,10 +555,15 @@ function NativeFileBody({
         horizontalOffset: horizontalOffsetForPath(horizontalOffsets.value, file.path),
       });
       if (hit?.kind === "cell" && hit.target) {
+        const line =
+          mode.kind === "working"
+            ? mode.fileReviews?.lineByTargetKey.get(hit.target.key)
+            : undefined;
+        if (line) presentation?.onSelectLine(line);
         reviewActions.onStartComment(hit.target);
       }
     },
-    [file, horizontalOffsets, model, reviewActions],
+    [file, horizontalOffsets, mode, model, presentation, reviewActions],
   );
   return (
     <View
@@ -533,7 +603,7 @@ function NativeReviewOverlays({
     const columnWidth = model.viewportWidth / row.cells.length;
     return row.cells.flatMap((cell, index) => {
       const marker = cell && parseDiffContextMarker(cell.content);
-      if (marker && mode.onExpandContext && index === row.cells.length - 1) {
+      if (marker && presentation?.onExpandContext && index === row.cells.length - 1) {
         const file = model.files[row.fileIndex];
         return file
           ? [
@@ -543,7 +613,7 @@ function NativeReviewOverlays({
                 region={marker}
                 top={row.top}
                 height={row.height}
-                onExpand={mode.onExpandContext}
+                onExpand={presentation.onExpandContext}
               />,
             ]
           : [];
@@ -816,4 +886,16 @@ const styles = StyleSheet.create({
   root: { flex: 1, minHeight: 0, position: "relative", overflow: "hidden" },
   scroll: { backgroundColor: "transparent" },
   header: { zIndex: 5 },
+  shortcutHint: {
+    position: "absolute",
+    zIndex: 30,
+    right: 12,
+    bottom: 12,
+    maxWidth: "95%",
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 6,
+    backgroundColor: "rgba(20,20,24,0.9)",
+  },
+  shortcutHintText: { color: "#ddd", fontSize: 12 },
 });

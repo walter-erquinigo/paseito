@@ -26,6 +26,7 @@ interface UseWorkingDiffOptions {
   ignoreWhitespace: boolean;
   enabled: boolean;
   queryScope?: string;
+  requestedNavigationLine?: { filePath: string; lineNumber: number };
 }
 
 function collectCurrentSideReviewTargets(files: ReturnType<typeof useCheckoutDiffQuery>["files"]) {
@@ -86,6 +87,7 @@ export function useWorkingDiff({
   ignoreWhitespace,
   enabled,
   queryScope,
+  requestedNavigationLine,
 }: UseWorkingDiffOptions) {
   const {
     status,
@@ -151,8 +153,9 @@ export function useWorkingDiff({
         filePath: suggestion.filePath,
         lineNumber: suggestion.startLine,
       })),
+      ...(requestedNavigationLine ? [requestedNavigationLine] : []),
     ],
-    [persistedComments, persistedSuggestions],
+    [persistedComments, persistedSuggestions, requestedNavigationLine],
   );
 
   const {

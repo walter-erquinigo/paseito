@@ -4276,6 +4276,36 @@ export class DaemonClient {
     }
     return payload;
   }
+
+  async searchCheckoutDiff(
+    cwd: string,
+    input: {
+      compare: { mode: "uncommitted" | "base"; baseRef?: string; ignoreWhitespace?: boolean };
+      query: string;
+      files: Array<{ path: string; expectedRevision?: string }>;
+      limit: number;
+    },
+    requestId?: string,
+  ) {
+    const payload =
+      await this.sendNamespacedCorrelatedSessionRequest<"checkout.diff.search.response">({
+        requestId,
+        message: {
+          type: "checkout.diff.search.request",
+          cwd,
+          compare: this.normalizeCheckoutDiffCompare(input.compare),
+          query: input.query,
+          files: input.files,
+          limit: input.limit,
+        },
+        timeout: 60_000,
+      });
+    if (payload.error) {
+      throw new Error(payload.error.message);
+    }
+    return payload;
+  }
+
   async checkoutPrCreate(
     cwd: string,
     input: { title?: string; body?: string; baseRef?: string },

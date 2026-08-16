@@ -244,6 +244,9 @@ function createFallbackWorkspaceGitService(): WorkspaceGitService {
     getCheckoutDiffContext: async () => {
       throw new Error("Git service unavailable");
     },
+    searchCheckoutDiff: async () => {
+      throw new Error("Git service unavailable");
+    },
     validateBranchRef: async () => ({ kind: "not-found" }),
     hasLocalBranch: async () => false,
     suggestBranchesForCwd: async () => [],
@@ -1917,6 +1920,8 @@ export class VoiceAssistantWebSocketServer {
         changesStackParentBase: true,
         // COMPAT(changesContextExpansion): added in Paseito v0.2.5-paseito.4, remove after 2027-02-05.
         changesContextExpansion: true,
+        // COMPAT(checkoutDiffSearch): added in Paseito v0.4.0-paseito.22, remove after 2027-02-17.
+        checkoutDiffSearch: true,
         // COMPAT(reviewSuggestionsV1): added in Paseito v0.2.5-paseito.4, remove after 2027-02-05.
         reviewSuggestionsV1: true,
         // COMPAT(fileReviewV1): added in Paseito v0.2.5-paseito.8, remove after 2027-02-07.
