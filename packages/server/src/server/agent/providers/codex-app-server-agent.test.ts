@@ -88,6 +88,7 @@ type CodexTestSession = AgentSession & {
   connected: boolean;
   currentThreadId: string | null;
   activeForegroundTurnId: string | null;
+  activeAppServerTurnId: string | null;
   client: CodexClientLike | null;
 };
 
@@ -129,6 +130,7 @@ function createSession(
   session.connected = true;
   session.currentThreadId = "test-thread";
   session.activeForegroundTurnId = "test-turn";
+  session.activeAppServerTurnId = "test-turn";
   return session;
 }
 
@@ -912,6 +914,12 @@ describe("Codex app-server provider", () => {
       },
     });
     expect(turnStart).not.toHaveProperty("config.mcp_servers.hub.tools.reply");
+  });
+
+  test("advertises steering support for app-server sessions", () => {
+    const session = createSession();
+
+    expect(session.capabilities.supportsSteering).toBe(true);
   });
 
   test("passes ephemeral: true to thread/start when constructed as ephemeral", async () => {
