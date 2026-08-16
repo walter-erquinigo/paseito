@@ -55,8 +55,6 @@ const HISTORY_START_SLOT_HEIGHT_PX = 32;
 const CONTENT_PADDING_TOP_PX = 16;
 const UPWARD_INPUT_EVIDENCE_TIMEOUT_MS = 100;
 const VIRTUALIZER_SCROLL_MARGIN_PX = HISTORY_START_SLOT_HEIGHT_PX + CONTENT_PADDING_TOP_PX;
-// A row has to clear this much of the viewport top before the next one takes over as the
-// reading position, so a row resting exactly on the edge does not flip back and forth.
 const READING_POSITION_OFFSET_PX = 8;
 
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
@@ -548,7 +546,6 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
       return;
     }
     cancelPendingStickToBottom();
-    historyStartSettleSchedulerRef.current?.cancel();
     for (const frame of pendingVirtualRowMeasureFramesRef.current.values()) {
       window.cancelAnimationFrame(frame);
     }
@@ -750,8 +747,6 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
     scheduleStickToBottom,
   ]);
 
-  // Following output is a layout invariant: rows, footer, and bottom offset must
-  // reach the browser in the same paint.
   useLayoutEffect(() => {
     if (!isActive || !followOutputRef.current) {
       return;
@@ -761,6 +756,7 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
   }, [
     cancelPendingStickToBottom,
     isActive,
+    liveHeadRowRevision,
     renderLiveAuxiliary,
     scrollMessagesToBottom,
     segments.historyMounted,
@@ -768,6 +764,13 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
     segments.liveHead,
     virtualTotalSize,
   ]);
+
+  useEffect(() => {
+    if (!isActive || !followOutputRef.current || !shouldUseVirtualizer) {
+      return;
+    }
+    scheduleStickToBottom();
+  }, [isActive, scheduleStickToBottom, shouldUseVirtualizer, virtualTotalSize]);
 
   useEffect(() => {
     if (!isActive) {
