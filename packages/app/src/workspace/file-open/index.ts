@@ -8,6 +8,8 @@ export interface WorkspaceFileLocation {
   lineEnd?: number;
 }
 
+export type WorkspaceFileOpenOptions = Omit<WorkspaceFileLocation, "path">;
+
 export type WorkspaceFileTabTarget = { kind: "file" } & WorkspaceFileLocation;
 
 export interface WorkspaceFileOpenRequest {

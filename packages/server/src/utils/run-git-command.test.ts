@@ -44,6 +44,7 @@ const fakeSpawnController = vi.hoisted<FakeSpawnController>(() => ({
 
 class FakeChildProcess extends EventEmitter {
   public readonly pid: number;
+  public readonly stdin = Object.assign(new EventEmitter(), { end: vi.fn() });
   public readonly stderr = new EventEmitter();
   public readonly stdout = new EventEmitter();
   public killed = false;
@@ -249,6 +250,23 @@ describe("runGitCommand", () => {
 
     expect(fakeSpawnController.peakActiveCount).toBe(2);
     expect(fakeSpawnController.activeCount).toBe(0);
+  });
+
+  it("writes requested stdin to the scheduled git process", async () => {
+    const { runGitCommand } = await loadRunGitCommand(1);
+
+    enqueueSpawnBehaviors({ stdoutData: "hash\n" });
+
+    await expect(
+      runGitCommand(["hash-object", "--stdin-paths"], {
+        cwd: process.cwd(),
+        stdin: "src/a.ts\nsrc/b.ts\n",
+      }),
+    ).resolves.toMatchObject({ stdout: "hash\n" });
+
+    expect(fakeSpawnController.processes[0]?.stdin.end).toHaveBeenCalledWith(
+      "src/a.ts\nsrc/b.ts\n",
+    );
   });
 
   it("kills timed out processes and releases the limiter slot", async () => {

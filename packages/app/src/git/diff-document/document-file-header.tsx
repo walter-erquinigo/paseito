@@ -1,4 +1,4 @@
-import { memo, useCallback } from "react";
+import { memo, useCallback, useMemo } from "react";
 import { Text, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import { ListChevronsUpDown } from "lucide-react-native";
@@ -7,6 +7,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { buildDiffContextRegions } from "@/git/diff-context-expansion";
 import { FileHeader } from "@/git/file-header";
 import type { DiffDocumentProps, DiffFileSection } from "./types";
+import { ReviewCheckbox } from "./review-checkbox";
+import type { ReviewCheckboxState } from "./review-checkbox-model";
 
 interface DocumentFileHeaderProps {
   file: DiffFileSection;
@@ -80,6 +82,10 @@ function WorkingDocumentFileHeader({
     await onExpandFile?.(file.path);
     onFocusDocument?.();
   }, [file.path, onExpandFile, onFocusDocument]);
+  const reviewControl = useMemo(
+    () => <DocumentFileReviewControl file={file} mode={mode} onToggleFile={onToggleFile} />,
+    [file, mode, onToggleFile],
+  );
   return (
     <View style={styles.root}>
       <FileHeader
@@ -100,6 +106,7 @@ function WorkingDocumentFileHeader({
         onDownload={mode.onDownload}
         onDuplicate={mode.onDuplicate}
         onRevert={mode.onRevert}
+        trailingContent={reviewControl}
         testID={`diff-file-${file.fileIndex}`}
         canvasRendered={canvasRendered}
         onActiveChange={onActiveChange}
@@ -126,11 +133,56 @@ function WorkingDocumentFileHeader({
   );
 }
 
+function DocumentFileReviewControl({
+  file,
+  mode,
+  onToggleFile,
+}: {
+  file: DiffFileSection;
+  mode: Extract<DiffDocumentProps["mode"], { kind: "working" }>;
+  onToggleFile: (path: string) => void;
+}) {
+  const reviews = mode.fileReviews;
+  const progress = reviews?.lineProgressByPath.get(file.path);
+  const reviewed = reviews?.reviewedPaths.has(file.path) === true;
+  const partiallyReviewed = Boolean(progress && progress.reviewed > 0);
+  let reviewState: ReviewCheckboxState = "unreviewed";
+  if (reviewed) reviewState = "reviewed";
+  else if (partiallyReviewed) reviewState = "mixed";
+  const toggleReview = useCallback(
+    (event: { stopPropagation?: () => void }) => {
+      event.stopPropagation?.();
+      const nextReviewed = reviews?.toggle(file.path);
+      if (nextReviewed !== undefined && file.isCollapsed !== nextReviewed) {
+        onToggleFile(file.path);
+      }
+    },
+    [file.isCollapsed, file.path, onToggleFile, reviews],
+  );
+  if (!reviews?.available || !file.file.contentRevision) return null;
+  return (
+    <ReviewCheckbox
+      accessibilityLabel={reviewed ? "Mark file unreviewed" : "Mark file reviewed"}
+      alwaysVisible
+      onPress={toggleReview}
+      state={reviewState}
+      style={styles.headerControl}
+      testID={`diff-file-review-${file.path}`}
+    />
+  );
+}
+
 const styles = StyleSheet.create((theme) => ({
   root: { position: "relative" },
+  headerControl: {
+    width: 22,
+    height: 22,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   expandFileControl: {
     position: "absolute",
-    right: 8,
+    right: 34,
     top: 1,
     width: 28,
     paddingHorizontal: 0,

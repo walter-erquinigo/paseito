@@ -62,6 +62,9 @@ const fileChanges = {
   revision: (value) => {
     value.revision = "revision";
   },
+  contentRevision: (value) => {
+    value.contentRevision = "content-revision";
+  },
   hunks: (value) => {
     value.hunks = [];
   },

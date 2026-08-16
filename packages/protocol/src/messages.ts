@@ -2668,6 +2668,9 @@ const ParsedDiffFileSchema = z.object({
   oldLineCount: z.number().int().nonnegative().optional(),
   newLineCount: z.number().int().nonnegative().optional(),
   revision: z.string().optional(),
+  // COMPAT(branchFileReviewState): added in Paseito v0.5.2-paseito.6,
+  // keep optional until every supported daemon reports the reviewed-side revision.
+  contentRevision: z.string().optional(),
 });
 
 const FileExplorerEntrySchema = z.object({
