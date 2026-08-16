@@ -9,6 +9,7 @@ import {
   useReviewAttachmentSnapshot,
 } from "@/review";
 import { useCheckoutDiffQuery } from "@/git/use-diff-query";
+import { useChangesBaseSelection } from "@/git/use-changes-base-selection";
 import { useCheckoutStatusQuery } from "@/git/use-status-query";
 import { useWorkingDiffComparison } from "@/git/working-diff-comparison";
 
@@ -19,6 +20,20 @@ interface UseWorkingDiffOptions {
   ignoreWhitespace: boolean;
   enabled: boolean;
   queryScope?: string;
+}
+
+function hasCommittedBranchChanges(
+  status: { aheadBehind?: { ahead: number } | null } | null,
+): boolean {
+  return (status?.aheadBehind?.ahead ?? 0) > 0;
+}
+
+function resolveSelectedComparisonBaseRef(
+  selection: ReturnType<typeof useChangesBaseSelection>,
+): string | undefined {
+  return selection.supported && selection.source !== "recorded" && selection.effectiveBaseRef
+    ? selection.effectiveBaseRef
+    : undefined;
 }
 
 export function useWorkingDiff({
@@ -41,16 +56,29 @@ export function useWorkingDiff({
   const statusErrorMessage =
     status?.error?.message ??
     (isStatusError && statusError instanceof Error ? statusError.message : null);
-  const baseRef = gitStatus?.baseRef ?? undefined;
+  const recordedBaseRef = gitStatus?.baseRef ?? undefined;
   const hasUncommittedChanges = Boolean(gitStatus?.isDirty);
   const currentBranchName =
     gitStatus?.currentBranch && gitStatus.currentBranch !== "HEAD" ? gitStatus.currentBranch : null;
+  const baseSelection = useChangesBaseSelection({
+    serverId,
+    cwd,
+    repoRoot: gitStatus?.repoRoot,
+    currentBranch: currentBranchName,
+    recordedBaseRef,
+    stackParent: gitStatus?.stackParent,
+  });
+  const baseRef = baseSelection.effectiveBaseRef;
+  const comparisonBaseRef = resolveSelectedComparisonBaseRef(baseSelection);
+  const hasCommittedChanges =
+    hasCommittedBranchChanges(gitStatus) || baseSelection.source === "stack-parent";
 
   const { comparison: diffMode, selectComparison } = useWorkingDiffComparison({
     serverId,
     workspaceId,
     cwd,
     isDirty: hasUncommittedChanges,
+    hasCommittedChanges,
   });
   const selectUncommitted = useCallback(() => selectComparison("uncommitted"), [selectComparison]);
   const selectBase = useCallback(() => selectComparison("base"), [selectComparison]);
@@ -64,7 +92,7 @@ export function useWorkingDiff({
     serverId,
     cwd,
     mode: diffMode,
-    baseRef,
+    baseRef: comparisonBaseRef,
     ignoreWhitespace,
     enabled: enabled && isGit,
     queryScope,
@@ -97,7 +125,10 @@ export function useWorkingDiff({
     notGit,
     statusErrorMessage,
     baseRef,
+    comparisonBaseRef,
     currentBranchName,
+    baseSelection,
+    hasUncommittedChanges,
     diffMode,
     selectUncommitted,
     selectBase,

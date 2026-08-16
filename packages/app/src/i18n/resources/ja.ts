@@ -918,6 +918,7 @@ export const ja: TranslationResources = {
         },
       },
       diff: {
+        ...en.workspace.git.diff,
         openChangesTab: "変更タブを開く",
         openDiffTab: "差分タブを開く",
         closeChangesTab: "変更タブを閉じる",

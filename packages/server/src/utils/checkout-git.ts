@@ -466,6 +466,67 @@ export async function resolveBranchCheckout(
   return { kind: "not-found" };
 }
 
+async function isValidStackParentBranchName(cwd: string, branchName: string): Promise<boolean> {
+  const result = await runGitCommand(["check-ref-format", "--branch", branchName], {
+    cwd,
+    envOverlay: READ_ONLY_GIT_ENV,
+    acceptExitCodes: [0, 1, 128],
+  });
+  return result.exitCode === 0;
+}
+
+async function getCheckoutStackParentStatus(
+  cwd: string,
+  currentBranch: string,
+): Promise<CheckoutStackParentStatus | null> {
+  const result = await runGitCommand(["show", "-s", "--format=%H%x00%B", "HEAD"], {
+    cwd,
+    envOverlay: READ_ONLY_GIT_ENV,
+    acceptExitCodes: [0, 128],
+  });
+  if (result.exitCode !== 0) {
+    return null;
+  }
+
+  const separatorIndex = result.stdout.indexOf("\x00");
+  if (separatorIndex < 0) {
+    return null;
+  }
+  const commitSha = result.stdout.slice(0, separatorIndex).trim();
+  const message = result.stdout.slice(separatorIndex + 1).replaceAll("\r\n", "\n");
+  const markers = message
+    .split("\n")
+    .filter((line) => line.startsWith("Stack-Parent:"))
+    .map((line) => line.slice("Stack-Parent:".length).trim());
+  if (markers.length === 0) {
+    return null;
+  }
+  if (markers.length > 1) {
+    return { commitSha, state: "malformed", reason: "multiple" };
+  }
+
+  const declaredRef = markers[0] ?? "";
+  if (!declaredRef) {
+    return { commitSha, state: "malformed", reason: "empty" };
+  }
+  const normalized = normalizeBranchSuggestionName(declaredRef);
+  if (!normalized || !(await isValidStackParentBranchName(cwd, normalized))) {
+    return { commitSha, state: "malformed", reason: "invalid", declaredRef };
+  }
+  if (normalized === currentBranch) {
+    return { commitSha, state: "malformed", reason: "self", declaredRef };
+  }
+
+  const resolution = await resolveBranchCheckout(cwd, declaredRef);
+  if (resolution.kind === "local") {
+    return { commitSha, state: "valid", ref: `refs/heads/${resolution.name}` };
+  }
+  if (resolution.kind === "remote-only") {
+    return { commitSha, state: "valid", ref: resolution.remoteRef };
+  }
+  return { commitSha, state: "missing", declaredRef };
+}
+
 export type BranchCheckoutSource = "local" | "remote";
 
 export interface CheckoutExistingBranchResult {
@@ -830,6 +891,24 @@ export interface AheadBehind {
   behind: number;
 }
 
+export type CheckoutStackParentStatus =
+  | {
+      commitSha: string;
+      state: "valid";
+      ref: string;
+    }
+  | {
+      commitSha: string;
+      state: "malformed";
+      reason: "empty" | "multiple" | "invalid" | "self";
+      declaredRef?: string;
+    }
+  | {
+      commitSha: string;
+      state: "missing";
+      declaredRef: string;
+    };
+
 export interface CheckoutStatus {
   isGit: false;
 }
@@ -851,6 +930,7 @@ export interface CheckoutStatusGitNonPaseo {
   hasRemote: boolean;
   remoteUrl: string | null;
   isPaseoOwnedWorktree: false;
+  stackParent?: CheckoutStackParentStatus | null;
 }
 
 export interface CheckoutStatusGitPaseo {
@@ -867,6 +947,7 @@ export interface CheckoutStatusGitPaseo {
   hasRemote: boolean;
   remoteUrl: string | null;
   isPaseoOwnedWorktree: true;
+  stackParent?: CheckoutStackParentStatus | null;
 }
 
 export type CheckoutStatusGit = CheckoutStatusGitNonPaseo | CheckoutStatusGitPaseo;
@@ -923,6 +1004,7 @@ export type CheckoutSnapshotFacts =
       branchMergeRef: string | null;
       upstreamStatus: UpstreamStatus | null;
       pullRequestLookupTarget: PullRequestStatusLookupTarget | null;
+      stackParent?: CheckoutStackParentStatus | null;
     };
 
 function isNotGitRepositoryError(error: unknown): boolean {
@@ -1702,6 +1784,34 @@ async function resolveMostAheadBaseRef(cwd: string, baseRef: string): Promise<st
   return normalizedBaseRef;
 }
 
+async function resolveRequestedComparisonBaseRef(cwd: string, baseRef: string): Promise<string> {
+  const normalized = normalizeComparisonBaseRefName(baseRef);
+  const explicitRemote =
+    baseRef.startsWith("origin/") || baseRef.startsWith("refs/remotes/origin/");
+  const explicitLocal = baseRef.startsWith("refs/heads/");
+
+  if (explicitRemote) {
+    if (await doesGitRefExist(cwd, `refs/remotes/origin/${normalized.localName}`)) {
+      return normalized.originRef;
+    }
+    throw new Error(`Base branch not found on origin: ${normalized.originRef}`);
+  }
+
+  if (await doesGitRefExist(cwd, `refs/heads/${normalized.localName}`)) {
+    if (explicitLocal) {
+      return normalized.localName;
+    }
+    return resolveBestComparisonBaseRef(cwd, normalized.localName);
+  }
+  if (
+    !explicitLocal &&
+    (await doesGitRefExist(cwd, `refs/remotes/origin/${normalized.localName}`))
+  ) {
+    return normalized.originRef;
+  }
+  throw new Error(`Base branch not found locally: ${normalized.localName}`);
+}
+
 async function getAheadBehind(
   cwd: string,
   baseRef: string,
@@ -2037,6 +2147,10 @@ export async function getCheckoutSnapshotFacts(
     return { isGit: false };
   }
 
+  const stackParentPromise = inspected.currentBranch
+    ? getCheckoutStackParentStatus(cwd, inspected.currentBranch)
+    : Promise.resolve(null);
+
   const paseoWorktreeMetadata = inspected.paseoWorktree.isPaseoOwnedWorktree
     ? readPaseoWorktreeMetadata(inspected.paseoWorktree.worktreeRoot)
     : null;
@@ -2095,6 +2209,7 @@ export async function getCheckoutSnapshotFacts(
     context,
   );
   const upstreamStatus = await upstreamStatusPromise;
+  const stackParent = await stackParentPromise;
 
   return {
     isGit: true,
@@ -2112,6 +2227,7 @@ export async function getCheckoutSnapshotFacts(
     branchMergeRef,
     upstreamStatus,
     pullRequestLookupTarget,
+    stackParent,
   };
 }
 
@@ -2303,6 +2419,7 @@ export async function getCheckoutStatus(
       hasRemote,
       remoteUrl,
       isPaseoOwnedWorktree: true,
+      stackParent: facts.stackParent ?? null,
     };
   }
 
@@ -2321,6 +2438,7 @@ export async function getCheckoutStatus(
     hasRemote,
     remoteUrl,
     isPaseoOwnedWorktree: false,
+    stackParent: facts.stackParent ?? null,
   };
 }
 
@@ -2544,9 +2662,11 @@ async function tryResolveCheckoutCommitsBaseRef(
 export async function listCheckoutCommits({
   cwd,
   context,
+  baseRef,
 }: {
   cwd: string;
   context?: CheckoutContext;
+  baseRef?: string;
 }): Promise<CheckoutCommitsResult> {
   const currentBranch = await getCurrentBranch(cwd);
   if (!currentBranch) {
@@ -2555,12 +2675,16 @@ export async function listCheckoutCommits({
 
   const { resolvedBaseRef } = await resolveBaseRefForCwd(cwd, context);
   const normalizedBaseRef = resolvedBaseRef ? branchNameFromRef(resolvedBaseRef) : null;
-  let comparisonBaseRef = await tryResolveCheckoutCommitsBaseRef(
-    cwd,
-    resolvedBaseRef,
-    currentBranch,
-  );
-  if (!comparisonBaseRef && normalizedBaseRef && normalizedBaseRef !== currentBranch) {
+  let comparisonBaseRef =
+    baseRef === undefined
+      ? await tryResolveCheckoutCommitsBaseRef(cwd, resolvedBaseRef, currentBranch)
+      : await resolveRequestedComparisonBaseRef(cwd, baseRef);
+  if (
+    baseRef === undefined &&
+    !comparisonBaseRef &&
+    normalizedBaseRef &&
+    normalizedBaseRef !== currentBranch
+  ) {
     // Saved worktree metadata can outlive a renamed or deleted base branch.
     comparisonBaseRef = await tryResolveCheckoutCommitsBaseRef(
       cwd,
@@ -3366,16 +3490,15 @@ async function resolveCheckoutDiffRefs(
   if (compare.mode === "uncommitted") {
     return { baseRef: "HEAD", includeUntracked: true };
   }
-  const { storedBaseRef, resolvedBaseRef } = await resolveBaseRefForCwd(cwd, context);
-  const baseRef = resolveOperationBaseRef({
-    storedBaseRef,
-    resolvedBaseRef,
-    requestedBaseRef: compare.baseRef,
-  });
+  const { resolvedBaseRef } = await resolveBaseRefForCwd(cwd, context);
+  const baseRef = compare.baseRef ?? resolvedBaseRef;
   if (!baseRef) {
     return null;
   }
-  const bestBaseRef = await resolveBestComparisonBaseRef(cwd, baseRef);
+  const bestBaseRef =
+    compare.baseRef === undefined
+      ? await resolveBestComparisonBaseRef(cwd, baseRef)
+      : await resolveRequestedComparisonBaseRef(cwd, baseRef);
   return {
     baseRef: (await tryResolveMergeBase(cwd, bestBaseRef)) ?? bestBaseRef,
     targetRef: "HEAD",

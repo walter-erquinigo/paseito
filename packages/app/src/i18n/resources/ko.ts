@@ -912,6 +912,7 @@ export const ko: TranslationResources = {
         },
       },
       diff: {
+        ...en.workspace.git.diff,
         openChangesTab: "변경사항 탭 열기",
         openDiffTab: "Diff 탭 열기",
         closeChangesTab: "변경사항 탭 닫기",

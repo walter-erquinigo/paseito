@@ -8,9 +8,10 @@ interface StatusBadgeProps {
   label: string;
   variant?: StatusBadgeVariant;
   leading?: ReactNode;
+  testID?: string;
 }
 
-export function StatusBadge({ label, variant = "muted", leading }: StatusBadgeProps) {
+export function StatusBadge({ label, variant = "muted", leading, testID }: StatusBadgeProps) {
   const pillStyle = useMemo(
     () => [
       styles.pill,
@@ -31,7 +32,7 @@ export function StatusBadge({ label, variant = "muted", leading }: StatusBadgePr
   );
 
   return (
-    <View style={pillStyle}>
+    <View style={pillStyle} testID={testID}>
       {leading}
       <Text style={textStyle}>{label}</Text>
     </View>

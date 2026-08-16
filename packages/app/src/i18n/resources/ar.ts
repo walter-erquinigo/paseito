@@ -905,6 +905,7 @@ export const ar: TranslationResources = {
         },
       },
       diff: {
+        ...en.workspace.git.diff,
         openChangesTab: "فتح علامة تبويب التغييرات",
         openDiffTab: "فتح علامة تبويب الفرق",
         closeChangesTab: "إغلاق علامة تبويب التغييرات",

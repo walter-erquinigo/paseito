@@ -938,6 +938,7 @@ export const es: TranslationResources = {
         },
       },
       diff: {
+        ...en.workspace.git.diff,
         openChangesTab: "Abrir la pestaña Cambios",
         openDiffTab: "Abrir la pestaña Diferencia",
         closeChangesTab: "Cerrar la pestaña Cambios",

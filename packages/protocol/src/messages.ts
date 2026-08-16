@@ -2277,6 +2277,7 @@ const CheckoutCommitSchema = z.object({
 export const CheckoutCommitsListRequestSchema = z.object({
   type: z.literal("checkout.commits.list.request"),
   cwd: z.string(),
+  baseRef: z.string().optional(),
   requestId: z.string(),
 });
 
@@ -3656,6 +3657,11 @@ export const ServerInfoStatusPayloadSchema = z
         commitsList: z.boolean().optional(),
         // COMPAT(commitBaseClassification): added in v0.2.0, remove gate after 2027-01-23.
         commitBaseClassification: z.boolean().optional(),
+        // COMPAT(changesBaseSelector): added in Paseito v0.2.5-paseito.1, remove gate after 2027-02-04.
+        changesBaseSelector: z.boolean().optional(),
+        // COMPAT(changesStackParentBase): added in Paseito v0.4.0-paseito.33,
+        // remove gate after 2027-02-21.
+        changesStackParentBase: z.boolean().optional(),
         // COMPAT(providerRemoval): added in v0.1.105, drop the gate when floor >= v0.1.105.
         providerRemoval: z.boolean().optional(),
         // COMPAT(importSessionWorkspaceTarget): added in v0.1.110, remove gate after 2027-01-16.
@@ -5149,6 +5155,25 @@ const AheadBehindSchema = z.object({
   behind: z.number(),
 });
 
+export const CheckoutStackParentSchema = z.discriminatedUnion("state", [
+  z.object({
+    commitSha: z.string(),
+    state: z.literal("valid"),
+    ref: z.string(),
+  }),
+  z.object({
+    commitSha: z.string(),
+    state: z.literal("malformed"),
+    reason: z.enum(["empty", "multiple", "invalid", "self"]),
+    declaredRef: z.string().optional(),
+  }),
+  z.object({
+    commitSha: z.string(),
+    state: z.literal("missing"),
+    declaredRef: z.string(),
+  }),
+]);
+
 const CheckoutStatusCommonSchema = z.object({
   cwd: z.string(),
   error: CheckoutErrorSchema.nullable(),
@@ -5189,6 +5214,9 @@ const CheckoutStatusGitNonPaseoSchema = CheckoutStatusCommonSchema.extend({
   behindOfOrigin: z.number().nullable(),
   hasRemote: z.boolean(),
   remoteUrl: z.string().nullable(),
+  // COMPAT(changesStackParentBase): added in Paseito v0.4.0-paseito.33,
+  // remove optional after 2027-02-21.
+  stackParent: CheckoutStackParentSchema.nullable().optional(),
 });
 
 const CheckoutStatusGitPaseoSchema = CheckoutStatusCommonSchema.extend({
@@ -5204,6 +5232,9 @@ const CheckoutStatusGitPaseoSchema = CheckoutStatusCommonSchema.extend({
   behindOfOrigin: z.number().nullable(),
   hasRemote: z.boolean(),
   remoteUrl: z.string().nullable(),
+  // COMPAT(changesStackParentBase): added in Paseito v0.4.0-paseito.33,
+  // remove optional after 2027-02-21.
+  stackParent: CheckoutStackParentSchema.nullable().optional(),
 });
 
 export const CheckoutStatusResponseSchema = z.object({
@@ -7209,6 +7240,7 @@ export type AgentPermissionResponseMessage = z.infer<typeof AgentPermissionRespo
 export type CheckoutStatusRequest = z.infer<typeof CheckoutStatusRequestSchema>;
 export type CheckoutStatusResponse = z.infer<typeof CheckoutStatusResponseSchema>;
 export type CheckoutStatusUpdate = z.infer<typeof CheckoutStatusUpdateSchema>;
+export type CheckoutStackParent = z.infer<typeof CheckoutStackParentSchema>;
 export type SubscribeCheckoutDiffRequest = z.infer<typeof SubscribeCheckoutDiffRequestSchema>;
 export type UnsubscribeCheckoutDiffRequest = z.infer<typeof UnsubscribeCheckoutDiffRequestSchema>;
 export type SubscribeCheckoutDiffResponse = z.infer<typeof SubscribeCheckoutDiffResponseSchema>;

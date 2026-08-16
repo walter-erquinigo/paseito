@@ -97,6 +97,12 @@ import { PullRequestStateIcon } from "@/git/pull-request-state-icon";
 import { openExternalUrl } from "@/utils/open-external-url";
 import { openWorkspacePullRequest } from "@/workspace-tabs/open-supporting-view";
 import type { PullRequestOpenLocation } from "@/hooks/use-settings";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { ChangesBaseSelector } from "@/git/changes-base-selector";
+import {
+  applyChangesBaseSelection,
+  getChangesStackParentBadgeKind,
+} from "@/git/changes-base-selection";
 
 export type { GitActionId, GitAction, GitActions } from "@/git/policy";
 
@@ -465,11 +471,16 @@ interface ChangesRepositoryToolbarModel {
 }
 
 interface ChangesComparisonToolbarModel {
+  baseSelection: ReturnType<typeof useWorkingDiff>["baseSelection"];
   committedDescription?: string;
+  currentBranchName: string | null;
+  cwd: string;
   diffMode: "uncommitted" | "base";
   mode: ChangesToolbarMode;
   selectedDiffStat: { additions: number; deletions: number } | null;
+  serverId: string;
   onSelectBase: () => void;
+  onSelectComparisonBase: (baseRef: string | null) => Promise<void>;
   onSelectUncommitted: () => void;
 }
 
@@ -481,6 +492,7 @@ interface ChangesHeaderProps {
 }
 
 interface BuildChangesHeaderModelInput {
+  baseSelection: ReturnType<typeof useWorkingDiff>["baseSelection"];
   branchName: string | null;
   committedDescription?: string;
   compact: boolean;
@@ -490,6 +502,7 @@ interface BuildChangesHeaderModelInput {
   mode: ChangesToolbarMode;
   onOpenPullRequest: () => void;
   onSelectBase: () => void;
+  onSelectComparisonBase: (baseRef: string | null) => Promise<void>;
   onSelectUncommitted: () => void;
   pullRequest: PrHint | null;
   selectedDiffStat: { additions: number; deletions: number } | null;
@@ -513,11 +526,16 @@ function buildChangesHeaderModel(input: BuildChangesHeaderModelInput): {
       workspaceId: input.workspaceId,
     },
     comparison: {
+      baseSelection: input.baseSelection,
       committedDescription: input.committedDescription,
+      currentBranchName: input.branchName,
+      cwd: input.cwd,
       diffMode: input.diffMode,
       mode: input.mode,
       selectedDiffStat: input.selectedDiffStat,
+      serverId: input.serverId,
       onSelectBase: input.onSelectBase,
+      onSelectComparisonBase: input.onSelectComparisonBase,
       onSelectUncommitted: input.onSelectUncommitted,
     },
   };
@@ -735,6 +753,14 @@ function ChangesComparisonToolbar({
           onSelectUncommitted={model.onSelectUncommitted}
           onSelectBase={model.onSelectBase}
         />
+        <ChangesBaseSelectorPlacement
+          visible={!compact}
+          serverId={model.serverId}
+          cwd={model.cwd}
+          currentBranchName={model.currentBranchName}
+          baseSelection={model.baseSelection}
+          onSelect={model.onSelectComparisonBase}
+        />
         {model.selectedDiffStat ? (
           <DiffStat
             additions={model.selectedDiffStat.additions}
@@ -747,6 +773,52 @@ function ChangesComparisonToolbar({
         <ChangesToolbarActions mode={model.mode} compact={compact} />
       </ChangesToolbarTrailing>
     </ChangesToolbarRow>
+  );
+}
+
+function ChangesBaseSelectorPlacement({
+  visible,
+  serverId,
+  cwd,
+  currentBranchName,
+  baseSelection,
+  onSelect,
+}: {
+  visible: boolean;
+  serverId: string;
+  cwd: string;
+  currentBranchName: string | null;
+  baseSelection: ReturnType<typeof useWorkingDiff>["baseSelection"];
+  onSelect: (baseRef: string | null) => Promise<void>;
+}) {
+  const { t } = useTranslation();
+  if (!visible || !currentBranchName) return null;
+  const badgeKind = getChangesStackParentBadgeKind(baseSelection.stackParentStatus);
+  return (
+    <>
+      <ChangesBaseSelector
+        serverId={serverId}
+        cwd={cwd}
+        currentBranch={currentBranchName}
+        defaultBaseRef={baseSelection.defaultBaseRef}
+        recordedBaseRef={baseSelection.recordedBaseRef}
+        selectedBaseRef={baseSelection.selectedBaseRef}
+        effectiveBaseRef={baseSelection.effectiveBaseRef}
+        supported={baseSelection.supported}
+        onSelect={onSelect}
+      />
+      {badgeKind ? (
+        <StatusBadge
+          label={t(
+            badgeKind === "malformed"
+              ? "workspace.git.diff.stackParentMalformed"
+              : "workspace.git.diff.stackParentMissing",
+          )}
+          variant="error"
+          testID={`changes-stack-parent-${badgeKind}-badge`}
+        />
+      ) : null}
+    </>
   );
 }
 
@@ -1538,6 +1610,7 @@ export function ChangesSurface({
     notGit,
     statusErrorMessage,
     baseRef,
+    baseSelection,
     currentBranchName,
     diffMode,
     selectUncommitted: handleSelectUncommitted,
@@ -1776,6 +1849,15 @@ export function ChangesSurface({
     selectUncommitted: handleSelectUncommitted,
     selectBase: handleSelectBase,
   });
+  const handleSelectComparisonBase = useCallback(
+    (nextBaseRef: string | null) =>
+      applyChangesBaseSelection({
+        baseRef: nextBaseRef,
+        setOverride: baseSelection.setOverride,
+        showCommitted: handleSelectBase,
+      }),
+    [baseSelection.setOverride, handleSelectBase],
+  );
 
   const diffContent: ReactElement = (
     <DiffBodyContent
@@ -1869,6 +1951,7 @@ export function ChangesSurface({
   const changesHeaderModel = useMemo(
     () =>
       buildChangesHeaderModel({
+        baseSelection,
         branchName: currentBranchName,
         committedDescription: committedDiffDescription,
         compact: isMobile,
@@ -1878,6 +1961,7 @@ export function ChangesSurface({
         mode: toolbarMode,
         onOpenPullRequest: handleOpenPullRequest,
         onSelectBase: handleSelectBase,
+        onSelectComparisonBase: handleSelectComparisonBase,
         onSelectUncommitted: handleSelectUncommitted,
         pullRequest: selectPrHintFromStatus(pullRequestStatus, forge),
         selectedDiffStat,
@@ -1885,6 +1969,7 @@ export function ChangesSurface({
         workspaceId,
       }),
     [
+      baseSelection,
       committedDiffDescription,
       currentBranchName,
       cwd,
@@ -1892,6 +1977,7 @@ export function ChangesSurface({
       gitActions,
       handleOpenPullRequest,
       handleSelectBase,
+      handleSelectComparisonBase,
       handleSelectUncommitted,
       isMobile,
       forge,

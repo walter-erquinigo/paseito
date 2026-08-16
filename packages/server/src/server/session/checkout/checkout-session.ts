@@ -271,16 +271,26 @@ export class CheckoutSession {
   }
 
   async handleCommitsListRequest(msg: CheckoutCommitsListRequest): Promise<void> {
-    const { cwd, requestId } = msg;
+    const { cwd, baseRef, requestId } = msg;
 
     try {
-      const { baseRef, commits } = await listCheckoutCommits({
+      if (baseRef !== undefined) {
+        assertSafeGitRef(baseRef, "base branch");
+      }
+      const result = await listCheckoutCommits({
         cwd: expandTilde(cwd),
         context: { paseoHome: this.paseoHome, worktreesRoot: this.worktreesRoot },
+        baseRef,
       });
       this.host.emit({
         type: "checkout.commits.list.response",
-        payload: { cwd, baseRef, commits, error: null, requestId },
+        payload: {
+          cwd,
+          baseRef: result.baseRef,
+          commits: result.commits,
+          error: null,
+          requestId,
+        },
       });
     } catch (error) {
       this.host.emit({

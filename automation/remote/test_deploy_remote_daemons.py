@@ -184,6 +184,7 @@ class RemoteDeploymentTests(unittest.TestCase):
         self.assertIn('select(.time >= $since and .msg == "relay_control_connected")', REMOTE_INSTALL)
         self.assertNotIn("journalctl --user-unit", REMOTE_INSTALL)
         self.assertIn("changesBaseSelector", REMOTE_INSTALL)
+        self.assertIn("changesStackParentBase", REMOTE_INSTALL)
         self.assertIn("remote-drift:", REMOTE_INSTALL)
         self.assertIn("runtime-integrity.json", REMOTE_INSTALL)
         self.assertIn('chmod -R a-w "$release"', REMOTE_INSTALL)

@@ -62,7 +62,7 @@ class PackageLinuxDaemonTests(unittest.TestCase):
                 "nodeMajor": 22,
                 "entrypoint": "node_modules/@getpaseo/cli/bin/paseito",
                 "feature": "changesBaseSelector",
-                "features": ["changesBaseSelector"],
+                "features": ["changesBaseSelector", "changesStackParentBase"],
             },
         )
 

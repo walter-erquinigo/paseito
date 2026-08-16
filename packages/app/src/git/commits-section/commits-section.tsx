@@ -13,6 +13,7 @@ import { CommitRow } from "./commit-row";
 interface CommitsSectionProps {
   serverId: string;
   cwd: string;
+  baseRef?: string;
   onCommitPress: (sha: string) => void;
   collapsed?: boolean;
   onCollapsedChange?: (collapsed: boolean) => void;
@@ -88,6 +89,7 @@ function CommitsSectionContent({
 export function CommitsSection({
   serverId,
   cwd,
+  baseRef,
   onCommitPress,
   collapsed = true,
   onCollapsedChange,
@@ -100,6 +102,7 @@ export function CommitsSection({
   const query = useCheckoutCommitsQuery({
     serverId,
     cwd,
+    baseRef,
     enabled: !collapsed,
   });
 

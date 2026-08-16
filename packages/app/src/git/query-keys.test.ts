@@ -7,6 +7,7 @@ import {
   checkoutStatusQueryKey,
   invalidateCheckoutGitQueriesForClient,
   invalidateCheckoutGitQueriesForServer,
+  invalidateCheckoutComparisonQueriesForClient,
 } from "@/git/query-keys";
 import {
   prPanePipelineQueryKey,
@@ -26,6 +27,9 @@ describe("checkout query keys", () => {
     });
     queryClient.setQueryData(checkoutPrStatusQueryKey(serverId, cwd), { status: { number: 12 } });
     queryClient.setQueryData(checkoutCommitsQueryKey(serverId, cwd), { commits: [] });
+    queryClient.setQueryData(checkoutCommitsQueryKey(serverId, cwd, "origin/release"), {
+      commits: [],
+    });
     queryClient.setQueryData(checkoutCommitsQueryKey(serverId, "/tmp/other"), { commits: [] });
     queryClient.setQueryData(prPaneTimelineQueryKey({ serverId, cwd, prNumber: 12 }), {
       items: [],
@@ -68,6 +72,10 @@ describe("checkout query keys", () => {
     expect(queryClient.getQueryState(checkoutCommitsQueryKey(serverId, cwd))?.isInvalidated).toBe(
       true,
     );
+    expect(
+      queryClient.getQueryState(checkoutCommitsQueryKey(serverId, cwd, "origin/release"))
+        ?.isInvalidated,
+    ).toBe(true);
     expect(
       queryClient.getQueryState(checkoutCommitsQueryKey(serverId, "/tmp/other"))?.isInvalidated,
     ).toBe(false);
@@ -162,6 +170,31 @@ describe("checkout query keys", () => {
       queryClient.getQueryState(checkoutStatusQueryKey(otherServerId, cwd))?.isInvalidated,
     ).toBe(false);
 
+    queryClient.clear();
+  });
+
+  it("invalidates every cached comparison when the selected base changes", async () => {
+    const queryClient = new QueryClient();
+    const otherCwd = "/tmp/other";
+    const diffKey = checkoutDiffQueryKey(serverId, cwd, "base", "main", false);
+    const alternateDiffKey = checkoutDiffQueryKey(serverId, cwd, "base", "origin/release", false);
+    const commitKey = checkoutCommitsQueryKey(serverId, cwd, "main");
+    const alternateCommitKey = checkoutCommitsQueryKey(serverId, cwd, "origin/release");
+
+    for (const key of [diffKey, alternateDiffKey, commitKey, alternateCommitKey]) {
+      queryClient.setQueryData(key, {});
+    }
+    queryClient.setQueryData(checkoutDiffQueryKey(serverId, otherCwd, "base", "main"), {});
+
+    await invalidateCheckoutComparisonQueriesForClient(queryClient, { serverId, cwd });
+
+    for (const key of [diffKey, alternateDiffKey, commitKey, alternateCommitKey]) {
+      expect(queryClient.getQueryState(key)?.isInvalidated).toBe(true);
+    }
+    expect(
+      queryClient.getQueryState(checkoutDiffQueryKey(serverId, otherCwd, "base", "main"))
+        ?.isInvalidated,
+    ).toBe(false);
     queryClient.clear();
   });
 });
