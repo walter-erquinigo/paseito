@@ -8,9 +8,18 @@ interface StatusBadgeProps {
   label: string;
   variant?: StatusBadgeVariant;
   leading?: ReactNode;
+  testID?: string;
 }
 
-export function StatusBadge({ label, variant = "muted", leading }: StatusBadgeProps) {
+export function StatusBadge({ label, variant = "muted", leading, testID }: StatusBadgeProps) {
+  const pillStyle = useMemo(
+    () => [
+      styles.pill,
+      variant === "success" && styles.pillSuccess,
+      variant === "error" && styles.pillError,
+    ],
+    [variant],
+  );
   const textStyle = useMemo(
     () => [
       styles.pillText,
@@ -22,7 +31,7 @@ export function StatusBadge({ label, variant = "muted", leading }: StatusBadgePr
   );
 
   return (
-    <View style={styles.pill}>
+    <View style={pillStyle} testID={testID}>
       {leading}
       <Text style={textStyle}>{label}</Text>
     </View>
@@ -40,6 +49,16 @@ const styles = StyleSheet.create((theme) => ({
     backgroundColor: theme.colors.surface3,
     paddingHorizontal: theme.spacing[2],
     paddingVertical: 3,
+  },
+  // Tinted from the one status token rather than a palette step, so the pill tracks the
+  // theme. `1a`/`33` are the 10%/20% alpha suffixes the identity table uses.
+  pillSuccess: {
+    backgroundColor: `${theme.colors.statusSuccess}1a`,
+    borderColor: `${theme.colors.statusSuccess}33`,
+  },
+  pillError: {
+    backgroundColor: `${theme.colors.statusDanger}1a`,
+    borderColor: `${theme.colors.statusDanger}33`,
   },
   pillText: {
     fontSize: theme.fontSize.sm,
