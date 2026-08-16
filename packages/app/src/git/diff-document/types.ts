@@ -5,6 +5,7 @@ import type { ChangesSearchMatch, ChangesSearchResult } from "@/git/changes-sear
 import type { ChangesLspController } from "@/git/use-changes-lsp";
 import type { ReviewableDiffTarget } from "@/utils/diff-layout";
 import type { WorkspaceFileOpenOptions } from "@/workspace/file-open";
+import type { LspHoverVisualTheme } from "@/file-pane/editor/lsp-hover-markdown.web";
 
 interface DiffDocumentBaseProps {
   files: ParsedDiffFile[];
@@ -54,6 +55,7 @@ export interface WorkingDiffMode {
   onRevealSearchMatch?: (match: ChangesSearchMatch) => void | Promise<void>;
   /** The shared editor session controller. Only current-side canvas cells become targets. */
   lsp?: ChangesLspController;
+  lspStatusPresentation?: "label" | "icon";
 }
 
 export interface DiffReviewPresentation {
@@ -257,6 +259,7 @@ export type DiffScrollAnchor =
 export type DiffSurfaceProps = DiffDocumentProps & {
   palette: DiffPalette;
   headerTypography: DiffHeaderTypography;
+  hoverTheme: LspHoverVisualTheme;
   collapsedFilePaths: ReadonlySet<string>;
   onToggleFile: (path: string) => void;
   selectedPath: string | null;
