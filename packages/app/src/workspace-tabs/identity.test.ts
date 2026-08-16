@@ -60,6 +60,29 @@ describe("working diff tab identity", () => {
     ).toEqual(target);
   });
 
+  it("normalizes optional line, range, and column navigation while preserving legacy targets", () => {
+    expect(
+      normalizeWorkspaceTabTarget({
+        kind: "working_diff",
+        focusPath: "src/example.ts",
+        focusRequestId: 2.9,
+        focusLineStart: 10.9,
+        focusLineEnd: 14.8,
+        focusColumn: 5.4,
+      }),
+    ).toEqual({
+      kind: "working_diff",
+      focusPath: "src/example.ts",
+      focusRequestId: 2,
+      focusLineStart: 10,
+      focusLineEnd: 14,
+      focusColumn: 5,
+    });
+    expect(normalizeWorkspaceTabTarget({ kind: "working_diff" })).toEqual({
+      kind: "working_diff",
+    });
+  });
+
   it("treats focus as navigation state rather than tab identity", () => {
     expect(workspaceTabTargetsEqual(target, target)).toBe(true);
     expect(workspaceTabTargetsEqual(target, { ...target, focusPath: "src/other.ts" })).toBe(false);
@@ -130,5 +153,37 @@ describe("commit diff tab identity", () => {
         sha: "   ",
       }),
     ).toBeNull();
+  });
+});
+
+describe("file tab location persistence", () => {
+  it("preserves normalized columns while older saved tabs remain valid", () => {
+    expect(
+      normalizeWorkspaceTabTarget({
+        kind: "file",
+        path: " src\\app.ts ",
+        lineStart: 10.9,
+        column: 4.8,
+        openMode: "source",
+      }),
+    ).toEqual({
+      kind: "file",
+      path: "src/app.ts",
+      lineStart: 10,
+      column: 4,
+      openMode: "source",
+    });
+    expect(normalizeWorkspaceTabTarget({ kind: "file", path: "src/app.ts" })).toEqual({
+      kind: "file",
+      path: "src/app.ts",
+    });
+    expect(
+      buildDeterministicWorkspaceTabId({
+        kind: "file",
+        path: "src/app.ts",
+        lineStart: 10,
+        column: 4,
+      }),
+    ).toBe("file_src/app.ts");
   });
 });

@@ -208,6 +208,7 @@ export function resolveSideFileOpenPlacement(input: {
   sourcePaneId?: string | null;
   tabs: WorkspaceTab[];
   target: WorkspaceTabTarget;
+  side?: "left" | "right";
 }): WorkspaceSideFileOpenPlacement {
   const targetTabId = buildDeterministicWorkspaceTabId(input.target);
   const existingTab = input.tabs.find(
@@ -223,7 +224,7 @@ export function resolveSideFileOpenPlacement(input: {
     return { kind: "open-in-source" };
   }
 
-  const sidePaneId = findAdjacentPane(layout.root, sourcePaneId, "right");
+  const sidePaneId = findAdjacentPane(layout.root, sourcePaneId, input.side ?? "right");
   if (sidePaneId) {
     return { kind: "focus-side-pane", paneId: sidePaneId };
   }
