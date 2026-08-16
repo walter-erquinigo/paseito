@@ -100,6 +100,12 @@ export const ru: TranslationResources = {
       queue: "Очередь",
       send: "Отправлять",
     },
+    queue: {
+      steer: "Перенаправить",
+      steeringConversation: "Перенаправление активной работы",
+      steerHint: "Отправить как указание для активного запуска",
+      replaceFallbackHint: "Этот провайдер перезапустит активный запуск с этим сообщением",
+    },
     cancel: {
       cancelingAgent: "Отменяющий агент",
       stopAgent: "Остановить агент",
@@ -814,7 +820,7 @@ export const ru: TranslationResources = {
             "Обновление недоступно, поскольку эта ветка уже обновлена ​​до версии{{baseRef}}.",
           mergePrNoGithub: "Объединение PR сейчас недоступно, поскольку GitHub не подключен.",
           archiveNotWorktree:
-            "Архив здесь недоступен, поскольку это рабочее пространство не было создано как рабочее дерево Paseo.",
+            "Архив здесь недоступен, поскольку это рабочее пространство не было создано как рабочее дерево Paseito.",
           mergePrNoForge:
             "Объединение {{noun}} сейчас недоступно, поскольку {{brand}} не подключен.",
           mergePrMissing: "Объединение PR недоступно, поскольку еще нет запроса на включение",
@@ -861,6 +867,14 @@ export const ru: TranslationResources = {
       diff: {
         openChangesTab: "Открыть вкладку «Изменения»",
         closeChangesTab: "Закрыть вкладку «Изменения»",
+        fileNavigator: "Файлы",
+        showFileNavigator: "Показать навигатор файлов",
+        hideFileNavigator: "Скрыть навигатор файлов",
+        fileStatus: {
+          added: "Добавлен",
+          deleted: "Удалён",
+          modified: "Изменён",
+        },
         binaryFile: "Бинарный файл",
         tooLarge: "Разница слишком велика для отображения",
         previewTooLargeTitle: "Этот diff слишком велик для предпросмотра",
@@ -876,8 +890,11 @@ export const ru: TranslationResources = {
         showWhitespace: "Показать пробелы",
         scrollLongLines: "Прокручивать длинные строки",
         wrapLongLines: "Перенос длинных строк",
+        lsp: "Языковые функции",
+        lspUpdateHost: "Обновите хост для языковых функций",
         collapseAll: "Свернуть все файлы",
         expandAll: "Развернуть все файлы",
+        expandUnreviewed: "Развернуть непросмотренные и свернуть просмотренные файлы",
         collapseAllFolders: "Свернуть все папки",
         expandAllFolders: "Развернуть все папки",
         refreshing: "Освежающий",
@@ -892,6 +909,42 @@ export const ru: TranslationResources = {
         diffMode: "Режим разницы",
         uncommitted: "Незафиксированный",
         committed: "Преданный идее",
+        baseSelectorLabel: "Сравнить зафиксированные изменения с {{baseRef}}",
+        baseSelectorTitle: "Сравнить с веткой",
+        baseSelectorSearch: "Поиск веток",
+        baseSelectorEmpty: "Подходящих веток нет",
+        baseSelectorMissing: "Ветка {{baseRef}} больше не существует",
+        baseSelectorError: "Не удалось изменить ветку сравнения",
+        baseSelectorUpdateHost: "Обновите хост, чтобы выбрать базовую ветку",
+        markReviewed: "Отметить как просмотренный",
+        markUnreviewed: "Отметить как непросмотренный",
+        markFileReviewed: "Отметить {{file}} как просмотренный",
+        markFileUnreviewed: "Отметить {{file}} как непросмотренный",
+        markAllReviewed: "Отметить все файлы как просмотренные",
+        clearAllReviewed: "Снять все отметки просмотра",
+        reviewUpdateHost: "Обновите хост, чтобы отмечать просмотренные файлы",
+        reviewBranchRequired: "Переключитесь на ветку, чтобы отмечать просмотренные файлы",
+        markLineReviewed: "Отметить строку {{line}} как просмотренную",
+        markLineUnreviewed: "Отметить строку {{line}} как непросмотренную",
+        editLineUnavailable: "Эту строку нельзя открыть во встроенном редакторе",
+        noUncheckedLines: "В этом направлении нет непросмотренных строк",
+        lineReviewShortcuts:
+          "m / , принять и перейти · Shift+M / Shift+. показать контекст · Пробел переключить · E изменить · U отменить · Esc очистить",
+        context: {
+          hiddenLines: "Скрыто строк: {{count}}",
+          expandUp: "Показать 20 строк выше",
+          expandDown: "Показать 20 строк ниже",
+          expandAll: "Показать все скрытые строки",
+          expandFile: "Развернуть весь файл",
+          failedToExpand: "Не удалось загрузить скрытые строки",
+        },
+        search: {
+          placeholder: "Поиск в изменённых файлах",
+          loading: "Поиск…",
+          noMatches: "Совпадений нет",
+          submit: "Enter — поиск · n/N — переход · Esc — закрыть",
+          failed: "Ошибка поиска",
+        },
         branchUnknown: "Неизвестный",
         base: "база",
         newFile: "Новый",
@@ -1031,7 +1084,7 @@ export const ru: TranslationResources = {
       discord: "Discord",
       github: "Создать issue в GitHub",
       whatsNew: "Что нового",
-      appName: "Paseo",
+      version: "Paseito {{version}}",
     },
     sections: {
       sessions: "История",
@@ -1163,7 +1216,7 @@ export const ru: TranslationResources = {
   },
   desktop: {
     quitting: {
-      title: "Выход из Paseo...",
+      title: "Выход из Paseito...",
       detail: "Остановка локального демона.",
     },
     daemon: {
@@ -1177,20 +1230,20 @@ export const ru: TranslationResources = {
       },
       management: {
         title: "Управление встроенным демоном",
-        hint: "Позвольте Paseo запустить и остановить встроенный демон.",
+        hint: "Позвольте Paseito запустить и остановить встроенный демон.",
         pauseTitle: "Приостановить встроенный демон",
         pauseMessage:
           "Это немедленно остановит встроенный демон. Запущенные агенты и терминалы, подключенные к встроенному демону, будут остановлены.",
         pauseAndStop: "Пауза и остановка",
         registrationFailed:
-          "Built-in daemon started, but Paseo could not save the localhost connection. Toggle daemon management off and on again, or add localhost manually.",
+          "Built-in daemon started, but Paseito could not save the localhost connection. Toggle daemon management off and on again, or add localhost manually.",
         pausedStopFailed:
-          "Встроенное управление демоном было приостановлено, но Paseo не смог остановить демон.",
+          "Встроенное управление демоном было приостановлено, но Paseito не смог остановить демон.",
         updateFailed: "Невозможно обновить встроенное управление демонами.",
       },
       keepRunning: {
         title: "Продолжать работу демона после выхода",
-        hint: "Daemon продолжает работать, когда вы выходите из Paseo",
+        hint: "Daemon продолжает работать, когда вы выходите из Paseito",
       },
       logs: {
         title: "Файл журнала",
@@ -1205,7 +1258,7 @@ export const ru: TranslationResources = {
       fullStatus: {
         title: "Полный статус",
         modalTitle: "Статус Daemon",
-        hint: "Запускает`paseo daemon status`и показывает результат",
+        hint: "Запускает`paseito daemon status`и показывает результат",
         view: "Посмотреть статус",
         copied: "Статус скопирован в буфер обмена.",
         fetchFailed: "Не удалось получить статус демона:{{message}}.",
@@ -1260,7 +1313,7 @@ export const ru: TranslationResources = {
     },
     rosetta: {
       title: "Загрузите сборку Apple Silicon",
-      runningIntel: "Вы используете сборку Intel для Paseo под Rosetta на Apple Silicon.",
+      runningIntel: "Вы используете сборку Intel для Paseito под Rosetta на Apple Silicon.",
       highCpu:
         "Это приводит к высокой загрузке ЦП. Загрузите сборку Apple Silicon, чтобы исправить это.",
       download: "Скачать",
@@ -1305,7 +1358,7 @@ export const ru: TranslationResources = {
         microphone: "Состояние микрофона еще не проверялось.",
       },
       testNotification: {
-        title: "Тест уведомлений Paseo",
+        title: "Тест уведомлений Paseito",
         body: "Если вы это видите, уведомления на рабочем столе работают.",
         notDelivered:
           "Уведомление не было доставлено. Проверьте Системные настройки > Уведомления.",
@@ -1315,7 +1368,7 @@ export const ru: TranslationResources = {
     integrations: {
       cli: {
         statusFailed: "Невозможно проверить статус установки CLI.",
-        installFailed: "Невозможно установить PaseoCLI.",
+        installFailed: "Невозможно установить PaseitoCLI.",
       },
       skills: {
         statusFailed: "Невозможно проверить статус навыков оркестровки.",
@@ -1327,7 +1380,8 @@ export const ru: TranslationResources = {
     },
   },
   rootError: {
-    title: "В Paseo возникла проблема.",
+    kicker: "Что-то пошло не так",
+    title: "В Paseito возникла проблема.",
     body: "Попробуйте снова перезагрузить приложение. Если это повторяется, приложите приведенные ниже подробности к отчету.",
     details: "Подробности",
   },
@@ -1423,7 +1477,7 @@ export const ru: TranslationResources = {
     },
   },
   onboarding: {
-    title: "Добро пожаловать в Paseo",
+    title: "Добро пожаловать в Paseito",
     subtitle: "Подключите компьютер, чтобы начать",
     actions: {
       settings: "Настройки",
@@ -1503,7 +1557,7 @@ export const ru: TranslationResources = {
     },
     direct: {
       title: "Прямое подключение",
-      helper: "Введите адрес сервера Paseo.",
+      helper: "Введите адрес сервера Paseito.",
       fields: {
         host: "Host",
         port: "Порт",
@@ -1594,7 +1648,7 @@ export const ru: TranslationResources = {
         "Без реле подключайтесь напрямую через TCP, Tailscale или другую VPN. QR-код не создаётся.",
       updateRequired: "Обновите хост, чтобы включить реле из Paseo Desktop.",
       unavailable: "Предложение по сопряжению недоступно.",
-      hint: "Отсканируйте этот код QR с помощью Paseo на своем телефоне или скопируйте ссылку ниже.",
+      hint: "Отсканируйте этот код QR с помощью Paseito на своем телефоне или скопируйте ссылку ниже.",
       qrUnavailable: "Код QR недоступен.",
       qrAccessibility: "QR-код сопряжения",
       retry: "Повторить попытку",
@@ -1627,7 +1681,7 @@ export const ru: TranslationResources = {
   serviceUrl: {
     title: "Открыть сервис URL",
     message: "Открыть{{url}}?",
-    inPaseo: "В Paseo",
+    inPaseo: "В Paseito",
     externalBrowser: "Внешний браузер",
     dontAskAgain: "Не спрашивай больше",
   },
@@ -1725,8 +1779,8 @@ export const ru: TranslationResources = {
       other: "использовано {{count}} других инструментов",
     },
     paseoCalls: {
-      one: "Paseo вызван {{count}} раз",
-      other: "Paseo вызван {{count}} раз",
+      one: "Paseito вызван {{count}} раз",
+      other: "Paseito вызван {{count}} раз",
     },
     and: "и",
   },
@@ -1745,6 +1799,10 @@ export const ru: TranslationResources = {
     accessibility: "Контекстное окно{{percentage}}% использовано",
   },
   review: {
+    composer: {
+      comment: "Комментарий",
+      codeChange: "Изменение кода",
+    },
     comment: {
       add: "Добавить комментарий к обзору",
       edit: "Изменить комментарий к отзыву",
@@ -1755,6 +1813,23 @@ export const ru: TranslationResources = {
       cancelAccessibility: "Отменить комментарий к отзыву",
       save: "Комментарий",
       saveAccessibility: "Сохранить комментарий к отзыву",
+    },
+    suggestion: {
+      start: "Предложить правку",
+      edit: "Изменить предложение",
+      delete: "Удалить предложение",
+      save: "Добавить предложение",
+      replacement: "Предлагаемая замена",
+      note: "Примечание",
+      notePlaceholder: "Необязательное пояснение",
+      lines: "Строки {{start}}–{{end}}",
+      stale: "Устаревшее предложение — обновите перед отправкой",
+      deleteLines: "Удалить выбранные строки",
+      addLineAbove: "Добавить строку выше",
+      addLineBelow: "Добавить строку ниже",
+      rangeHidden: "Разверните скрытые строки перед выбором этого диапазона",
+      rangeTooLarge: "Предложение может включать не более 200 строк",
+      rangeInvalid: "Выберите строки текущей версии одного файла и ревизии",
     },
   },
   settings: {
@@ -1838,7 +1913,7 @@ export const ru: TranslationResources = {
       browserData: {
         title: "Данные браузера",
         siteData: "Файлы cookie и данные сайтов",
-        description: "Вкладки браузера используют общие данные входа и данные сайтов в Paseo.",
+        description: "Вкладки браузера используют общие данные входа и данные сайтов в Paseito.",
         clear: "Очистить данные браузера",
         clearing: "Очистка...",
         confirmTitle: "Очистить данные браузера?",
@@ -1850,11 +1925,12 @@ export const ru: TranslationResources = {
       defaultSend: {
         label: "Отправка по умолчанию",
         descriptions: {
-          interrupt: "Когда агент работает, Enter прерывает. Command/Ctrl+Enter ставит в очередь.",
+          steer:
+            "Когда агент работает, Enter перенаправляет его. Command/Ctrl+Enter ставит в очередь.",
           queue: "Когда агент работает, Enter ставит в очередь. Command/Ctrl+Enter отправляет.",
         },
         options: {
-          interrupt: "Прерывать",
+          steer: "Перенаправить",
           queue: "Очередь",
         },
       },
@@ -1863,7 +1939,7 @@ export const ru: TranslationResources = {
         description: "Где открыть URL- адреса запущенных скриптов",
         options: {
           ask: "Просить",
-          inApp: "В Paseo",
+          inApp: "В Paseito",
           external: "Внешний браузер",
         },
       },
@@ -1949,7 +2025,7 @@ export const ru: TranslationResources = {
         label: "Обновления приложений",
         readyToInstall: "Готово к установке:{{version}}",
         installTitle: "Установить обновление рабочего стола",
-        installMessage: "Это обновит Paseo на этом компьютере.",
+        installMessage: "Это обновит Paseito на этом компьютере.",
         installConfirm: "Установить обновление",
         update: "Обновлять",
         updateTo: "Обновление до{{version}}",
@@ -2065,6 +2141,7 @@ export const ru: TranslationResources = {
         toggleFocusMode: "Переключить режим фокусировки",
         cycleTheme: "Циклическая тема",
         focusMessageInput: "Фокус ввода сообщения",
+        focusChanges: "Фокус на изменениях",
         cycleAgentMode: "Переключить режим агента",
         toggleVoiceMode: "Переключить голосовой режим",
         startStopDictation: "Начать диктовку /stop",
@@ -2094,10 +2171,11 @@ export const ru: TranslationResources = {
         title: "Навыки оркестровки",
         description: "Научите своих агентов организовывать работу через CLI",
         updateAvailable: "Доступно обновление",
-        updateTitle: "Обновить навыки Paseo?",
+        updateTitle: "Обновить навыки Paseito?",
         updateFallback: "Синхронизируйте связанные навыки с вашим компьютером.",
-        uninstallTitle: "Удалить навыки Paseo?",
-        uninstallMessage: "Удаляет все навыки оркестровки Paseo из ~/.agents, ~/.claude, ~/.codex.",
+        uninstallTitle: "Удалить навыки Paseito?",
+        uninstallMessage:
+          "Удаляет все навыки оркестровки Paseito из ~/.agents, ~/.claude, ~/.codex.",
         choose: "Выбрать навыки",
         chooseAll: "Все навыки",
         chooseAllHint: "Держите установленными все входящие навыки, включая добавленные позже.",
@@ -2197,9 +2275,9 @@ export const ru: TranslationResources = {
         title: "оркестровка",
         unavailable: "Подключитесь к этому хосту, чтобы управлять оркестрацией.",
         enableTools: {
-          title: "Включить инструменты Paseo",
+          title: "Включить инструменты Paseito",
           hint: "Агенты смогут управлять рабочими деревьями, агентами и расписаниями.",
-          accessibilityLabel: "Инструменты внедрения Paseo",
+          accessibilityLabel: "Инструменты внедрения Paseito",
         },
         systemPrompt: {
           title: "Системная подсказка",
@@ -2304,15 +2382,15 @@ export const ru: TranslationResources = {
             "Этот хост не подключен. Подождите, пока он подключится к сети, прежде чем перезапустить.",
           offlineTitle: "Host оффлайн",
           offlineMessage:
-            "Этот хост не в сети.Paseo автоматически повторно подключается — подождите, пока он снова подключится к сети, прежде чем перезапускаться.",
+            "Этот хост не в сети.Paseito автоматически повторно подключается — подождите, пока он снова подключится к сети, прежде чем перезапускаться.",
           requestFailedTitle: "Ошибка",
           requestFailedMessage:
-            "Не удалось отправить запрос на перезапуск.Paseo автоматически повторно подключается. Повторите попытку, как только хост окажется в сети.",
+            "Не удалось отправить запрос на перезапуск.Paseito автоматически повторно подключается. Повторите попытку, как только хост окажется в сети.",
           dialogFailedMessage: "Невозможно открыть диалоговое окно подтверждения перезапуска.",
         },
         update: {
           desktopManagedHint:
-            "Этот демон управляется Paseo Desktop. Обновите Paseo Desktop на хосте.",
+            "Этот демон управляется Paseito Desktop. Обновите Paseito Desktop на хосте.",
           title: "Update daemon",
           hint: "Update the daemon to the latest version and restart it",
           confirm: "Update",
@@ -2473,7 +2551,7 @@ export const ru: TranslationResources = {
         newScript: "Новый сценарий",
         editScript: "Изменить{{name}}",
         runAsService: "Запуск как служба",
-        serviceHint: "Paseo контролирует процесс и назначает порт через $PASEO_PORT.",
+        serviceHint: "Paseito контролирует процесс и назначает порт через $PASEO_PORT.",
         actions: {
           add: "Добавить скрипт",
           edit: "Редактировать",
@@ -2482,7 +2560,7 @@ export const ru: TranslationResources = {
       },
       metadata: {
         title: "Генерация метаданных",
-        info: "Инструкции для конкретного проекта, внедренные в подсказки ИИ, которые Paseo использует для генерации метаданных. Используйте их для обеспечения соблюдения соглашений вашей команды, таких как наименование ветвей, стиль фиксации или формат PR.",
+        info: "Инструкции для конкретного проекта, внедренные в подсказки ИИ, которые Paseito использует для генерации метаданных. Используйте их для обеспечения соблюдения соглашений вашей команды, таких как наименование ветвей, стиль фиксации или формат PR.",
         branchName: "Названия ветвей",
         branchNamePlaceholder: "Префиксные ветки с feat/ или fix/, mb/ для личных веток",
         commitMessage: "Фиксировать сообщения",

@@ -144,6 +144,12 @@ describe("keyboard-shortcuts", () => {
       action: "workspace.new",
     },
     {
+      name: "matches Cmd+semicolon to focus Changes on mac",
+      event: { key: ";", code: "Semicolon", metaKey: true },
+      context: { isMac: true, commandCenterOpen: false },
+      action: "changes.focus",
+    },
+    {
       name: "matches Ctrl+N to create new workspace on non-mac",
       event: { key: "n", code: "KeyN", ctrlKey: true },
       context: { isMac: false, commandCenterOpen: false, focusScope: "other" },

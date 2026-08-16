@@ -85,7 +85,10 @@ import {
   type WorkspaceTabTarget,
 } from "@/workspace-tabs/model";
 import { useKeyboardActionHandler } from "@/hooks/use-keyboard-action-handler";
-import type { KeyboardActionDefinition } from "@/keyboard/keyboard-action-dispatcher";
+import {
+  keyboardActionDispatcher,
+  type KeyboardActionDefinition,
+} from "@/keyboard/keyboard-action-dispatcher";
 import { useCreateFlowStore } from "@/stores/create-flow-store";
 import {
   buildDeterministicWorkspaceTabId,
@@ -202,6 +205,12 @@ import {
   type WorkspaceFileLocation,
   type WorkspaceFileOpenRequest,
 } from "@/workspace/file-open";
+import {
+  getInlineWorkingDiffNavigationSnapshot,
+  getWorkingDiffNavigationSnapshot,
+  resolveMarkdownChangesNavigation,
+  resolveMarkdownInlineChangesNavigation,
+} from "@/workspace/markdown-changes-navigation";
 import { RenderProfile } from "@/utils/render-profiler";
 import { useWorkspaceCheckoutStatus } from "@/screens/workspace/use-workspace-checkout-status";
 
@@ -222,6 +231,8 @@ interface WorkspaceFileLocationFields {
   path: string | null;
   lineStart?: number;
   lineEnd?: number;
+  column?: number;
+  openMode?: "source";
 }
 
 function getWorkspaceFileLocationFields(
@@ -231,7 +242,13 @@ function getWorkspaceFileLocationFields(
   if (target?.kind !== "file") {
     return { path: null };
   }
-  return { path: target.path, lineStart: target.lineStart, lineEnd: target.lineEnd };
+  return {
+    path: target.path,
+    lineStart: target.lineStart,
+    lineEnd: target.lineEnd,
+    column: target.column,
+    openMode: target.openMode,
+  };
 }
 
 function buildWorkspaceFileLocation(
@@ -240,7 +257,13 @@ function buildWorkspaceFileLocation(
   if (fields.path === null) {
     return null;
   }
-  return { path: fields.path, lineStart: fields.lineStart, lineEnd: fields.lineEnd };
+  return {
+    path: fields.path,
+    lineStart: fields.lineStart,
+    lineEnd: fields.lineEnd,
+    column: fields.column,
+    openMode: fields.openMode,
+  };
 }
 
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
@@ -2200,6 +2223,23 @@ function WorkspaceScreenContent({
     },
     [focusWorkspaceTab, persistenceKey],
   );
+  const handleFocusChangesTab = useCallback((): boolean => {
+    const changesTab = tabs.find((tab) => tab.target.kind === "working_diff");
+    if (!changesTab) return false;
+    if (changesTab.tabId === activeTabId) return false;
+    navigateToTabId(changesTab.tabId);
+    requestAnimationFrame(() => {
+      keyboardActionDispatcher.dispatch({ id: "changes.focus", scope: "workspace" });
+    });
+    return true;
+  }, [activeTabId, navigateToTabId, tabs]);
+  useKeyboardActionHandler({
+    handlerId: `workspace-focus-changes:${normalizedServerId}:${normalizedWorkspaceId}`,
+    actions: ["changes.focus"],
+    enabled: isRouteFocused,
+    priority: 150,
+    handle: handleFocusChangesTab,
+  });
   const handleImportedAgent = useCallback(
     (agentId: string) => {
       if (!persistenceKey) {
@@ -2325,20 +2365,24 @@ function WorkspaceScreenContent({
   ]);
 
   const handleOpenFileFromExplorer = useCallback(
-    function handleOpenFileFromExplorer(filePath: string) {
+    function handleOpenFileFromExplorer(
+      filePath: string,
+      options?: { lineStart: number; openMode: "source" },
+    ) {
       if (!persistenceKey) {
         return;
       }
-      const location = normalizeWorkspaceFileLocation({ path: filePath });
+      const location = normalizeWorkspaceFileLocation({ path: filePath, ...options });
       if (!location) {
         return;
       }
       const tabId = openWorkspaceTabFocused(persistenceKey, createWorkspaceFileTabTarget(location));
       if (tabId) {
+        requestFileNavigation(tabId);
         navigateToTabId(tabId);
       }
     },
-    [navigateToTabId, openWorkspaceTabFocused, persistenceKey],
+    [navigateToTabId, openWorkspaceTabFocused, persistenceKey, requestFileNavigation],
   );
 
   const handleOpenFileFromChat = useCallback(
@@ -2378,6 +2422,7 @@ function WorkspaceScreenContent({
       location: WorkspaceFileLocation;
       sourcePaneId?: string;
       parentTabId?: string | null;
+      side?: "left" | "right";
     }) => {
       const location = normalizeWorkspaceFileLocation(input.location);
       if (!location) {
@@ -2394,13 +2439,14 @@ function WorkspaceScreenContent({
         sourcePaneId: input.sourcePaneId,
         tabs: uiTabs,
         target,
+        side: input.side,
       });
       if (placement.kind === "focus-side-pane") {
         focusWorkspacePane(persistenceKey, placement.paneId);
       } else if (placement.kind === "split-side-pane") {
         splitWorkspacePaneEmpty(persistenceKey, {
           targetPaneId: placement.paneId,
-          position: "right",
+          position: input.side ?? "right",
         });
       }
 
@@ -2441,11 +2487,49 @@ function WorkspaceScreenContent({
     if (focusPaneBeforeOpen && paneId && persistenceKey) {
       focusWorkspacePane(persistenceKey, paneId);
     }
+    if (request.disposition === "markdown-preview") {
+      const location = normalizeWorkspaceFileLocation(request.location);
+      if (!location) {
+        return;
+      }
+      if (persistenceKey && workspaceDirectory && !isMobile) {
+        const navigation = resolveMarkdownChangesNavigation({
+          workspaceRoot: workspaceDirectory,
+          location,
+          tabs: uiTabs,
+          snapshot: getWorkingDiffNavigationSnapshot(persistenceKey),
+        });
+        if (navigation) {
+          retargetWorkspaceTab(persistenceKey, navigation.tabId, navigation.target);
+          focusWorkspaceTab(persistenceKey, navigation.tabId);
+          navigateToTabId(navigation.tabId);
+          return;
+        }
+        const inlineSnapshot = getInlineWorkingDiffNavigationSnapshot(persistenceKey);
+        const inlineNavigation = resolveMarkdownInlineChangesNavigation({
+          workspaceRoot: workspaceDirectory,
+          location,
+          snapshot: inlineSnapshot,
+        });
+        if (inlineSnapshot && inlineNavigation) {
+          inlineSnapshot.navigate(inlineNavigation);
+          return;
+        }
+      }
+      handleOpenFileFromChatInSidePane({
+        location,
+        sourcePaneId: paneId ?? undefined,
+        parentTabId,
+        side: "left",
+      });
+      return;
+    }
     if (request.disposition === "side") {
       handleOpenFileFromChatInSidePane({
         location: request.location,
         sourcePaneId: paneId ?? undefined,
         parentTabId,
+        side: request.side,
       });
       return;
     }
@@ -3276,14 +3360,18 @@ function WorkspaceScreenContent({
   const activeFilePath = activeFileFields.path;
   const activeFileLineStart = activeFileFields.lineStart;
   const activeFileLineEnd = activeFileFields.lineEnd;
+  const activeFileColumn = activeFileFields.column;
+  const activeFileOpenMode = activeFileFields.openMode;
   const activeFileLocation = useMemo<WorkspaceFileLocation | null>(
     () =>
       buildWorkspaceFileLocation({
         path: activeFilePath,
         lineStart: activeFileLineStart,
         lineEnd: activeFileLineEnd,
+        column: activeFileColumn,
+        openMode: activeFileOpenMode,
       }),
-    [activeFileLineEnd, activeFileLineStart, activeFilePath],
+    [activeFileColumn, activeFileLineEnd, activeFileLineStart, activeFileOpenMode, activeFilePath],
   );
   const canRenderDesktopPaneSplits = supportsDesktopPaneSplits();
   const shouldRenderDesktopPaneFallback = useMemo(
@@ -3328,6 +3416,7 @@ function WorkspaceScreenContent({
           }
           retargetWorkspaceTab(persistenceKey, input.tab.tabId, target);
         },
+        onFocusCurrentTab: () => navigateToTabId(input.tab.tabId),
         onOpenWorkspaceFile: (request: WorkspaceFileOpenRequest) => {
           handleOpenWorkspaceFileFromPane({
             request,
