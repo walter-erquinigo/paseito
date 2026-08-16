@@ -110,7 +110,6 @@ export function removeAgentDirectoryReplica(serverId: string, agentId: string): 
   };
   store.setAgents(serverId, removeKey);
   store.setAgentDetails(serverId, removeKey);
-  store.setQueuedMessages(serverId, removeKey);
   store.setAgentTimelineCursor(serverId, removeKey);
   store.setInitializingAgents(serverId, removeKey);
   store.setPendingPermissions(serverId, (current) => {

@@ -57,6 +57,18 @@ describe("migrateAppSettings", () => {
     expect(result.sendBehavior).toBe("interrupt");
   });
 
+  it("marks the upstream default migration without overriding Paseito delivery behavior", async () => {
+    const storage = createInMemoryKeyValueStorage();
+
+    const result = await migrateAppSettings(settingsWith("interrupt"), storage, undefined, {
+      skipSteerDefault: true,
+    });
+
+    expect(result.sendBehavior).toBe("interrupt");
+    expect(storage.entries.has(APP_SETTINGS_KEY)).toBe(false);
+    expect(appliedIds(storage)).toEqual(["steer-default"]);
+  });
+
   it("leaves queue alone", async () => {
     const storage = createInMemoryKeyValueStorage();
 
