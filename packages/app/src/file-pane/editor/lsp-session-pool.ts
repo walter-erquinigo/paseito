@@ -1,11 +1,11 @@
 import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
-import { EditorLspSession, type EditorLspStatus } from "@/file-pane/editor/lsp-session";
+import { EditorLspSession, type EditorLspSnapshot } from "@/file-pane/editor/lsp-session";
 
 interface PooledSession {
   session: EditorLspSession;
   initialContent: string;
   leases: number;
-  statusListeners: Set<(status: EditorLspStatus) => void>;
+  statusListeners: Set<(snapshot: EditorLspSnapshot) => void>;
 }
 
 export interface EditorLspLease {
@@ -20,7 +20,7 @@ export function acquireEditorLspSession(input: {
   cwd: string;
   path: string;
   content: string;
-  onStatus(status: EditorLspStatus): void;
+  onStatus(snapshot: EditorLspSnapshot): void;
 }): EditorLspLease | null {
   let pool = pools.get(input.client);
   if (!pool) {
@@ -36,8 +36,9 @@ export function acquireEditorLspSession(input: {
   ) {
     return null;
   }
+  const existingEntry = Boolean(entry);
   if (!entry) {
-    const statusListeners = new Set<(status: EditorLspStatus) => void>();
+    const statusListeners = new Set<(snapshot: EditorLspSnapshot) => void>();
     entry = {
       leases: 0,
       initialContent: input.content,
@@ -55,6 +56,7 @@ export function acquireEditorLspSession(input: {
   }
   entry.leases += 1;
   entry.statusListeners.add(input.onStatus);
+  if (existingEntry) input.onStatus(entry.session.getSnapshot());
   let released = false;
   return {
     session: entry.session,
