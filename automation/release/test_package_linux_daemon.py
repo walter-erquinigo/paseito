@@ -64,6 +64,7 @@ class PackageLinuxDaemonTests(unittest.TestCase):
                 "feature": "changesBaseSelector",
                 "features": [
                     "changesBaseSelector",
+                    "changesStackParentBase",
                     "changesContextExpansion",
                     "reviewSuggestionsV1",
                     "fileReviewV1",
