@@ -1035,6 +1035,54 @@ describe("WorkspaceGitService checkout observation", () => {
     service.dispose();
   });
 
+  test("refreshes a workspace when its missing Stack-Parent branch appears", async () => {
+    const watcher = createWatcherHarness();
+    const getCheckoutSnapshotFacts = vi.fn(async (cwd: string) => ({
+      ...createCheckoutFacts(cwd),
+      stackParent: {
+        commitSha: "abc123",
+        state: "missing" as const,
+        declaredRef: "werquinigo/parent",
+      },
+    }));
+    const getCheckoutStatus = vi.fn(async (cwd: string) => createCheckoutStatus(cwd));
+    const service = createService(watcher, { getCheckoutSnapshotFacts, getCheckoutStatus });
+    const subscription = service.registerWorkspace({ cwd: REPO_CWD }, vi.fn());
+
+    await vi.waitFor(() => {
+      expect(service.getMetrics().workspaceObservationSetupInFlightCount).toBe(0);
+      expect(service.getMetrics().workspaceRefreshInFlightCount).toBe(0);
+    });
+    getCheckoutStatus.mockClear();
+    const repoWatcher = watcher.records.find((record) => record.directory === GIT_DIR);
+
+    repoWatcher?.callback(null, [
+      {
+        path: path.join(GIT_DIR, "refs", "heads", "werquinigo", "parent"),
+        type: "create",
+      },
+    ]);
+    await vi.advanceTimersByTimeAsync(1_000);
+    await vi.waitFor(() => {
+      expect(getCalledCwds(getCheckoutStatus)).toEqual([REPO_CWD]);
+    });
+    getCheckoutStatus.mockClear();
+
+    repoWatcher?.callback(null, [
+      {
+        path: path.join(GIT_DIR, "refs", "remotes", "origin", "werquinigo", "parent"),
+        type: "create",
+      },
+    ]);
+    await vi.advanceTimersByTimeAsync(1_000);
+    await vi.waitFor(() => {
+      expect(getCalledCwds(getCheckoutStatus)).toEqual([REPO_CWD]);
+    });
+
+    subscription.unsubscribe();
+    service.dispose();
+  });
+
   test("a newly created remote tracking ref refreshes every repository workspace", async () => {
     const watcher = createWatcherHarness();
     const getCheckoutSnapshotFacts = vi.fn(async (cwd: string) => {
