@@ -1149,12 +1149,24 @@ export const ReviewAttachmentCommentSchema = z.object({
   filePath: z.string(),
   side: z.enum(["old", "new"]),
   lineNumber: z.number().int().positive(),
+  // COMPAT(reviewCommentRanges): added in v0.3.1-paseito.1, remove after 2027-02-14 once daemon floor >= v0.3.1.
+  endLine: z.number().int().positive().optional(),
   body: z.string(),
   context: z.object({
     hunkHeader: z.string(),
     targetLine: ReviewAttachmentContextLineSchema,
     lines: z.array(ReviewAttachmentContextLineSchema),
   }),
+});
+
+export const ReviewAttachmentSuggestionSchema = z.object({
+  filePath: z.string(),
+  startLine: z.number().int().positive(),
+  endLine: z.number().int().positive(),
+  originalLines: z.array(z.string()).min(1).max(200),
+  replacement: z.string().max(65_536),
+  note: z.string().optional(),
+  sourceRevision: z.string(),
 });
 
 export const ReviewAttachmentSchema = z.object({
@@ -1164,6 +1176,8 @@ export const ReviewAttachmentSchema = z.object({
   mode: z.enum(["uncommitted", "base"]),
   baseRef: z.string().nullable().optional(),
   comments: z.array(ReviewAttachmentCommentSchema),
+  // COMPAT(reviewSuggestionsV1): added in Paseito v0.2.5-paseito.4.
+  suggestions: z.array(ReviewAttachmentSuggestionSchema).optional(),
 });
 
 export const UploadedFileAttachmentSchema = z.object({
