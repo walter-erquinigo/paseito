@@ -13,11 +13,13 @@ describe("normalizeWorkspaceFileLocation", () => {
         path: "src\\app.ts",
         lineStart: 12.8,
         lineEnd: 20.2,
+        column: 4.9,
       }),
     ).toEqual({
       path: "src/app.ts",
       lineStart: 12,
       lineEnd: 20,
+      column: 4,
     });
   });
 
@@ -30,6 +32,26 @@ describe("normalizeWorkspaceFileLocation", () => {
     ).toEqual({
       path: "src/app.ts",
       lineStart: 20,
+    });
+  });
+
+  it("preserves source-edit navigation intent", () => {
+    expect(
+      normalizeWorkspaceFileLocation({
+        path: "README.md",
+        lineStart: 8,
+        openMode: "source",
+      }),
+    ).toEqual({ path: "README.md", lineStart: 8, openMode: "source" });
+  });
+
+  it("drops a column without a valid line and remains compatible with older saved tabs", () => {
+    expect(normalizeWorkspaceFileLocation({ path: "README.md", column: 4 })).toEqual({
+      path: "README.md",
+    });
+    expect(normalizeWorkspaceFileLocation({ path: "README.md", lineStart: 8 })).toEqual({
+      path: "README.md",
+      lineStart: 8,
     });
   });
 
@@ -58,6 +80,18 @@ describe("workspace file tab targets", () => {
       workspaceFileLocationsEqual(
         { path: "src/app.ts", lineStart: 12 },
         { path: "src/app.ts", lineStart: 13 },
+      ),
+    ).toBe(false);
+    expect(
+      workspaceFileLocationsEqual(
+        { path: "src/app.ts", lineStart: 12 },
+        { path: "src/app.ts", lineStart: 12, openMode: "source" },
+      ),
+    ).toBe(false);
+    expect(
+      workspaceFileLocationsEqual(
+        { path: "src/app.ts", lineStart: 12, column: 4 },
+        { path: "src/app.ts", lineStart: 12, column: 5 },
       ),
     ).toBe(false);
   });
