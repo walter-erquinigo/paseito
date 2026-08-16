@@ -21,12 +21,11 @@ import {
 } from "@/styles/theme";
 import { z } from "zod";
 import { APP_SETTINGS_KEY, LEGACY_SETTINGS_KEY } from "./keys";
-import { migrateAppSettings } from "./migrations";
 
 export { APP_SETTINGS_KEY } from "./keys";
 export const APP_SETTINGS_QUERY_KEY = ["app-settings"];
-
 export type SendBehavior = ActiveTurnBehavior | "queue";
+export const QUEUE_DEFAULT_MIGRATION_KEY = "@paseito:queue-default-migration-v1";
 export type ReleaseChannel = "stable" | "beta";
 export type ServiceUrlBehavior = "ask" | "in-app" | "external";
 export type WorkspaceTitleSource = "title" | "branch";
@@ -98,7 +97,7 @@ export const DEFAULT_CLIENT_SETTINGS: AppSettings = {
   theme: DEFAULT_THEME_PREFERENCE,
   pluginThemeId: null,
   language: "system",
-  sendBehavior: "steer",
+  sendBehavior: "queue",
   serviceUrlBehavior: "ask",
   terminalScrollbackLines: DEFAULT_TERMINAL_SCROLLBACK_LINES,
   useLegacyTerminalRenderer: false,
@@ -171,7 +170,9 @@ const StoredAppSettingsSchema = z
     language: z
       .enum(["system", "ar", "en", "es", "fr", "ja", "ko", "pt-BR", "ru", "zh-CN"])
       .catch("system"),
-    sendBehavior: z.enum(["interrupt", "steer", "queue"]).catch("steer"),
+    sendBehavior: z
+      .enum(["interrupt", "steer", "queue"])
+      .catch(DEFAULT_CLIENT_SETTINGS.sendBehavior),
     serviceUrlBehavior: z.enum(["ask", "in-app", "external"]).catch("ask"),
     terminalScrollbackLines: clampedNumber(
       MIN_TERMINAL_SCROLLBACK_LINES,
@@ -292,11 +293,19 @@ export async function saveAppSettings(input: {
 export async function loadAppSettingsFromStorage(deps: SettingsDeps): Promise<AppSettings> {
   try {
     const read = await readAppSettings(deps);
-    if (read.needsWrite) {
-      await writeAppSettings(deps.storage, read.stored, read.settings);
+    const queueDefaultMigrationComplete =
+      (await deps.storage.getItem(QUEUE_DEFAULT_MIGRATION_KEY)) === "1";
+    const next =
+      !queueDefaultMigrationComplete && read.stored.sendBehavior === "interrupt"
+        ? { ...read.settings, sendBehavior: "queue" as const }
+        : read.settings;
+    if (read.needsWrite || next !== read.settings) {
+      await writeAppSettings(deps.storage, read.stored, next);
     }
-    const { needsWrite: _needsWrite, ...stored } = read.stored;
-    return await migrateAppSettings(read.settings, deps.storage, stored);
+    if (!queueDefaultMigrationComplete) {
+      await deps.storage.setItem(QUEUE_DEFAULT_MIGRATION_KEY, "1");
+    }
+    return next;
   } catch (error) {
     console.error("[AppSettings] Failed to load settings:", error);
     throw error;

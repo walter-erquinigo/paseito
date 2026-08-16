@@ -1572,6 +1572,7 @@ describe("ClaudeAgentSession context window usage", () => {
   interface QueryFactoryForTurnsOptions {
     getContextUsage?: ReturnType<typeof vi.fn>;
     model?: string;
+    onPrompt?: (prompt: unknown) => void;
   }
 
   async function createSessionForTest(): Promise<TestClaudeSession> {
@@ -1675,7 +1676,8 @@ describe("ClaudeAgentSession context window usage", () => {
       }
 
       void (async () => {
-        for await (const _ of prompt) {
+        for await (const nextPrompt of prompt) {
+          options?.onPrompt?.(nextPrompt);
           const turnMessages = turns[turnIndex] ?? [];
           turnIndex += 1;
           for (const message of turnMessages) {
@@ -1720,6 +1722,33 @@ describe("ClaudeAgentSession context window usage", () => {
       };
     });
   }
+
+  test("steerActiveTurn pushes a priority-next user message into the active input stream", async () => {
+    const capturedPrompts: SDKUserMessage[] = [];
+    const session = await createSessionForTurns([], {
+      onPrompt: (prompt) => capturedPrompts.push(prompt as SDKUserMessage),
+    });
+
+    try {
+      const { turnId } = await session.startTurn("first prompt");
+      await vi.waitFor(() => expect(capturedPrompts).toHaveLength(1));
+
+      await expect(
+        session.steerActiveTurn?.("steered prompt", { expectedTurnId: turnId }),
+      ).resolves.toEqual({ status: "accepted" });
+      await vi.waitFor(() => expect(capturedPrompts).toHaveLength(2));
+      expect(capturedPrompts[1]).toMatchObject({
+        type: "user",
+        priority: "next",
+        message: {
+          role: "user",
+          content: [{ type: "text", text: "steered prompt" }],
+        },
+      });
+    } finally {
+      await session.close();
+    }
+  });
 
   function createInitMessage(sessionId = "session-1"): Record<string, unknown> {
     return {
