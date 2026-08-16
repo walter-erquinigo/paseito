@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "resolved", "files", "blockers"],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "resolved": { "type": "boolean" },
+    "files": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "blockers": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  }
+}

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Paseito Upstream Sync"
+  short_description: "Reconcile Paseito features with a new Paseo release"
+  default_prompt: "Use $paseito-upstream-sync to reconcile this Paseito candidate with its new upstream release, retire only proven-equivalent features, and leave a structured decision report."

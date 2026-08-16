@@ -41,6 +41,8 @@ tsconfig.tsbuildinfo
 
 # Testing
 coverage/
+__pycache__/
+*.pyc
 
 # Playwright
 test-results/
@@ -93,3 +95,7 @@ app.json
 
 # Heap snapshots dumped by --heapsnapshot-near-heap-limit; keep them for debugging.
 *.heapsnapshot
+
+# Paseito local automation credentials and state
+/graph-token-cache.enc
+/report-state.json
