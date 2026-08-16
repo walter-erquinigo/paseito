@@ -78,6 +78,28 @@ async function startOrReplaceRun(
   return { iterator, replaced };
 }
 
+async function resolveActiveOrNewRun(
+  agentManager: AgentRunController,
+  agentId: string,
+  prompt: AgentPromptInput,
+  options: StartAgentRunOptions | undefined,
+): Promise<
+  | { disposition: "steered" }
+  | {
+      disposition: "turn_started";
+      iterator: AsyncGenerator<import("./agent-sdk-types.js").AgentStreamEvent>;
+      replaced: boolean;
+    }
+> {
+  const steered = await steerOrReplaceActiveRun(agentManager, agentId, prompt, options);
+  if (steered?.disposition === "steered") return steered;
+  if (steered) return { ...steered, replaced: true };
+  return {
+    disposition: "turn_started",
+    ...(await startOrReplaceRun(agentManager, agentId, prompt, options)),
+  };
+}
+
 export async function startAgentRun(
   agentManager: AgentRunController,
   agentId: string,
@@ -95,6 +117,7 @@ export async function startAgentRun(
       promptType: typeof prompt === "string" ? "string" : "structured",
       hasRunOptions: Boolean(options?.runOptions),
       replaceRunning: Boolean(options?.replaceRunning),
+      activeTurnBehavior: options?.activeTurnBehavior,
     },
     "agent.session.start_stream.request",
   );
@@ -104,19 +127,16 @@ export async function startAgentRun(
   if (agentManager.tryRunOutOfBand(agentId, prompt, options?.runOptions)) {
     return { disposition: "out_of_band" };
   }
-  const steered = await steerOrReplaceActiveRun(agentManager, agentId, prompt, options);
-  if (steered?.disposition === "steered") {
-    return steered;
-  }
-  const { iterator, replaced } = steered
-    ? { iterator: steered.iterator, replaced: true }
-    : await startOrReplaceRun(agentManager, agentId, prompt, options);
+  const run = await resolveActiveOrNewRun(agentManager, agentId, prompt, options);
+  if (run.disposition === "steered") return run;
+  const { iterator, replaced } = run;
   logger.trace(
     {
       agentId,
       provider: snapshot?.provider,
       providerSessionId: snapshot?.persistence?.sessionId ?? undefined,
       shouldReplace: replaced,
+      activeTurnBehavior: options?.activeTurnBehavior,
     },
     "agent.session.start_stream.iterator_returned",
   );

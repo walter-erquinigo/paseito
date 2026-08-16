@@ -13,7 +13,12 @@ import {
   splitComposerAttachmentsForSubmit,
   type ComposerAttachmentSubmitFormat,
 } from "@/composer/attachments/submit";
-import { createUserMessage, generateMessageId, type UserMessageItem } from "@/types/stream";
+import {
+  createUserMessage,
+  generateMessageId,
+  type UserMessageDeliveryHint,
+  type UserMessageItem,
+} from "@/types/stream";
 import type { MessageSubmissionRejectionOutcome } from "@/composer/submission/model";
 import type { PickedImageAttachmentInput } from "@/hooks/image-attachment-picker";
 import { i18n } from "@/i18n/i18next";
@@ -180,6 +185,7 @@ export interface DispatchComposerAgentMessageInput {
   submission: MessageSubmissionWriter;
   activeTurnBehavior?: ActiveTurnBehavior;
   activeTurnId?: string;
+  deliveryHint?: UserMessageDeliveryHint;
 }
 
 export async function dispatchComposerAgentMessage(
@@ -198,6 +204,7 @@ export async function dispatchComposerAgentMessage(
     ...(input.activeTurnBehavior === "steer" && input.activeTurnId
       ? { turnId: input.activeTurnId }
       : {}),
+    deliveryHint: input.deliveryHint,
   });
   input.submission.begin(input.agentId, userMessage);
   try {
@@ -290,7 +297,9 @@ export type SendQueuedComposerMessageNowResult =
 export async function sendQueuedComposerMessageNow(
   input: SendQueuedComposerMessageNowInput,
 ): Promise<SendQueuedComposerMessageNowResult> {
-  const item = input.queue.read(input.agentId).find((q) => q.id === input.messageId);
+  const originalQueue = input.queue.read(input.agentId);
+  const originalIndex = originalQueue.findIndex((q) => q.id === input.messageId);
+  const item = originalQueue[originalIndex];
   if (!item) return { status: "missing" };
   input.queue.write((prev) => {
     const next = new Map(prev);
@@ -306,7 +315,13 @@ export async function sendQueuedComposerMessageNow(
   } catch (error) {
     input.queue.write((prev) => {
       const next = new Map(prev);
-      next.set(input.agentId, [item, ...(prev.get(input.agentId) ?? [])]);
+      const current = prev.get(input.agentId) ?? [];
+      const insertionIndex = Math.min(originalIndex, current.length);
+      next.set(input.agentId, [
+        ...current.slice(0, insertionIndex),
+        item,
+        ...current.slice(insertionIndex),
+      ]);
       return next;
     });
     return {

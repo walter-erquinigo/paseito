@@ -80,7 +80,7 @@ export function useComposerHeight({
     Object.assign(mirror.style, {
       position: "absolute",
       top: "0",
-      left: "0",
+      right: "100%",
       visibility: "hidden",
       pointerEvents: "none",
       overflow: "hidden",
