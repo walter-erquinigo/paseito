@@ -8,13 +8,15 @@ import {
   useInlineReviewController,
   useReviewAttachmentSnapshot,
   useReviewDraftComments,
+  useReviewDraftSuggestions,
 } from "@/review";
 import { useCheckoutDiffQuery } from "@/git/use-diff-query";
-import { useChangesBaseSelection } from "@/git/use-changes-base-selection";
 import { useCheckoutStatusQuery } from "@/git/use-status-query";
 import { useWorkingDiffComparison } from "@/git/working-diff-comparison";
+import { useChangesBaseSelection } from "@/git/use-changes-base-selection";
 import { useSessionStore } from "@/stores/session-store";
 import { useDiffContextExpansion } from "@/git/use-diff-context-expansion";
+import { buildNumberedDiffHunks } from "@/utils/diff-layout";
 
 interface UseWorkingDiffOptions {
   serverId: string;
@@ -25,10 +27,12 @@ interface UseWorkingDiffOptions {
   queryScope?: string;
 }
 
-function hasCommittedBranchChanges(
-  status: { aheadBehind?: { ahead: number } | null } | null,
-): boolean {
-  return (status?.aheadBehind?.ahead ?? 0) > 0;
+function collectCurrentSideReviewTargets(files: ReturnType<typeof useCheckoutDiffQuery>["files"]) {
+  return files.flatMap((file) =>
+    buildNumberedDiffHunks(file).flatMap((hunk) =>
+      hunk.lines.map((line) => line.newCell).filter((cell) => cell !== null),
+    ),
+  );
 }
 
 function resolveSelectedComparisonBaseRef(
@@ -61,6 +65,12 @@ function getStatusErrorMessage(input: {
 function getCurrentBranchName(gitStatus: ReturnType<typeof getGitStatus>): string | null {
   const branch = gitStatus?.currentBranch;
   return branch && branch !== "HEAD" ? branch : null;
+}
+
+function hasCommittedBranchChanges(
+  status: { aheadBehind?: { ahead: number } | null } | null,
+): boolean {
+  return (status?.aheadBehind?.ahead ?? 0) > 0;
 }
 
 export function useWorkingDiff({
@@ -106,6 +116,38 @@ export function useWorkingDiff({
   });
   const selectUncommitted = useCallback(() => selectComparison("uncommitted"), [selectComparison]);
   const selectBase = useCallback(() => selectComparison("base"), [selectComparison]);
+  const reviewDraftKey = useMemo(
+    () =>
+      buildReviewDraftKey({
+        serverId,
+        workspaceId,
+        cwd,
+        mode: diffMode,
+        baseRef,
+        ignoreWhitespace,
+      }),
+    [baseRef, cwd, diffMode, ignoreWhitespace, serverId, workspaceId],
+  );
+  const persistedComments = useReviewDraftComments(reviewDraftKey);
+  const persistedSuggestions = useReviewDraftSuggestions(reviewDraftKey);
+  const requestedContextLines = useMemo(
+    () => [
+      ...persistedComments
+        .filter((comment) => comment.side === "new")
+        .flatMap((comment) => {
+          const endLine = comment.endLine ?? comment.lineNumber;
+          return Array.from({ length: endLine - comment.lineNumber + 1 }, (_, offset) => ({
+            filePath: comment.filePath,
+            lineNumber: comment.lineNumber + offset,
+          }));
+        }),
+      ...persistedSuggestions.map((suggestion) => ({
+        filePath: suggestion.filePath,
+        lineNumber: suggestion.startLine,
+      })),
+    ],
+    [persistedComments, persistedSuggestions],
+  );
 
   const {
     files: sourceFiles,
@@ -121,28 +163,11 @@ export function useWorkingDiff({
     enabled: enabled && isGit,
     queryScope,
   });
-  const reviewDraftKey = useMemo(
-    () =>
-      buildReviewDraftKey({
-        serverId,
-        workspaceId,
-        cwd,
-        mode: diffMode,
-        baseRef,
-        ignoreWhitespace,
-      }),
-    [baseRef, cwd, diffMode, ignoreWhitespace, serverId, workspaceId],
-  );
-  const persistedComments = useReviewDraftComments(reviewDraftKey);
-  const requestedContextLines = useMemo(
-    () =>
-      persistedComments
-        .filter((comment) => comment.side === "new")
-        .map((comment) => ({ filePath: comment.filePath, lineNumber: comment.lineNumber })),
-    [persistedComments],
-  );
   const contextExpansionSupported = useSessionStore(
     (state) => state.sessions[serverId]?.serverInfo?.features?.changesContextExpansion === true,
+  );
+  const suggestionsSupported = useSessionStore(
+    (state) => state.sessions[serverId]?.serverInfo?.features?.reviewSuggestionsV1 === true,
   );
   const contextExpansion = useDiffContextExpansion({
     serverId,
@@ -157,7 +182,12 @@ export function useWorkingDiff({
     requestedLines: requestedContextLines,
   });
   const files = contextExpansion.files;
-  const reviewActions = useInlineReviewController({ reviewDraftKey });
+  const availableTargets = useMemo(() => collectCurrentSideReviewTargets(files), [files]);
+  const reviewActions = useInlineReviewController({
+    reviewDraftKey,
+    availableTargets,
+    suggestionsSupported,
+  });
   const reviewAttachment = useReviewAttachmentSnapshot({
     key: reviewDraftKey,
     diffFiles: files,
@@ -174,8 +204,8 @@ export function useWorkingDiff({
     statusErrorMessage,
     baseRef,
     comparisonBaseRef,
-    currentBranchName,
     baseSelection,
+    currentBranchName,
     hasUncommittedChanges,
     diffMode,
     selectUncommitted,
@@ -190,6 +220,7 @@ export function useWorkingDiff({
     reviewDraftKey,
     contextExpansion,
     contextExpansionSupported,
+    suggestionsSupported,
   };
 }
 

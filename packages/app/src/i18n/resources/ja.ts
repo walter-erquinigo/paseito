@@ -1941,6 +1941,7 @@ export const ja: TranslationResources = {
     accessibility: "コンテキストウィンドウ{{percentage}}%使用",
   },
   review: {
+    ...en.review,
     comment: {
       add: "レビューコメントを追加",
       edit: "レビューコメントを編集",

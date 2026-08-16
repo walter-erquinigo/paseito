@@ -1128,12 +1128,24 @@ export const ReviewAttachmentCommentSchema = z.object({
   filePath: z.string(),
   side: z.enum(["old", "new"]),
   lineNumber: z.number().int().positive(),
+  // COMPAT(reviewCommentRanges): added in v0.3.1-paseito.1, remove after 2027-02-14 once daemon floor >= v0.3.1.
+  endLine: z.number().int().positive().optional(),
   body: z.string(),
   context: z.object({
     hunkHeader: z.string(),
     targetLine: ReviewAttachmentContextLineSchema,
     lines: z.array(ReviewAttachmentContextLineSchema),
   }),
+});
+
+export const ReviewAttachmentSuggestionSchema = z.object({
+  filePath: z.string(),
+  startLine: z.number().int().positive(),
+  endLine: z.number().int().positive(),
+  originalLines: z.array(z.string()).min(1).max(200),
+  replacement: z.string().max(65_536),
+  note: z.string().optional(),
+  sourceRevision: z.string(),
 });
 
 export const ReviewAttachmentSchema = z.object({
@@ -1143,6 +1155,8 @@ export const ReviewAttachmentSchema = z.object({
   mode: z.enum(["uncommitted", "base"]),
   baseRef: z.string().nullable().optional(),
   comments: z.array(ReviewAttachmentCommentSchema),
+  // COMPAT(reviewSuggestionsV1): added in Paseito v0.2.5-paseito.4.
+  suggestions: z.array(ReviewAttachmentSuggestionSchema).optional(),
 });
 
 export const UploadedFileAttachmentSchema = z.object({
@@ -3689,6 +3703,9 @@ export const ServerInfoStatusPayloadSchema = z
         // COMPAT(changesContextExpansion): added in Paseito v0.2.5-paseito.4,
         // remove gate after 2027-02-05.
         changesContextExpansion: z.boolean().optional(),
+        // COMPAT(reviewSuggestionsV1): added in Paseito v0.2.5-paseito.4,
+        // remove gate after 2027-02-05.
+        reviewSuggestionsV1: z.boolean().optional(),
         // COMPAT(providerRemoval): added in v0.1.105, drop the gate when floor >= v0.1.105.
         providerRemoval: z.boolean().optional(),
         // COMPAT(importSessionWorkspaceTarget): added in v0.1.110, remove gate after 2027-01-16.

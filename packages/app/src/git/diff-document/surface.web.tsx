@@ -11,8 +11,7 @@ import {
 } from "@/components/ui/context-menu";
 import { useToast } from "@/contexts/toast-context";
 import { useStableEvent } from "@/hooks/use-stable-event";
-import { InlineReviewAddButton, InlineReviewThread } from "@/review";
-import { parseDiffContextMarker } from "@/git/diff-context-expansion";
+import { getInlineReviewThreadState, InlineReviewGutterCell, InlineReviewThread } from "@/review";
 import { copyToClipboard } from "@/utils/copy-to-clipboard";
 import type { ReviewableDiffTarget } from "@/utils/diff-layout";
 import { DocumentFileHeader } from "./document-file-header";
@@ -21,6 +20,7 @@ import {
   diffMaterializationWindow,
   resolveVisibleFileSections,
 } from "./header-layout";
+import { parseDiffContextMarker, type DiffContextRegion } from "@/git/diff-context-expansion";
 import {
   hitTestDiffDocument,
   selectAllSource,
@@ -29,7 +29,6 @@ import {
 } from "./hit-testing";
 import { retainHorizontalOffsetMapForPaths } from "./horizontal-offsets";
 import { HorizontalScroll } from "./horizontal-scroll.web";
-import { DiffContextControl } from "./context-control";
 import { buildDiffDocumentModel, FILE_HEADER_HEIGHT, resolveRelayoutScrollTop } from "./model";
 import { paintWebFileHeader, paintWebViewport } from "./paint.web";
 import { hasPointerDragStarted } from "./pointer-gesture";
@@ -47,10 +46,6 @@ import { useDiffDocumentWorkspaceCache } from "./workspace-cache";
 
 const DEFAULT_MONO_STACK = "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace";
 const RESIZE_SETTLE_DELAY_MS = 120;
-
-function webContextControlStyle(top: number): ViewStyle {
-  return { position: "absolute", top, left: 0, right: 0, zIndex: 7 };
-}
 
 interface StickyHeaderCanvasSlot {
   section: HTMLDivElement | null;
@@ -80,6 +75,7 @@ export function DiffSurface(props: DiffSurfaceProps) {
   const { t } = useTranslation();
   const toast = useToast();
   const workspaceCache = useDiffDocumentWorkspaceCache();
+  const onToggleFile = props.onToggleFile;
   const rootRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const stickyHeaderSlotsRef = useRef<[StickyHeaderCanvasSlot, StickyHeaderCanvasSlot]>([
@@ -116,12 +112,6 @@ export function DiffSurface(props: DiffSurfaceProps) {
   >([]);
   const [hasSelection, setHasSelection] = useState(false);
   const [contextHit, setContextHit] = useState<Extract<DiffHit, { kind: "cell" }> | null>(null);
-  const [hoveredAffordance, setHoveredAffordance] = useState<{
-    hit: Extract<DiffHit, { kind: "cell" }>;
-    left: number;
-    top: number;
-  } | null>(null);
-  const hasHoveredAffordanceRef = useRef(false);
   const family = props.displayPreferences.monoFontFamily.trim() || DEFAULT_MONO_STACK;
   useLayoutEffect(() => {
     const stats = (window as typeof window & { __PASEO_DIFF_REACT_STATS__?: { commits: number } })
@@ -165,7 +155,8 @@ export function DiffSurface(props: DiffSurfaceProps) {
   const measurement =
     readyTypographyResource === typographyResource ? typographyResource.measureText : null;
   const reviewActions = props.mode.kind === "working" ? props.mode.reviewActions : undefined;
-  const expandContext = props.mode.kind === "working" ? props.mode.onExpandContext : undefined;
+  const workingMode = props.mode.kind === "working" ? props.mode : null;
+  const expandContext = workingMode?.onExpandContext;
   const model = useMemo(() => {
     if (!loadedTypography || !measurement) {
       return emptyDiffDocumentModel({
@@ -478,17 +469,21 @@ export function DiffSurface(props: DiffSurfaceProps) {
   );
   const mode = props.mode;
   const collapsedFilePaths = props.collapsedFilePaths;
-  const onToggleFile = props.onToggleFile;
   useEffect(() => {
     if (mode.kind !== "working") return;
     const focusPath = mode.focusPath;
     if (!focusPath) return;
     const requestKey = `${mode.focusRequestId ?? "initial"}:${focusPath}`;
     if (consumedFocusRef.current === requestKey) return;
-    if (collapsedFilePaths.has(focusPath)) onToggleFile(focusPath);
+    if (collapsedFilePaths.has(focusPath)) {
+      onToggleFile(focusPath);
+      return;
+    }
     const file = model.files.find((entry) => entry.path === focusPath);
-    if (file && scrollRef.current) {
-      scrollRef.current.scrollTop = file.top;
+    const scroll = scrollRef.current;
+    if (file && scroll) {
+      scroll.scrollTop = file.top;
+      scroll.focus({ preventScroll: true });
       consumedFocusRef.current = requestKey;
     }
   }, [collapsedFilePaths, mode, model.files, onToggleFile]);
@@ -503,10 +498,6 @@ export function DiffSurface(props: DiffSurfaceProps) {
         schedulePaint();
       }
       updateInteractionFiles(scrollTop);
-      if (hasHoveredAffordanceRef.current) {
-        hasHoveredAffordanceRef.current = false;
-        setHoveredAffordance(null);
-      }
       const currentModel = modelRef.current;
       if (currentModel) paintStickyHeaderPool(currentModel, scrollTop);
       const currentWindow = canvasWindowRef.current;
@@ -642,36 +633,10 @@ export function DiffSurface(props: DiffSurfaceProps) {
         });
       }
       const hit = pointHit(event);
-      if (hit?.kind === "cell") {
-        const row = modelRef.current?.rows[hit.position.rowIndex];
-        const file = modelRef.current?.files[hit.position.fileIndex];
-        const sideIndex =
-          row?.kind === "line" && row.cells.length === 2 && hit.position.side === "new" ? 1 : 0;
-        if (row && file) {
-          const columnWidth = viewport.width / (row.kind === "line" ? row.cells.length : 1);
-          const gutterBorder = sideIndex * columnWidth + file.gutterWidth;
-          const rootBounds = rootRef.current?.getBoundingClientRect();
-          const pointerX = rootBounds ? event.clientX - rootBounds.left : Number.NaN;
-          if (hit.target && Number.isFinite(pointerX)) {
-            hasHoveredAffordanceRef.current = true;
-            setHoveredAffordance({
-              hit,
-              left: gutterBorder - 12,
-              top: row.top - scrollTopRef.current + (modelRef.current!.lineHeight - 22) / 2,
-            });
-          } else {
-            hasHoveredAffordanceRef.current = false;
-            setHoveredAffordance(null);
-          }
-        }
-      } else {
-        hasHoveredAffordanceRef.current = false;
-        setHoveredAffordance(null);
-      }
       if (!drag || hit?.kind !== "cell") return;
       setSelection({ anchor: drag.anchor, focus: hit.position });
     },
-    [pointHit, setSelection, updateActiveHeader, viewport.width],
+    [pointHit, setSelection, updateActiveHeader],
   );
   const pointerUp = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
@@ -775,6 +740,7 @@ export function DiffSurface(props: DiffSurfaceProps) {
     },
     [selectAll, setSelection],
   );
+  const focusDocument = useCallback(() => scrollRef.current?.focus({ preventScroll: true }), []);
   const rootStyle = useMemo<React.CSSProperties>(
     () => ({ ...ROOT_STYLE, background: props.palette.surface }),
     [props.palette.surface],
@@ -787,18 +753,6 @@ export function DiffSurface(props: DiffSurfaceProps) {
     }),
     [contentInsetBottom, model.height, viewport.height],
   );
-  const affordanceStyle = useMemo<ViewStyle>(
-    () => ({
-      ...AFFORDANCE_STYLE,
-      left: hoveredAffordance?.left ?? 0,
-      top: hoveredAffordance?.top ?? 0,
-    }),
-    [hoveredAffordance?.left, hoveredAffordance?.top],
-  );
-  const addHoveredComment = useCallback(() => {
-    const target = hoveredAffordance?.hit.target;
-    if (target) reviewActions?.onStartComment(target);
-  }, [hoveredAffordance?.hit.target, reviewActions]);
   const canvasStyle = useMemo<React.CSSProperties>(
     () => ({
       ...CANVAS_STYLE,
@@ -809,7 +763,12 @@ export function DiffSurface(props: DiffSurfaceProps) {
   );
 
   const surface = (
-    <div data-testid="git-diff-canvas-root" ref={rootRef} style={rootStyle}>
+    <div
+      data-testid="git-diff-canvas-root"
+      data-paseito-diff-focus-path={workingMode?.focusPath}
+      ref={rootRef}
+      style={rootStyle}
+    >
       <div
         ref={scrollRef}
         data-testid="git-diff-scroll"
@@ -839,6 +798,7 @@ export function DiffSurface(props: DiffSurfaceProps) {
                 onToggleFile={props.onToggleFile}
                 onSelectPath={props.onSelectPath}
                 canvasRendered
+                onFocusDocument={focusDocument}
               />
             </WebFileHeaderSection>
           ))}
@@ -854,32 +814,51 @@ export function DiffSurface(props: DiffSurfaceProps) {
             ))}
           {props.mode.kind === "working" && reviewActions
             ? model.rows.map((row) => {
-                if (row.kind !== "line" || row.reviewHeight === 0) return null;
+                if (row.kind !== "line") return null;
                 const columnWidth = model.viewportWidth / row.cells.length;
                 return row.cells.map((cell, index) => {
                   if (!cell?.reviewTarget) return null;
-                  const comments = reviewActions.commentsByTarget.get(cell.reviewTarget.key) ?? [];
-                  const hasEditor =
-                    reviewActions.editor?.target.filePath === cell.reviewTarget.filePath &&
-                    reviewActions.editor.target.side === cell.reviewTarget.side &&
-                    reviewActions.editor.target.lineNumber === cell.reviewTarget.lineNumber;
-                  if (comments.length === 0 && !hasEditor) return null;
-                  return (
-                    <WebReviewThread
-                      key={cell.reviewTarget.key}
+                  const thread = getInlineReviewThreadState({
+                    reviewTarget: cell.reviewTarget,
+                    reviewActions,
+                  });
+                  const file = model.files[row.fileIndex];
+                  if (!file) return null;
+                  return [
+                    <WebCanvasRowMarker
+                      key={`${cell.reviewTarget.key}:row-marker`}
+                      targetKey={cell.reviewTarget.key}
+                      sourceText={cell.content}
+                      sourceX={index * columnWidth + file.gutterWidth + 8}
+                      top={row.top}
+                      height={row.height}
+                    />,
+                    <WebReviewGutter
+                      key={`${cell.reviewTarget.key}:gutter`}
                       target={cell.reviewTarget}
                       actions={reviewActions}
-                      top={row.top + row.height - row.reviewHeight}
+                      top={row.top}
                       left={index * columnWidth}
-                      width={columnWidth}
-                      height={row.reviewHeight}
-                      pinToViewport={!model.wrapLines}
-                    />
-                  );
+                      width={file.gutterWidth}
+                      height={model.lineHeight}
+                    />,
+                    thread ? (
+                      <WebReviewThread
+                        key={cell.reviewTarget.key}
+                        target={cell.reviewTarget}
+                        actions={reviewActions}
+                        top={row.top + row.height - row.reviewHeight}
+                        left={index * columnWidth}
+                        width={columnWidth}
+                        height={row.reviewHeight}
+                        pinToViewport={!model.wrapLines}
+                      />
+                    ) : null,
+                  ];
                 });
               })
             : null}
-          {props.mode.kind === "working" && expandContext
+          {workingMode && expandContext
             ? model.rows.map((row) => {
                 if (row.kind !== "line") return null;
                 const marker = row.cells
@@ -888,12 +867,13 @@ export function DiffSurface(props: DiffSurfaceProps) {
                 if (!marker) return null;
                 const file = model.files[row.fileIndex];
                 return file ? (
-                  <DiffContextControl
+                  <WebContextControl
                     key={`${file.path}:${row.index}`}
                     filePath={file.path}
                     region={marker}
+                    top={row.top}
+                    height={row.height}
                     onExpand={expandContext}
-                    style={webContextControlStyle(row.top)}
                   />
                 ) : null;
               })
@@ -901,9 +881,6 @@ export function DiffSurface(props: DiffSurfaceProps) {
         </div>
       </div>
       <DomOverlayScrollbar scrollContainerRef={scrollRef} onUserScrollUp={noop} />
-      {hoveredAffordance?.hit.target && reviewActions ? (
-        <InlineReviewAddButton onPress={addHoveredComment} style={affordanceStyle} />
-      ) : null}
     </div>
   );
 
@@ -1054,6 +1031,125 @@ function preventDocumentMouseSelection(event: React.MouseEvent): void {
   window.getSelection()?.removeAllRanges();
 }
 
+function WebReviewGutter({
+  target,
+  actions,
+  top,
+  left,
+  width,
+  height,
+}: {
+  target: ReviewableDiffTarget;
+  actions: NonNullable<Extract<DiffSurfaceProps["mode"], { kind: "working" }>["reviewActions"]>;
+  top: number;
+  left: number;
+  width: number;
+  height: number;
+}) {
+  const style = useMemo<ViewStyle>(
+    () => ({ position: "absolute", top, left, width, height, zIndex: 5 }),
+    [height, left, top, width],
+  );
+  const comments = actions.commentsByTarget.get(target.key) ?? [];
+  return (
+    <InlineReviewGutterCell
+      reviewTarget={target}
+      comments={comments}
+      isEditorOpen={
+        getInlineReviewThreadState({ reviewTarget: target, reviewActions: actions }) !== null
+      }
+      lineHeight={height}
+      onStartComment={actions.onStartComment}
+      reviewActions={actions}
+      style={style}
+      actionTestID={`diff-review-gutter-action-${target.key}`}
+      testID={`diff-review-gutter-${target.key}`}
+    >
+      <div data-paseito-review-target-key={target.key} />
+    </InlineReviewGutterCell>
+  );
+}
+
+function WebCanvasRowMarker({
+  targetKey,
+  sourceText,
+  sourceX,
+  top,
+  height,
+}: {
+  targetKey: string;
+  sourceText: string;
+  sourceX: number;
+  top: number;
+  height: number;
+}) {
+  const style = useMemo<React.CSSProperties>(
+    () => ({ position: "absolute", top, left: 0, width: 1, height, pointerEvents: "none" }),
+    [height, top],
+  );
+  return (
+    <div
+      data-testid={`diff-canvas-row-${targetKey}`}
+      data-paseito-diff-canvas-source-text={sourceText}
+      data-paseito-diff-canvas-source-x={sourceX}
+      style={style}
+    />
+  );
+}
+
+function WebContextControl({
+  filePath,
+  region,
+  top,
+  height,
+  onExpand,
+}: {
+  filePath: string;
+  region: DiffContextRegion;
+  top: number;
+  height: number;
+  onExpand: NonNullable<Extract<DiffSurfaceProps["mode"], { kind: "working" }>["onExpandContext"]>;
+}) {
+  const style = useMemo<React.CSSProperties>(
+    () => ({
+      position: "absolute",
+      top,
+      left: 22,
+      height,
+      zIndex: 7,
+      display: "flex",
+      alignItems: "center",
+      gap: 8,
+    }),
+    [height, top],
+  );
+  const expandUp = useCallback(
+    () => void onExpand(filePath, region, "up"),
+    [filePath, onExpand, region],
+  );
+  const expandDown = useCallback(
+    () => void onExpand(filePath, region, "down"),
+    [filePath, onExpand, region],
+  );
+  const expandAll = useCallback(
+    () => void onExpand(filePath, region, "all"),
+    [filePath, onExpand, region],
+  );
+  return (
+    <div style={style} data-diff-review="true" data-testid="diff-context-control">
+      <button type="button" onClick={expandUp}>
+        ↑ 20
+      </button>
+      <button type="button" onClick={expandDown}>
+        ↓ 20
+      </button>
+      <button type="button" onClick={expandAll}>
+        Expand {Math.min(region.lineCount, 5000)}
+      </button>
+    </div>
+  );
+}
+
 function WebReviewThread({
   target,
   actions,
@@ -1119,7 +1215,7 @@ const FILE_SECTION_STYLE: React.CSSProperties = {
   position: "absolute",
   left: 0,
   right: 0,
-  zIndex: 3,
+  zIndex: 10,
   pointerEvents: "none",
   userSelect: "none",
 };
@@ -1159,11 +1255,6 @@ const CANVAS_STYLE: React.CSSProperties = {
   zIndex: 1,
   pointerEvents: "none",
 };
-const AFFORDANCE_STYLE: ViewStyle = {
-  position: "absolute",
-  zIndex: 5,
-};
-
 function emptyDiffDocumentModel(input: {
   layout: "unified" | "split";
   wrapLines: boolean;

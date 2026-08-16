@@ -124,6 +124,81 @@ describe("prompt attachments", () => {
     );
   });
 
+  it("renders structured code suggestions for the destination agent", () => {
+    const rendered = renderPromptAttachmentAsText({
+      type: "review",
+      mimeType: "application/paseo-review",
+      cwd: "/tmp/repo",
+      mode: "base",
+      comments: [],
+      suggestions: [
+        {
+          filePath: "src/index.ts",
+          startLine: 42,
+          endLine: 43,
+          originalLines: ["const oldValue = 1;", "return oldValue;"],
+          replacement: "return newValue;",
+          note: "Use the new API.",
+          sourceRevision: "revision-1",
+        },
+      ],
+    });
+    expect(rendered).toContain("Suggested edit 1: src/index.ts:42-43");
+    expect(rendered).toContain("```suggestion\nreturn newValue;\n```");
+    expect(rendered).toContain("Note: Use the new API.");
+  });
+
+  it("renders every selected line in a multi-line comment as targeted", () => {
+    const rendered = renderPromptAttachmentAsText({
+      type: "review",
+      mimeType: "application/paseo-review",
+      cwd: "/tmp/repo",
+      mode: "base",
+      comments: [
+        {
+          filePath: "src/index.ts",
+          side: "new",
+          lineNumber: 42,
+          endLine: 43,
+          body: "Keep this block together.",
+          context: {
+            hunkHeader: "@@ -41,3 +41,3 @@",
+            targetLine: {
+              oldLineNumber: 42,
+              newLineNumber: 42,
+              type: "context",
+              content: "const first = 1;",
+            },
+            lines: [
+              {
+                oldLineNumber: 41,
+                newLineNumber: 41,
+                type: "context",
+                content: "const before = true;",
+              },
+              {
+                oldLineNumber: 42,
+                newLineNumber: 42,
+                type: "context",
+                content: "const first = 1;",
+              },
+              {
+                oldLineNumber: 43,
+                newLineNumber: 43,
+                type: "context",
+                content: "const second = 2;",
+              },
+            ],
+          },
+        },
+      ],
+    });
+
+    expect(rendered).toContain("Comment 1: src/index.ts:new:42-43");
+    expect(rendered).toContain("> 42 42  const first = 1;");
+    expect(rendered).toContain("> 43 43  const second = 2;");
+  });
+
   it("renders github_issue attachments as readable text", () => {
     expect(
       renderPromptAttachmentAsText({

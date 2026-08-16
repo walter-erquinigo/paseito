@@ -1974,6 +1974,7 @@ export const fr: TranslationResources = {
     accessibility: "Fenêtre contextuelle{{percentage}}% utilisé",
   },
   review: {
+    ...en.review,
     comment: {
       add: "Ajouter un commentaire",
       edit: "Modifier le commentaire de l'avis",

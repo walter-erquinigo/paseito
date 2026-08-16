@@ -1900,6 +1900,7 @@ export const zhCN: TranslationResources = {
     accessibility: "上下文窗口已使用 {{percentage}}%",
   },
   review: {
+    ...en.review,
     comment: {
       add: "添加 review 评论",
       edit: "编辑 review 评论",

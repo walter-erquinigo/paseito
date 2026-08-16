@@ -3,6 +3,8 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { useTranslation } from "react-i18next";
 import {
   ScrollView,
+  Pressable,
+  Text,
   StyleSheet,
   View,
   type GestureResponderEvent,
@@ -19,7 +21,7 @@ import Animated, {
   type SharedValue,
 } from "react-native-reanimated";
 import { scheduleOnRN } from "react-native-worklets";
-import { InlineReviewThread } from "@/review";
+import { getInlineReviewThreadState, InlineReviewThread } from "@/review";
 import { useKeyboardShift } from "@/keyboard/shift";
 import { parseDiffContextMarker } from "@/git/diff-context-expansion";
 import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
@@ -32,7 +34,6 @@ import {
 import { hitTestDiffBodyPoint } from "./native-hit-testing";
 import { retainDiffViewport } from "./viewport";
 import { HorizontalScroll } from "./horizontal-scroll.native";
-import { DiffContextControl } from "./context-control";
 import {
   horizontalOffsetForPath,
   retainHorizontalOffsetsForPaths,
@@ -475,7 +476,9 @@ function NativeFileBody({
         locationY: event.nativeEvent.locationY,
         horizontalOffset: horizontalOffsetForPath(horizontalOffsets.value, file.path),
       });
-      if (hit?.kind === "cell" && hit.target) reviewActions.onStartComment(hit.target);
+      if (hit?.kind === "cell" && hit.target) {
+        reviewActions.onStartComment(hit.target);
+      }
     },
     [file, horizontalOffsets, model, reviewActions],
   );
@@ -519,31 +522,23 @@ function NativeReviewOverlays({
         const file = model.files[row.fileIndex];
         return file
           ? [
-              <DiffContextControl
+              <NativeContextControl
                 key={`${file.path}:${row.index}`}
                 filePath={file.path}
                 region={marker}
+                top={row.top}
+                height={row.height}
                 onExpand={mode.onExpandContext}
-                style={inlineUnistylesStyle<ViewStyle>({
-                  position: "absolute",
-                  top: row.top,
-                  left: 0,
-                  right: 0,
-                  zIndex: 8,
-                })}
               />,
             ]
           : [];
       }
-      if (!reviewActions || row.reviewHeight === 0) return [];
       if (!cell?.reviewTarget) return [];
-      const comments = reviewActions.commentsByTarget.get(cell.reviewTarget.key) ?? [];
-      const editor = reviewActions.editor;
-      const hasEditor =
-        editor?.target.filePath === cell.reviewTarget.filePath &&
-        editor.target.side === cell.reviewTarget.side &&
-        editor.target.lineNumber === cell.reviewTarget.lineNumber;
-      if (comments.length === 0 && !hasEditor) return [];
+      const thread = getInlineReviewThreadState({
+        reviewTarget: cell.reviewTarget,
+        reviewActions,
+      });
+      if (!thread || !reviewActions) return [];
       return [
         <View
           key={cell.reviewTarget.key}
@@ -567,6 +562,57 @@ function NativeReviewOverlays({
       ];
     });
   });
+}
+
+function NativeContextControl({
+  filePath,
+  region,
+  top,
+  height,
+  onExpand,
+}: {
+  filePath: string;
+  region: import("@/git/diff-context-expansion").DiffContextRegion;
+  top: number;
+  height: number;
+  onExpand: NonNullable<Extract<DiffSurfaceProps["mode"], { kind: "working" }>["onExpandContext"]>;
+}) {
+  const expandUp = useCallback(
+    () => void onExpand(filePath, region, "up"),
+    [filePath, onExpand, region],
+  );
+  const expandDown = useCallback(
+    () => void onExpand(filePath, region, "down"),
+    [filePath, onExpand, region],
+  );
+  const expandAll = useCallback(
+    () => void onExpand(filePath, region, "all"),
+    [filePath, onExpand, region],
+  );
+  return (
+    <View
+      style={inlineUnistylesStyle<ViewStyle>({
+        position: "absolute",
+        top,
+        left: 22,
+        height,
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 8,
+        zIndex: 8,
+      })}
+    >
+      <Pressable onPress={expandUp}>
+        <Text>↑ 20</Text>
+      </Pressable>
+      <Pressable onPress={expandDown}>
+        <Text>↓ 20</Text>
+      </Pressable>
+      <Pressable onPress={expandAll}>
+        <Text>Expand {Math.min(region.lineCount, 5000)}</Text>
+      </Pressable>
+    </View>
+  );
 }
 
 function NativeCanvasSlabView({
@@ -705,4 +751,5 @@ function NativeSlabCode({
 const styles = StyleSheet.create({
   root: { flex: 1, minHeight: 0, position: "relative", overflow: "hidden" },
   scroll: { backgroundColor: "transparent" },
+  header: { zIndex: 5 },
 });

@@ -1931,6 +1931,7 @@ export const ko: TranslationResources = {
     accessibility: "컨텍스트 윈도우 {{percentage}}% 사용됨",
   },
   review: {
+    ...en.review,
     comment: {
       add: "리뷰 댓글 추가",
       edit: "리뷰 댓글 편집",

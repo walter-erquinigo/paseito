@@ -1040,6 +1040,27 @@ test("creates, cancels, edits, and deletes a review while keeping Changes focuse
   });
 });
 
+test("saved suggestions align after the diff gutter", async ({ page }, testInfo) => {
+  const workspace = await createWorkspaceWithMountedTabDiff();
+  await useUnwrappedDiffLines(page);
+  await openWorkspaceChanges(page, workspace);
+
+  await startReviewOnFirstChangedLine(page);
+  await page.getByRole("tab", { name: "Code change" }).click();
+  await page.getByLabel("Suggested replacement").fill("const mountedTabValue = 2;");
+  await page.getByRole("button", { name: "Add suggestion" }).click();
+
+  const [body, gutter, rail] = await Promise.all([
+    page.getByTestId("diff-file-0-body").boundingBox(),
+    page.locator('[data-testid^="diff-review-gutter-"]').first().boundingBox(),
+    page.getByTestId("inline-review-content-rail").boundingBox(),
+  ]);
+  if (!body || !gutter || !rail) throw new Error("Suggestion rail geometry is unavailable");
+  expect(rail.x).toBeGreaterThanOrEqual(body.x + gutter.width);
+  expect(rail.x + rail.width).toBeLessThanOrEqual(body.x + body.width);
+  await page.screenshot({ path: testInfo.outputPath("suggestion-content-rail.png") });
+});
+
 test("split canvas creates a review on the changed side and keeps it in that column", async ({
   page,
 }) => {

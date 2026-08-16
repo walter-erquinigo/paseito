@@ -1969,6 +1969,7 @@ export const es: TranslationResources = {
     accessibility: "Ventana de contexto{{percentage}}% utilizada",
   },
   review: {
+    ...en.review,
     comment: {
       add: "Agregar comentario de revisión",
       edit: "Editar comentario de revisión",

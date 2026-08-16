@@ -1954,6 +1954,7 @@ export const ptBR: TranslationResources = {
     accessibility: "Janela de contexto {{percentage}}% usada",
   },
   review: {
+    ...en.review,
     comment: {
       add: "Adicionar comentário de revisão",
       edit: "Editar comentário de revisão",

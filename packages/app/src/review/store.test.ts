@@ -5,10 +5,12 @@ import { createValidatedPersistStorage } from "@/storage/validated-persist-stora
 import { buildReviewAttachmentSnapshot, buildReviewDraftKey } from "./store";
 import {
   addCommentToState,
+  addSuggestionToState,
   clearReviewInState,
   deleteCommentFromState,
   normalizePersistedState,
   type ReviewDraftComment,
+  type ReviewDraftSuggestion,
   type ReviewDraftStoreState,
   serializeReviewDraftState,
   SerializedReviewDraftStateSchema,
@@ -16,7 +18,7 @@ import {
 } from "./state";
 
 function emptyState(): ReviewDraftStoreState {
-  return { drafts: {} };
+  return { drafts: {}, suggestions: {} };
 }
 
 function makeComment(overrides: Partial<ReviewDraftComment> = {}): ReviewDraftComment {
@@ -31,6 +33,34 @@ function makeComment(overrides: Partial<ReviewDraftComment> = {}): ReviewDraftCo
     ...overrides,
   };
 }
+
+function makeSuggestion(overrides: Partial<ReviewDraftSuggestion> = {}): ReviewDraftSuggestion {
+  return {
+    id: "suggestion-1",
+    filePath: "src/example.ts",
+    startLine: 41,
+    endLine: 42,
+    originalLines: ["old one", "old two"],
+    replacement: "new code",
+    note: "Simplify this",
+    sourceRevision: "revision-1",
+    createdAt: "2026-04-21T00:00:00.000Z",
+    updatedAt: "2026-04-21T00:00:00.000Z",
+    ...overrides,
+  };
+}
+
+describe("review suggestions", () => {
+  it("persists a structured multi-line suggestion", () => {
+    const state = addSuggestionToState(emptyState(), {
+      key: "review:key",
+      suggestion: makeSuggestion(),
+    });
+    expect(serializeReviewDraftState(state).suggestions?.["review:key"]).toEqual([
+      makeSuggestion(),
+    ]);
+  });
+});
 
 function makeFile(): ParsedDiffFile {
   return {
@@ -155,10 +185,21 @@ describe("normalizePersistedState", () => {
     expect(normalized.drafts).toEqual({});
   });
 
+  it("accepts bounded comment ranges and rejects malformed ranges", () => {
+    const range = makeComment({ endLine: 43 });
+    const normalized = normalizePersistedState({
+      drafts: {
+        "review:key": [range, makeComment({ id: "backwards", endLine: 40 })],
+      },
+    });
+
+    expect(normalized.drafts["review:key"]).toEqual([range]);
+  });
+
   it("returns empty state for null, non-object, or malformed inputs", () => {
-    expect(normalizePersistedState(null)).toEqual({ drafts: {} });
-    expect(normalizePersistedState("nope")).toEqual({ drafts: {} });
-    expect(normalizePersistedState({ drafts: [] })).toEqual({ drafts: {} });
+    expect(normalizePersistedState(null)).toEqual({ drafts: {}, suggestions: {} });
+    expect(normalizePersistedState("nope")).toEqual({ drafts: {}, suggestions: {} });
+    expect(normalizePersistedState({ drafts: [] })).toEqual({ drafts: {}, suggestions: {} });
   });
 });
 
@@ -168,7 +209,7 @@ describe("serializeReviewDraftState", () => {
 
     const serialized = serializeReviewDraftState(state);
 
-    expect(Object.keys(serialized)).toEqual(["drafts"]);
+    expect(Object.keys(serialized)).toEqual(["drafts", "suggestions"]);
     expect("activeModesByScope" in serialized).toBe(false);
     expect(serialized.drafts["review:key"]).toHaveLength(1);
   });
@@ -302,5 +343,60 @@ describe("buildReviewAttachmentSnapshot", () => {
         ],
       },
     });
+  });
+
+  it("serializes a multi-line comment with context through its final line", () => {
+    const snapshot = buildReviewAttachmentSnapshot({
+      reviewDraftKey: "review:range",
+      cwd: "/repo",
+      mode: "base",
+      comments: [makeComment({ lineNumber: 41, endLine: 42, body: "Review both lines." })],
+      diffFiles: [makeFile()],
+    });
+
+    expect(snapshot?.attachment.comments).toEqual([
+      {
+        filePath: "src/example.ts",
+        side: "new",
+        lineNumber: 41,
+        endLine: 42,
+        body: "Review both lines.",
+        context: {
+          hunkHeader: "@@ -40,4 +40,4 @@",
+          targetLine: {
+            oldLineNumber: null,
+            newLineNumber: 41,
+            type: "add",
+            content: "const value = newValue;",
+          },
+          lines: [
+            {
+              oldLineNumber: 40,
+              newLineNumber: 40,
+              type: "context",
+              content: "const before = true;",
+            },
+            {
+              oldLineNumber: 41,
+              newLineNumber: null,
+              type: "remove",
+              content: "const value = oldValue;",
+            },
+            {
+              oldLineNumber: null,
+              newLineNumber: 41,
+              type: "add",
+              content: "const value = newValue;",
+            },
+            {
+              oldLineNumber: 42,
+              newLineNumber: 42,
+              type: "context",
+              content: "return value;",
+            },
+          ],
+        },
+      },
+    ]);
   });
 });

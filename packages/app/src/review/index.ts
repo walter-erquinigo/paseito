@@ -6,12 +6,14 @@ export {
   useClearReviewDraft,
   useReviewAttachmentSnapshot,
   useReviewDraftComments,
+  useReviewDraftSuggestions,
   addReviewDraftComment,
   type BuildReviewDraftKeyInput,
   type ReviewDraftCommentInput,
   type ReviewDraftComment,
   type ReviewDraftMode,
   type ReviewDraftSide,
+  type ReviewDraftSuggestion,
 } from "./store";
 
 export {
@@ -20,12 +22,11 @@ export {
   isInlineReviewEditorForTarget,
   type InlineReviewActions,
   type InlineReviewEditorState,
-} from "./geometry";
+} from "./inline-review";
 
 export {
   getInlineReviewThreadViewportStyle,
   groupInlineReviewCommentsByTarget,
-  InlineReviewAddButton,
   InlineReviewEditor,
   InlineReviewGutterCell,
   InlineReviewThread,

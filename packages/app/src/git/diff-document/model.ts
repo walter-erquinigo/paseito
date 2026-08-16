@@ -7,8 +7,11 @@ import {
   type SplitDiffDisplayLine,
 } from "@/utils/diff-layout";
 import { compactHighlightTokens } from "@/utils/diff-rendering";
-import { getInlineReviewThreadState, getSplitInlineReviewThreadState } from "@/review/geometry";
 import { advancesFor, requiresShaping } from "./text-measurement";
+import {
+  getInlineReviewThreadState,
+  getSplitInlineReviewThreadState,
+} from "@/review/inline-review";
 import { parseDiffContextMarker } from "@/git/diff-context-expansion";
 import { DIFF_CONTEXT_CONTROL_HEIGHT } from "./context-control-model";
 import type {
@@ -330,10 +333,22 @@ export function reviewGeometryKey(
   const comments = [...reviewActions.commentsByTarget.entries()]
     .map(([target, targetComments]) => [target, targetComments.map((comment) => comment.id).sort()])
     .sort(([left], [right]) => String(left).localeCompare(String(right)));
+  const suggestions = [...reviewActions.suggestionsByTarget.entries()]
+    .map(([target, targetSuggestions]) => [
+      target,
+      targetSuggestions.map((suggestion) => suggestion.id).sort(),
+    ])
+    .sort(([left], [right]) => String(left).localeCompare(String(right)));
   const editor = reviewActions.editor
-    ? [reviewActions.editor.target.key, reviewActions.editor.commentId]
+    ? [reviewActions.editor.targets.map((target) => target.key), reviewActions.editor.commentId]
     : null;
-  return JSON.stringify([comments, editor]);
+  const suggestionEditor = reviewActions.suggestionEditor
+    ? [
+        reviewActions.suggestionEditor.targets.map((target) => target.key),
+        reviewActions.suggestionEditor.suggestionId,
+      ]
+    : null;
+  return JSON.stringify([comments, suggestions, editor, suggestionEditor]);
 }
 
 export function expandedBodyBorderTop(file: DiffFileSection): number | null {

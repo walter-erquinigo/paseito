@@ -1968,6 +1968,10 @@ export const en = {
     accessibility: "Context window {{percentage}}% used",
   },
   review: {
+    composer: {
+      comment: "Comment",
+      codeChange: "Code change",
+    },
     comment: {
       add: "Add review comment",
       edit: "Edit review comment",
@@ -1978,6 +1982,23 @@ export const en = {
       cancelAccessibility: "Cancel review comment",
       save: "Comment",
       saveAccessibility: "Save review comment",
+    },
+    suggestion: {
+      start: "Suggest edit",
+      edit: "Edit suggestion",
+      delete: "Delete suggestion",
+      save: "Add suggestion",
+      replacement: "Suggested replacement",
+      deleteLines: "Delete selected lines",
+      note: "Suggestion note",
+      notePlaceholder: "Optional explanation",
+      addLineAbove: "Add line above",
+      addLineBelow: "Add line below",
+      lines: "Lines {{start}}–{{end}}",
+      stale: "Stale suggestion — update before sending",
+      rangeInvalid: "Select current-side lines from the same file and revision",
+      rangeHidden: "Expand hidden lines before selecting this range",
+      rangeTooLarge: "Suggestions can include at most 200 lines",
     },
   },
   settings: {

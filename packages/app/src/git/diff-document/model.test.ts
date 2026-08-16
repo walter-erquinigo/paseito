@@ -395,31 +395,19 @@ describe("diff document model", () => {
   it("reserves review geometry in the measured row", () => {
     const model = buildDiffDocumentModel(
       input({
-        reviewActions: {
-          commentsByTarget: new Map(),
-          editor: {
-            target: {
-              key: "src/a.ts:old:1",
-              filePath: "src/a.ts",
-              hunkHeader: "@@ -1 +1 @@",
-              hunkIndex: 0,
-              lineIndex: 1,
-              oldLineNumber: 1,
-              newLineNumber: null,
-              side: "old",
-              lineNumber: 1,
-              lineType: "remove",
-              content: "const oldValue = '👨‍👩‍👧‍👦';",
-            },
-            body: "",
-            commentId: null,
-          },
-          onStartComment() {},
-          onCancelEditor() {},
-          onSaveEditor() {},
-          onEditComment() {},
-          onDeleteComment() {},
-        },
+        reviewActions: reviewActionsWithEditor({
+          key: "src/a.ts:old:1",
+          filePath: "src/a.ts",
+          hunkHeader: "@@ -1 +1 @@",
+          hunkIndex: 0,
+          lineIndex: 1,
+          oldLineNumber: 1,
+          newLineNumber: null,
+          side: "old",
+          lineNumber: 1,
+          lineType: "remove",
+          content: "const oldValue = '👨‍👩‍👧‍👦';",
+        }),
       }),
     );
     const reviewRow = model.rows.find((row) => {
@@ -813,12 +801,31 @@ function reviewActionsWithEditor(
   target: NonNullable<ReturnType<typeof addedCell>["reviewTarget"]> | null,
 ): NonNullable<BuildDiffDocumentModelInput["reviewActions"]> {
   return {
+    canSuggest: true,
+    composerMode: target ? "comment" : null,
     commentsByTarget: new Map(),
-    editor: target ? { target, body: "", commentId: null } : null,
+    editor: target ? { targets: [target], body: "", commentId: null } : null,
+    suggestionsByTarget: new Map(),
+    suggestionEditor: null,
+    selectedRangeTargetKeys: new Set(),
+    suggestionRangeError: null,
     onStartComment() {},
     onCancelEditor() {},
     onSaveEditor() {},
     onEditComment() {},
     onDeleteComment() {},
+    onStartSuggestion() {},
+    onSwitchSuggestionToComment() {},
+    onBeginSuggestionDrag() {},
+    onUpdateSuggestionDrag() {},
+    onShiftSuggestionRange() {},
+    onPressReviewGutter() {},
+    onCancelSuggestionRange() {},
+    onClearSuggestionRangeError() {},
+    onCancelSuggestion() {},
+    onEditSuggestion() {},
+    onExtendSuggestion() {},
+    onSaveSuggestion() {},
+    onDeleteSuggestion() {},
   };
 }

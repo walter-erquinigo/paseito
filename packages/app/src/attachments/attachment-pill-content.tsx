@@ -15,6 +15,7 @@ import { getFileTypeLabel } from "@/attachments/file-types";
 import { isPullRequestContextAttachment } from "@/attachments/workspace-attachment-utils";
 import { getForgePresentation } from "@/git/forge";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
+import { getReviewAttachmentEntryCount } from "@/attachments/review-attachment-items";
 
 export interface AttachmentPillContent {
   icon: ReactNode;
@@ -63,7 +64,7 @@ export function getAgentAttachmentPillContent(
       return {
         icon: attachmentReviewIcon,
         title: t("message.attachments.review"),
-        subtitle: getReviewSubtitle(attachment.comments.length, t),
+        subtitle: getReviewSubtitle(getReviewAttachmentEntryCount(attachment), t),
       };
     case "forge_change_request": {
       const presentation = getForgePresentation(attachment.forge ?? "github");

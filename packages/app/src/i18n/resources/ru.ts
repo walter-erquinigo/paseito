@@ -1954,6 +1954,7 @@ export const ru: TranslationResources = {
     accessibility: "Использовано {{percentage}}% контекстного окна",
   },
   review: {
+    ...en.review,
     comment: {
       add: "Добавить комментарий к ревью",
       edit: "Изменить комментарий к ревью",
