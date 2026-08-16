@@ -54,6 +54,10 @@ export default defineConfig({
         find: /^@xterm\/addon-ligatures$/,
         replacement: path.resolve(appDir, "test-stubs/xterm-addon-ligatures.ts"),
       },
+      {
+        find: /^lucide-react-native$/,
+        replacement: path.resolve(appDir, "test-stubs/lucide-react-native.ts"),
+      },
     ],
   },
   test: {
