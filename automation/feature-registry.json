@@ -115,13 +115,14 @@
       "id": "changes-context-expansion",
       "commitSubject": "feat(changes): expand omitted diff context",
       "preservationFixes": [
-        "Keep context expansion bounded, revision-validated and available to comments and suggestions."
+        "Keep context expansion bounded, revision-validated and available to comments and suggestions.",
+        "Keep omitted context visually integrated with the diff while retaining adaptive edge and whole-region controls."
       ],
       "permanent": false,
       "intent": "Load and review omitted source context on demand from the Changes diff without transferring entire files by default.",
       "invariants": [
         "Expansion is capability-gated and unavailable against an older daemon.",
-        "Each omitted region offers 20-line upward/downward expansion and a bounded full expansion.",
+        "Each omitted region uses a dedicated separator row: small gaps offer one full reveal, while larger gaps retain 20-line upward/downward expansion and a bounded full expansion.",
         "The daemon validates repository-relative paths, file revisions, a 5000-line limit and a 1 MiB response budget.",
         "Expanded current-side lines retain syntax highlighting and can receive comments and suggestions."
       ],

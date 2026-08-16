@@ -8,6 +8,8 @@ import {
 } from "@/utils/diff-layout";
 import { compactHighlightTokens } from "@/utils/diff-rendering";
 import { getInlineReviewThreadState, getSplitInlineReviewThreadState } from "@/review/geometry";
+import { parseDiffContextMarker } from "@/git/diff-context-expansion";
+import { DIFF_CONTEXT_CONTROL_HEIGHT } from "./context-control-model";
 import { advancesFor } from "./text-measurement";
 import type {
   BuildDiffDocumentModelInput,
@@ -121,10 +123,15 @@ export function buildDiffDocumentModel(input: BuildDiffDocumentModelInput): Diff
             );
             return cell;
           }) as DiffLineRow["cells"];
-          const textHeight = Math.max(
-            input.typography.lineHeight,
-            ...cells.map((cell) => (cell?.fragments.length ?? 1) * input.typography.lineHeight),
+          const isContextControl = cells.some(
+            (cell) => cell && parseDiffContextMarker(cell.content) !== null,
           );
+          const textHeight = isContextControl
+            ? Math.max(input.typography.lineHeight, DIFF_CONTEXT_CONTROL_HEIGHT)
+            : Math.max(
+                input.typography.lineHeight,
+                ...cells.map((cell) => (cell?.fragments.length ?? 1) * input.typography.lineHeight),
+              );
           const reviewHeight = reviewHeightForCells(cells, input);
           const height = textHeight + reviewHeight;
           rows.push({
@@ -248,8 +255,9 @@ function measureCell(input: {
   availableWidth: number;
   input: BuildDiffDocumentModelInput;
 }): DiffCell {
+  const displayContent = parseDiffContextMarker(input.source.content) ? "" : input.source.content;
   const fragments = measureFragments({
-    text: input.source.content,
+    text: displayContent,
     availableWidth: input.availableWidth,
     wrapLines: input.input.wrapLines,
     lineHeight: input.input.typography.lineHeight,
