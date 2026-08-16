@@ -681,6 +681,44 @@ describe("dispatchComposerAgentMessage", () => {
     expect(client.calls[0]?.options.images).toEqual([]);
   });
 
+  it("attaches a steering deliveryHint to the optimistic user_message when provided", async () => {
+    const client = createFakeSendClient();
+    const stream = createFakeStream();
+
+    await dispatchComposerAgentMessage({
+      client,
+      agentId: "agent",
+      text: "steer this",
+      attachments: [],
+      encodeImages: passthroughEncodeImages,
+      submission: stream,
+      deliveryHint: "steering",
+    });
+
+    const tail = stream.tail.get("agent");
+    expect(tail).toHaveLength(1);
+    const userMessage = tail?.[0] as Extract<StreamItem, { kind: "user_message" }>;
+    expect(userMessage.deliveryHint).toBe("steering");
+  });
+
+  it("omits deliveryHint when none is supplied (no marker for non-steering sends)", async () => {
+    const client = createFakeSendClient();
+    const stream = createFakeStream();
+
+    await dispatchComposerAgentMessage({
+      client,
+      agentId: "agent",
+      text: "no steering",
+      attachments: [],
+      encodeImages: passthroughEncodeImages,
+      submission: stream,
+    });
+
+    const tail = stream.tail.get("agent");
+    const userMessage = tail?.[0] as Extract<StreamItem, { kind: "user_message" }>;
+    expect(userMessage.deliveryHint).toBeUndefined();
+  });
+
   it("serializes browser_element workspace attachments as text attachments at the wire boundary", async () => {
     const client = createFakeSendClient();
     const stream = createFakeStream();
@@ -847,6 +885,36 @@ describe("sendQueuedComposerMessageNow", () => {
     expect(result).toEqual({ status: "failed", errorMessage: "network down" });
     const state = queue.state.get("agent");
     expect(state?.map((m) => m.id)).toEqual(["msg-1", "msg-2"]);
+  });
+
+  it("restores a failed selected item at its original queue position", async () => {
+    const queue = createFakeQueue(
+      new Map([
+        [
+          "agent",
+          [
+            { id: "msg-1", text: "first", attachments: [] },
+            { id: "msg-2", text: "selected", attachments: [] },
+            { id: "msg-3", text: "third", attachments: [] },
+          ],
+        ],
+      ]),
+    );
+
+    await sendQueuedComposerMessageNow({
+      agentId: "agent",
+      messageId: "msg-2",
+      queue,
+      submitMessage: async () => {
+        throw new Error("offline");
+      },
+    });
+
+    expect(queue.state.get("agent")?.map((message) => message.id)).toEqual([
+      "msg-1",
+      "msg-2",
+      "msg-3",
+    ]);
   });
 });
 
