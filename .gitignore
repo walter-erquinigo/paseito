@@ -41,6 +41,8 @@ tsconfig.tsbuildinfo
 
 # Testing
 coverage/
+__pycache__/
+*.pyc
 
 # Playwright
 test-results/
@@ -90,3 +92,7 @@ packages/protocol/src/generated/validation/*.aot.ts
 packages/desktop/.cache/
 packages/desktop/src-tauri/resources/managed-runtime/
 app.json
+
+# Paseito local automation credentials and state
+/graph-token-cache.enc
+/report-state.json

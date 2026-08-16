@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "reviewedCommit", "approved", "blockers", "featureFindings"],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "reviewedCommit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "approved": { "type": "boolean" },
+    "blockers": { "type": "array", "items": { "type": "string" } },
+    "featureFindings": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "agrees", "explanation", "evidenceChecked"],
+        "properties": {
+          "id": { "type": "string" },
+          "agrees": { "type": "boolean" },
+          "explanation": { "type": "string" },
+          "evidenceChecked": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "type": "string" }
+          }
+        }
+      }
+    }
+  }
+}
