@@ -114,6 +114,7 @@ export const es: TranslationResources = {
     },
   },
   composer: {
+    ...en.composer,
     placeholders: {
       desktop: "Envíe un mensaje al agente, etiquete@fileso use/commandsy/skills",
       mobile: "Mensaje,@files,/commands",

@@ -89,6 +89,8 @@ export type StreamItem =
 
 export type UserMessageImageAttachment = AttachmentMetadata;
 
+export type UserMessageDeliveryHint = "steering";
+
 export interface UserMessageItem {
   kind: "user_message";
   id: string;
@@ -100,6 +102,13 @@ export interface UserMessageItem {
   timestamp: Date;
   images?: UserMessageImageAttachment[];
   attachments?: AgentAttachment[];
+  /**
+   * Local-only marker set when this user message was sent optimistically
+   * while the agent was running and the provider supports steering. Never
+   * sent or received over the wire — preserved across canonical replays so
+   * the UI can keep showing the marker.
+   */
+  deliveryHint?: UserMessageDeliveryHint;
 }
 
 export interface UserMessageInput {
@@ -112,6 +121,7 @@ export interface UserMessageInput {
   timestamp: Date;
   images?: UserMessageImageAttachment[];
   attachments?: AgentAttachment[];
+  deliveryHint?: UserMessageDeliveryHint;
 }
 
 export function createUserMessage(input: UserMessageInput): UserMessageItem {
@@ -132,6 +142,7 @@ export function createUserMessage(input: UserMessageInput): UserMessageItem {
     ...(input.attachments && input.attachments.length > 0
       ? { attachments: input.attachments }
       : {}),
+    ...(input.deliveryHint ? { deliveryHint: input.deliveryHint } : {}),
   };
 }
 
@@ -260,6 +271,7 @@ function produceUserMessage(
     clientMessageId: incoming.clientMessageId ?? existing.clientMessageId,
     messageId: incoming.messageId ?? existing.messageId,
     timelineCursor: incoming.timelineCursor ?? existing.timelineCursor,
+    deliveryHint: incoming.deliveryHint ?? existing.deliveryHint,
   });
   if (
     existing.id === merged.id &&
@@ -269,7 +281,8 @@ function produceUserMessage(
     existing.text === merged.text &&
     existing.timestamp === merged.timestamp &&
     existing.images === merged.images &&
-    existing.attachments === merged.attachments
+    existing.attachments === merged.attachments &&
+    existing.deliveryHint === merged.deliveryHint
   ) {
     return { items, index, message: existing, matched: true };
   }

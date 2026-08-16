@@ -26,7 +26,7 @@ export async function migrateAppSettings(
   settings: AppSettings,
   storage: KeyValueStorage,
   stored?: PersistedAppSettings,
-  options: { native?: boolean } = {},
+  options: { native?: boolean; skipSteerDefault?: boolean } = {},
 ): Promise<AppSettings> {
   const migrationMarker = await readValidatedJson(
     storage,
@@ -38,8 +38,10 @@ export async function migrateAppSettings(
 
   let migrated = settings;
   if (!applied.has(STEER_DEFAULT_MIGRATION)) {
-    migrated =
-      migrated.sendBehavior === "interrupt" ? { ...migrated, sendBehavior: "steer" } : migrated;
+    if (!options.skipSteerDefault) {
+      migrated =
+        migrated.sendBehavior === "interrupt" ? { ...migrated, sendBehavior: "steer" } : migrated;
+    }
     applied.add(STEER_DEFAULT_MIGRATION);
     addedMigration = true;
   }

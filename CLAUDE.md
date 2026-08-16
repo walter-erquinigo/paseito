@@ -328,6 +328,7 @@ instead of editing the list by hand.
   - Fix: Require every focused registry Vitest contract to stop after its first failure.
 - `agent-message-delivery-control` — Let users queue durable follow-up messages or explicitly steer an active agent run without conflating the two actions.
   - Fix: Restore failed sends to their original queue position and preserve legacy replacement behavior.
+  - Fix: Keep automatic-drain submission coverage seeded through the durable composer queue.
 - `pi-plan-completion-presentation` — Show completed Pi plans through the shared plan presentation before asking whether to implement them.
   - Fix: Keep completed plan output ordered before Pi's implementation approval request and retain generic handling for malformed plans.
 - `workspace-file-search-navigation` — Find every eligible workspace file from Command+P and open it either as source or in Changes.

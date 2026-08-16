@@ -116,6 +116,7 @@ export const fr: TranslationResources = {
     },
   },
   composer: {
+    ...en.composer,
     placeholders: {
       desktop: "Envoyez un message à l'agent, marquez@filesou utilisez/commandset/skills",
       mobile: "Message,@files,/commands",

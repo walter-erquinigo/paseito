@@ -128,6 +128,12 @@ export const en = {
       queue: "Queue",
       send: "Send",
     },
+    queue: {
+      steer: "Steer",
+      steeringConversation: "Steering active work",
+      steerHint: "Send this now as guidance for the active run",
+      replaceFallbackHint: "This provider will restart the active run with this message",
+    },
     cancel: {
       cancelingAgent: "Canceling agent",
       stopAgent: "Stop agent",

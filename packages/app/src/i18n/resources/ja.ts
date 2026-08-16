@@ -114,6 +114,7 @@ export const ja: TranslationResources = {
     },
   },
   composer: {
+    ...en.composer,
     placeholders: {
       desktop: "エージェントにメッセージ、@ファイル、/コマンドや/スキルを入力",
       mobile: "メッセージ、@ファイル、/コマンド",

@@ -114,6 +114,7 @@ export const ru: TranslationResources = {
     },
   },
   composer: {
+    ...en.composer,
     placeholders: {
       desktop: "Напишите агенту сообщение, отметьте @files или используйте /commands и /skills.",
       mobile: "Сообщение,@files,/commands",
