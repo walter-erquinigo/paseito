@@ -40,7 +40,7 @@ export async function runCreateCommand(
     throw cmdError(
       "DAEMON_NOT_RUNNING",
       `Cannot connect to daemon at ${host}: ${message}`,
-      "Start the daemon with: paseo daemon start",
+      "Start the daemon with: paseito daemon start",
     );
   }
 
