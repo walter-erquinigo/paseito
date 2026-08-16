@@ -87,6 +87,21 @@ describe("changes preferences commitsCollapsed", () => {
   });
 });
 
+describe("changes preferences malformed storage", () => {
+  it("replaces malformed JSON with default-open preferences", async () => {
+    const storage = createInMemoryKeyValueStorage({
+      [CHANGES_PREFERENCES_STORAGE_KEY]: "{not-json",
+    });
+
+    const preferences = await loadChangesPreferencesFromStorage(storage);
+
+    expect(preferences).toEqual(DEFAULT_CHANGES_PREFERENCES);
+    expect(storage.entries.get(CHANGES_PREFERENCES_STORAGE_KEY)).toBe(
+      JSON.stringify(DEFAULT_CHANGES_PREFERENCES),
+    );
+  });
+});
+
 describe("saveChangesPreferences", () => {
   it("merges updates onto cached preferences and persists the result", async () => {
     const storage = createInMemoryKeyValueStorage();
