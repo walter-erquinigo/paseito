@@ -100,6 +100,12 @@ export const ar: TranslationResources = {
       queue: "طابور",
       send: "يرسل",
     },
+    queue: {
+      steer: "توجيه",
+      steeringConversation: "جارٍ توجيه العمل النشط",
+      steerHint: "أرسل الآن كتوجيه للتشغيل النشط",
+      replaceFallbackHint: "سيعيد هذا المزوّد تشغيل العمل النشط بهذه الرسالة",
+    },
     cancel: {
       cancelingAgent: "وكيل الإلغاء",
       stopAgent: "توقف الوكيل",
@@ -798,7 +804,7 @@ export const ar: TranslationResources = {
           updateCurrent: "التحديث غير متاح لأن هذا الفرع محدث بالفعل باستخدام{{baseRef}}",
           mergePrNoGithub: "دمج PR غير متاح الآن لأن GitHub غير متصل",
           archiveNotWorktree:
-            "الأرشيف غير متاح هنا لأنه لم يتم إنشاء مساحة العمل هذه كشجرة عمل Paseo",
+            "الأرشيف غير متاح هنا لأنه لم يتم إنشاء مساحة العمل هذه كشجرة عمل Paseito",
           mergePrNoForge: "دمج {{noun}} غير متاح الآن لأن {{brand}} غير متصل",
           mergePrMissing: "دمج PR غير متاح لأنه لا يوجد طلب سحب حتى الآن",
           mergePrDraft: "دمج PR غير متاح لأن طلب السحب لا يزال مسودة",
@@ -839,6 +845,14 @@ export const ar: TranslationResources = {
       diff: {
         openChangesTab: "فتح علامة تبويب التغييرات",
         closeChangesTab: "إغلاق علامة تبويب التغييرات",
+        fileNavigator: "الملفات",
+        showFileNavigator: "إظهار مستعرض الملفات",
+        hideFileNavigator: "إخفاء مستعرض الملفات",
+        fileStatus: {
+          added: "مضاف",
+          deleted: "محذوف",
+          modified: "معدّل",
+        },
         binaryFile: "ملف ثنائي",
         tooLarge: "الفرق كبير جدًا بحيث لا يمكن عرضه",
         previewTooLargeTitle: "هذا الفرق كبير جدًا بحيث لا يمكن معاينته",
@@ -854,8 +868,11 @@ export const ar: TranslationResources = {
         showWhitespace: "إظهار المسافة البيضاء",
         scrollLongLines: "قم بتمرير الخطوط الطويلة",
         wrapLongLines: "لف الخطوط الطويلة",
+        lsp: "ميزات اللغة",
+        lspUpdateHost: "حدّث المضيف لميزات اللغة",
         collapseAll: "طي كافة الملفات",
         expandAll: "قم بتوسيع كافة الملفات",
+        expandUnreviewed: "توسيع الملفات غير المراجعة وطي الملفات المراجعة",
         collapseAllFolders: "طي كافة المجلدات",
         expandAllFolders: "توسيع كافة المجلدات",
         refreshing: "منعش",
@@ -870,6 +887,42 @@ export const ar: TranslationResources = {
         diffMode: "وضع الفرق",
         uncommitted: "غير ملتزم",
         committed: "ملتزم",
+        baseSelectorLabel: "مقارنة التغييرات الملتزم بها مع {{baseRef}}",
+        baseSelectorTitle: "المقارنة مع فرع",
+        baseSelectorSearch: "البحث في الفروع",
+        baseSelectorEmpty: "لا توجد فروع مطابقة",
+        baseSelectorMissing: "الفرع {{baseRef}} لم يعد موجودًا",
+        baseSelectorError: "تعذر تغيير فرع المقارنة",
+        baseSelectorUpdateHost: "حدّث المضيف لاختيار الفرع الأساسي",
+        markReviewed: "وضع علامة تمت المراجعة",
+        markUnreviewed: "وضع علامة لم تتم المراجعة",
+        markFileReviewed: "وضع علامة تمت المراجعة على {{file}}",
+        markFileUnreviewed: "وضع علامة لم تتم المراجعة على {{file}}",
+        markAllReviewed: "وضع علامة تمت المراجعة على جميع الملفات",
+        clearAllReviewed: "مسح علامات المراجعة من جميع الملفات",
+        reviewUpdateHost: "حدّث المضيف لوضع علامات المراجعة على الملفات",
+        reviewBranchRequired: "انتقل إلى فرع لوضع علامات المراجعة على الملفات",
+        markLineReviewed: "وضع علامة مراجعة على السطر {{line}}",
+        markLineUnreviewed: "إلغاء علامة مراجعة السطر {{line}}",
+        editLineUnavailable: "لا يمكن فتح هذا السطر في المحرر المدمج",
+        noUncheckedLines: "لا توجد أسطر غير مراجعة في هذا الاتجاه",
+        lineReviewShortcuts:
+          "m / , للمراجعة والتنقل · Shift+M / Shift+. لإظهار السياق · مسافة للتبديل · E للتحرير · U للتراجع · Esc للمسح",
+        context: {
+          hiddenLines: "{{count}} hidden lines",
+          expandUp: "Show 20 lines above",
+          expandDown: "Show 20 lines below",
+          expandAll: "Show all hidden lines",
+          expandFile: "Expand the complete file",
+          failedToExpand: "Failed to load hidden lines",
+        },
+        search: {
+          placeholder: "البحث في الملفات المتغيرة",
+          loading: "جارٍ البحث…",
+          noMatches: "لا توجد نتائج",
+          submit: "Enter للبحث · n/N للتنقل · Esc للإغلاق",
+          failed: "فشل البحث",
+        },
         branchUnknown: "مجهول",
         base: "قاعدة",
         newFile: "جديد",
@@ -1009,7 +1062,7 @@ export const ar: TranslationResources = {
       discord: "Discord",
       github: "إنشاء مشكلة على GitHub",
       whatsNew: "ما الجديد",
-      appName: "Paseo",
+      version: "Paseito {{version}}",
     },
     sections: {
       sessions: "السجل",
@@ -1141,7 +1194,7 @@ export const ar: TranslationResources = {
   },
   desktop: {
     quitting: {
-      title: "جارٍ إنهاء Paseo...",
+      title: "جارٍ إنهاء Paseito...",
       detail: "إيقاف البرنامج الخفي المحلي.",
     },
     daemon: {
@@ -1155,20 +1208,20 @@ export const ar: TranslationResources = {
       },
       management: {
         title: "إدارة البرنامج الخفي المدمج",
-        hint: "اسمح لـ Paseo ببدء تشغيل البرنامج الخفي المدمج وإيقافه",
+        hint: "اسمح لـ Paseito ببدء تشغيل البرنامج الخفي المدمج وإيقافه",
         pauseTitle: "وقفة المدمج في البرنامج الخفي",
         pauseMessage:
           "سيؤدي هذا إلى إيقاف البرنامج الخفي المدمج على الفور. سيتم إيقاف تشغيل الوكلاء والمحطات الطرفية المتصلة بالبرنامج الخفي المدمج.",
         pauseAndStop: "وقفة وتوقف",
         registrationFailed:
-          "Built-in daemon started, but Paseo could not save the localhost connection. Toggle daemon management off and on again, or add localhost manually.",
+          "Built-in daemon started, but Paseito could not save the localhost connection. Toggle daemon management off and on again, or add localhost manually.",
         pausedStopFailed:
-          "تم إيقاف إدارة البرنامج الخفي المضمنة مؤقتًا، لكن لم يتمكن Paseo من إيقاف البرنامج الخفي.",
+          "تم إيقاف إدارة البرنامج الخفي المضمنة مؤقتًا، لكن لم يتمكن Paseito من إيقاف البرنامج الخفي.",
         updateFailed: "غير قادر على تحديث إدارة البرنامج الخفي المضمنة.",
       },
       keepRunning: {
         title: "استمر في تشغيل البرنامج الخفي بعد الإقلاع عن التدخين",
-        hint: "يستمر تشغيل Daemon عند إنهاء Paseo",
+        hint: "يستمر تشغيل Daemon عند إنهاء Paseito",
       },
       logs: {
         title: "ملف السجل",
@@ -1183,7 +1236,7 @@ export const ar: TranslationResources = {
       fullStatus: {
         title: "الوضع الكامل",
         modalTitle: "حالة Daemon",
-        hint: "يقوم بتشغيل`paseo daemon status`ويظهر الإخراج",
+        hint: "يقوم بتشغيل`paseito daemon status`ويظهر الإخراج",
         view: "عرض الحالة",
         copied: "تم نسخ الحالة إلى الحافظة.",
         fetchFailed: "فشل جلب حالة البرنامج الخفي:{{message}}",
@@ -1234,7 +1287,7 @@ export const ar: TranslationResources = {
     },
     rosetta: {
       title: "قم بتنزيل نسخة Apple Silicon",
-      runningIntel: "أنت تقوم بتشغيل إصدار Intel من Paseo ضمن Rosetta على Apple Silicon.",
+      runningIntel: "أنت تقوم بتشغيل إصدار Intel من Paseito ضمن Rosetta على Apple Silicon.",
       highCpu:
         "يؤدي هذا إلى ارتفاع استخدام وحدة المعالجة المركزية. قم بتنزيل إصدار Apple Silicon لإصلاحه.",
       download: "تحميل",
@@ -1277,7 +1330,7 @@ export const ar: TranslationResources = {
         microphone: "لم يتم التحقق من حالة الميكروفون بعد.",
       },
       testNotification: {
-        title: "اختبار الإخطار Paseo",
+        title: "اختبار الإخطار Paseito",
         body: "إذا كان بإمكانك رؤية ذلك، فهذا يعني أن إشعارات سطح المكتب تعمل.",
         notDelivered: "لم يتم تسليم الإخطار. تحقق من إعدادات النظام > الإشعارات.",
         failed: "فشل في إرسال الإخطار.",
@@ -1286,7 +1339,7 @@ export const ar: TranslationResources = {
     integrations: {
       cli: {
         statusFailed: "غير قادر على التحقق من حالة تثبيت CLI.",
-        installFailed: "غير قادر على تثبيت PaseoCLI.",
+        installFailed: "غير قادر على تثبيت PaseitoCLI.",
       },
       skills: {
         statusFailed: "غير قادر على التحقق من حالة مهارات التنسيق.",
@@ -1298,7 +1351,8 @@ export const ar: TranslationResources = {
     },
   },
   rootError: {
-    title: "واجه Paseo مشكلة.",
+    kicker: "حدث خطأ",
+    title: "واجه Paseito مشكلة.",
     body: "جرّب مرة أخرى لإعادة تحميل التطبيق. إذا استمر حدوث ذلك، فأرفق التفاصيل أدناه عند الإبلاغ عنه.",
     details: "التفاصيل",
   },
@@ -1391,7 +1445,7 @@ export const ar: TranslationResources = {
     },
   },
   onboarding: {
-    title: "مرحبا بكم في Paseo",
+    title: "مرحبا بكم في Paseito",
     subtitle: "قم بتوصيل جهاز الكمبيوتر الخاص بك للبدء",
     actions: {
       settings: "إعدادات",
@@ -1471,7 +1525,7 @@ export const ar: TranslationResources = {
     },
     direct: {
       title: "اتصال مباشر",
-      helper: "أدخل عنوان خادم Paseo.",
+      helper: "أدخل عنوان خادم Paseito.",
       fields: {
         host: "Host",
         port: "ميناء",
@@ -1560,7 +1614,7 @@ export const ar: TranslationResources = {
         "بدون التتابع، اتصل مباشرة عبر TCP أو Tailscale أو شبكة VPN أخرى. لن يتم إنشاء رمز QR.",
       updateRequired: "حدّث المضيف لتمكين التتابع من Paseo Desktop.",
       unavailable: "عرض الاقتران غير متاح.",
-      hint: "قم بمسح رمز QR هذا باستخدام Paseo على هاتفك، أو انسخ الرابط أدناه.",
+      hint: "قم بمسح رمز QR هذا باستخدام Paseito على هاتفك، أو انسخ الرابط أدناه.",
       qrUnavailable: "رمز QR غير متاح.",
       qrAccessibility: "رمز QR للإقران",
       retry: "أعد المحاولة",
@@ -1593,7 +1647,7 @@ export const ar: TranslationResources = {
   serviceUrl: {
     title: "افتح الخدمة URL",
     message: "افتح{{url}}؟",
-    inPaseo: "في Paseo",
+    inPaseo: "في Paseito",
     externalBrowser: "متصفح خارجي",
     dontAskAgain: "لا تسأل مرة أخرى",
   },
@@ -1691,8 +1745,8 @@ export const ar: TranslationResources = {
       other: "استخدم {{count}} أدوات أخرى",
     },
     paseoCalls: {
-      one: "استدعى Paseo {{count}} مرة",
-      other: "استدعى Paseo {{count}} مرات",
+      one: "استدعى Paseito {{count}} مرة",
+      other: "استدعى Paseito {{count}} مرات",
     },
     and: "و",
   },
@@ -1711,6 +1765,10 @@ export const ar: TranslationResources = {
     accessibility: "تم استخدام نافذة السياق{{percentage}}%",
   },
   review: {
+    composer: {
+      comment: "تعليق",
+      codeChange: "تغيير الرمز",
+    },
     comment: {
       add: "إضافة تعليق المراجعة",
       edit: "تحرير تعليق المراجعة",
@@ -1721,6 +1779,23 @@ export const ar: TranslationResources = {
       cancelAccessibility: "إلغاء تعليق المراجعة",
       save: "تعليق",
       saveAccessibility: "حفظ تعليق المراجعة",
+    },
+    suggestion: {
+      start: "اقتراح تعديل",
+      edit: "تعديل الاقتراح",
+      delete: "حذف الاقتراح",
+      save: "إضافة اقتراح",
+      replacement: "البديل المقترح",
+      note: "ملاحظة الاقتراح",
+      notePlaceholder: "شرح اختياري",
+      lines: "الأسطر {{start}}–{{end}}",
+      stale: "اقتراح قديم — حدّثه قبل الإرسال",
+      deleteLines: "حذف الأسطر المحددة",
+      addLineAbove: "إضافة السطر أعلاه",
+      addLineBelow: "إضافة السطر أدناه",
+      rangeHidden: "وسّع الأسطر المخفية قبل تحديد هذا النطاق",
+      rangeTooLarge: "يمكن أن تتضمن الاقتراحات 200 سطر كحد أقصى",
+      rangeInvalid: "حدد أسطر الجانب الحالي من الملف والمراجعة نفسيهما",
     },
   },
   settings: {
@@ -1804,7 +1879,7 @@ export const ar: TranslationResources = {
       browserData: {
         title: "بيانات المتصفح",
         siteData: "ملفات تعريف الارتباط وبيانات المواقع",
-        description: "تتشارك علامات تبويب المتصفح تسجيلات الدخول وبيانات المواقع عبر Paseo.",
+        description: "تتشارك علامات تبويب المتصفح تسجيلات الدخول وبيانات المواقع عبر Paseito.",
         clear: "مسح بيانات المتصفح",
         clearing: "جارٍ المسح...",
         confirmTitle: "هل تريد مسح بيانات المتصفح؟",
@@ -1815,12 +1890,11 @@ export const ar: TranslationResources = {
       defaultSend: {
         label: "إرسال افتراضي",
         descriptions: {
-          interrupt:
-            "عند تشغيل الوكيل، يوقف Enter التشغيل. Command/Ctrl+Enter يضيف إلى قائمة الانتظار.",
+          steer: "عند تشغيل الوكيل، يعيد Enter توجيهه. Command/Ctrl+Enter يضيف إلى قائمة الانتظار.",
           queue: "عند تشغيل الوكيل، يضيف Enter إلى قائمة الانتظار. Command/Ctrl+Enter يرسل.",
         },
         options: {
-          interrupt: "مقاطعة",
+          steer: "توجيه",
           queue: "طابور",
         },
       },
@@ -1829,7 +1903,7 @@ export const ar: TranslationResources = {
         description: "مكان فتح عناوين URL من تشغيل البرامج النصية",
         options: {
           ask: "بسأل",
-          inApp: "في Paseo",
+          inApp: "في Paseito",
           external: "متصفح خارجي",
         },
       },
@@ -1913,7 +1987,7 @@ export const ar: TranslationResources = {
         label: "تحديثات التطبيق",
         readyToInstall: "جاهز للتثبيت:{{version}}",
         installTitle: "تثبيت تحديث سطح المكتب",
-        installMessage: "يؤدي هذا إلى تحديث Paseo على هذا الكمبيوتر",
+        installMessage: "يؤدي هذا إلى تحديث Paseito على هذا الكمبيوتر",
         installConfirm: "تثبيت التحديث",
         update: "تحديث",
         updateTo: "التحديث إلى{{version}}",
@@ -2027,6 +2101,7 @@ export const ar: TranslationResources = {
         toggleFocusMode: "تبديل وضع التركيز",
         cycleTheme: "موضوع الدورة",
         focusMessageInput: "التركيز على إدخال الرسالة",
+        focusChanges: "التركيز على التغييرات",
         cycleAgentMode: "تبديل وضع الوكيل",
         toggleVoiceMode: "تبديل الوضع الصوتي",
         startStopDictation: "بدء إملاء /stop",
@@ -2056,10 +2131,10 @@ export const ar: TranslationResources = {
         title: "مهارات التنسيق",
         description: "قم بتعليم عملائك كيفية التنسيق من خلال CLI",
         updateAvailable: "التحديث متاح",
-        updateTitle: "تحديث مهارات Paseo ؟",
+        updateTitle: "تحديث مهارات Paseito ؟",
         updateFallback: "مزامنة المهارات المجمعة لجهازك.",
-        uninstallTitle: "إلغاء تثبيت مهارات Paseo ؟",
-        uninstallMessage: "يزيل جميع مهارات تنسيق Paseo من ~/.agents ، ~/.claude ، ~/.codex.",
+        uninstallTitle: "إلغاء تثبيت مهارات Paseito ؟",
+        uninstallMessage: "يزيل جميع مهارات تنسيق Paseito من ~/.agents ، ~/.claude ، ~/.codex.",
         choose: "اختيار المهارات",
         chooseAll: "كل المهارات",
         chooseAllHint: "أبقِ جميع المهارات المرفقة مثبتة، بما فيها ما يُضاف لاحقًا.",
@@ -2158,9 +2233,9 @@ export const ar: TranslationResources = {
         title: "التنسيق",
         unavailable: "اتصل بهذا المضيف لإدارة التنسيق",
         enableTools: {
-          title: "تمكين أدوات Paseo",
+          title: "تمكين أدوات Paseito",
           hint: "سيتمكن الوكلاء من إدارة أشجار العمل والوكلاء والجداول الزمنية",
-          accessibilityLabel: "حقن أدوات Paseo",
+          accessibilityLabel: "حقن أدوات Paseito",
         },
         systemPrompt: {
           title: "موجه النظام",
@@ -2262,15 +2337,15 @@ export const ar: TranslationResources = {
             "هذا المضيف غير متصل. انتظر حتى يصبح متصلاً بالإنترنت قبل إعادة التشغيل.",
           offlineTitle: "Host غير متصل",
           offlineMessage:
-            "هذا المضيف غير متصل.  يقوم Paseo بإعادة الاتصال تلقائيًا - انتظر حتى يتم الاتصال بالإنترنت مرة أخرى قبل إعادة التشغيل.",
+            "هذا المضيف غير متصل.  يقوم Paseito بإعادة الاتصال تلقائيًا - انتظر حتى يتم الاتصال بالإنترنت مرة أخرى قبل إعادة التشغيل.",
           requestFailedTitle: "خطأ",
           requestFailedMessage:
-            "فشل في إرسال طلب إعادة التشغيل.  يقوم Paseo بإعادة الاتصال تلقائيًا - حاول مرة أخرى بمجرد ظهور المضيف على أنه متصل بالإنترنت.",
+            "فشل في إرسال طلب إعادة التشغيل.  يقوم Paseito بإعادة الاتصال تلقائيًا - حاول مرة أخرى بمجرد ظهور المضيف على أنه متصل بالإنترنت.",
           dialogFailedMessage: "غير قادر على فتح مربع حوار تأكيد إعادة التشغيل.",
         },
         update: {
           desktopManagedHint:
-            "يدير Paseo Desktop هذا البرنامج الخفي. حدّث Paseo Desktop على المضيف.",
+            "يدير Paseito Desktop هذا البرنامج الخفي. حدّث Paseito Desktop على المضيف.",
           title: "Update daemon",
           hint: "Update the daemon to the latest version and restart it",
           confirm: "Update",
@@ -2430,7 +2505,7 @@ export const ar: TranslationResources = {
         newScript: "نص جديد",
         editScript: "تحرير{{name}}",
         runAsService: "تشغيل كخدمة",
-        serviceHint: "يشرف Paseo على العملية ويعين منفذًا عبر $PASEO_PORT",
+        serviceHint: "يشرف Paseito على العملية ويعين منفذًا عبر $PASEO_PORT",
         actions: {
           add: "إضافة البرنامج النصي",
           edit: "يحرر",
@@ -2439,7 +2514,7 @@ export const ar: TranslationResources = {
       },
       metadata: {
         title: "توليد البيانات الوصفية",
-        info: "تعليمات خاصة بالمشروع يتم إدخالها في الذكاء الاصطناعي الذي يستخدمه Paseo لإنشاء بيانات التعريف - استخدمها لفرض اصطلاحات فريقك مثل تسمية الفرع أو نمط الالتزام أو تنسيق PR",
+        info: "تعليمات خاصة بالمشروع يتم إدخالها في الذكاء الاصطناعي الذي يستخدمه Paseito لإنشاء بيانات التعريف - استخدمها لفرض اصطلاحات فريقك مثل تسمية الفرع أو نمط الالتزام أو تنسيق PR",
         branchName: "اسماء الفروع",
         branchNamePlaceholder: "بادئة الفروع بـ fet/ أو Fix/, mb/ للفروع الشخصية",
         commitMessage: "ارتكاب الرسائل",

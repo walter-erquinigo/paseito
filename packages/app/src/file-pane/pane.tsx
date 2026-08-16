@@ -9,9 +9,24 @@ import React, {
   useSyncExternalStore,
 } from "react";
 import type { DaemonClient, FileReadResult } from "@getpaseo/client/internal/daemon-client";
-import { Image as RNImage, ScrollView as RNScrollView, Text, View } from "react-native";
+import type { WorkspaceLspLocation } from "@getpaseo/protocol/messages";
+import {
+  Image as RNImage,
+  ScrollView as RNScrollView,
+  Text,
+  View,
+  type StyleProp,
+  type TextStyle,
+} from "react-native";
+import { type ASTNode, type MarkdownIt, type RenderRules } from "react-native-markdown-display";
 import { StyleSheet, UnistylesRuntime, withUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
+import { createSharedMarkdownRules, type MarkdownStyles } from "@/components/markdown/renderer";
+import {
+  AssistantFileLinkResolverProvider,
+  AssistantMarkdownLink,
+  type InlinePathTarget,
+} from "@/assistant-file-links";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { useSessionStore, type ExplorerFile } from "@/stores/session-store";
 import { highlightCode, type HighlightToken } from "@getpaseo/highlight";
@@ -26,7 +41,11 @@ import { persistAttachmentFromBytes } from "@/attachments/service";
 import { createPreviewAttachmentId, getFileNameFromPath } from "@/attachments/utils";
 import { explorerFileFromReadResult } from "@/file-explorer/read-result";
 import { resolveFilePreviewReadTarget } from "@/file-explorer/preview-target";
-import type { WorkspaceFileLocation } from "@/workspace/file-open";
+import {
+  resolveWorkspaceFilePaths,
+  type OpenFileDisposition,
+  type WorkspaceFileLocation,
+} from "@/workspace/file-open";
 import { useRetainedPanelActive } from "@/components/retained-panel";
 import { useAppActivelyVisible } from "@/hooks/use-app-visible";
 import { isFileQueryEnabled } from "@/components/file-pane-enabled";
@@ -44,6 +63,12 @@ import type { LiveFileModel } from "./live-file/model";
 import { confirmDialog } from "@/utils/confirm-dialog";
 import { usePublishPanelInstanceAttributes } from "@/panels/panel-instance-attributes";
 import type { Theme } from "@/styles/theme";
+import { usePaneContext } from "@/panels/pane-context";
+import { useToast } from "@/contexts/toast-context";
+import type { EditorLspStatus } from "./editor/lsp-session";
+import { acquireEditorLspSession } from "./editor/lsp-session-pool";
+import { lspLanguageForFile, useWorkspaceLspPreferences } from "./editor/lsp-preferences";
+import { createMarkdownFilePreviewParser } from "./markdown-file-links";
 
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
 const foregroundMutedColorMapping = (theme: Theme) => ({
@@ -65,6 +90,8 @@ interface FilePreviewBodyProps {
   location: WorkspaceFileLocation;
   navigationRevision: number;
   imagePreviewUri: string | null;
+  markdownParser: ReturnType<typeof MarkdownIt>;
+  markdownRules: RenderRules;
 }
 
 type TextExplorerFile = ExplorerFile & { kind: "text" };
@@ -217,6 +244,8 @@ function FilePreviewBody({
   location,
   navigationRevision,
   imagePreviewUri,
+  markdownParser,
+  markdownRules,
 }: FilePreviewBodyProps) {
   const theme = UnistylesRuntime.getTheme();
   const { t } = useTranslation();
@@ -307,7 +336,11 @@ function FilePreviewBody({
             style={styles.previewContent}
             showsVerticalScrollIndicator
           >
-            <FileMarkdownPreview source={preview.content ?? ""} />
+            <FileMarkdownPreview
+              source={preview.content ?? ""}
+              markdownit={markdownParser}
+              rules={markdownRules}
+            />
           </RNScrollView>
         </View>
       );
@@ -409,8 +442,12 @@ export function FilePane({
   navigationRevision: number;
 }) {
   const { t } = useTranslation();
+  const toast = useToast();
+  const { openFileInWorkspace } = usePaneContext();
   const isMobile = useIsCompactFormFactor();
-  const [previewMode, setPreviewMode] = useState<"preview" | "source">("preview");
+  const [previewMode, setPreviewMode] = useState<"preview" | "source">(
+    location.openMode === "source" ? "source" : "preview",
+  );
   const [resolvedPreview, setResolvedPreview] = useState<{
     key: string | null;
     file: ExplorerFile | null;
@@ -422,7 +459,16 @@ export function FilePane({
   const supportsEditing = useSessionStore(
     (state) => state.sessions[serverId]?.serverInfo?.features?.workspaceFileEditing === true,
   );
+  // COMPAT(workspaceLsp): added in Paseito v0.2.5-paseito.9, remove after 2027-02-08.
+  const supportsLsp = useSessionStore(
+    (state) => state.sessions[serverId]?.serverInfo?.features?.workspaceLsp === true,
+  );
   const normalizedWorkspaceRoot = useMemo(() => workspaceRoot.trim(), [workspaceRoot]);
+  const markdownParser = useMemo(
+    () => createMarkdownFilePreviewParser(normalizedWorkspaceRoot),
+    [normalizedWorkspaceRoot],
+  );
+  const markdownRules = useMemo(() => createMarkdownFilePreviewRules(), []);
   const normalizedFilePath = useMemo(() => trimNonEmpty(location.path), [location.path]);
   const readTarget = useMemo(
     () =>
@@ -466,8 +512,12 @@ export function FilePane({
     };
   }, [liveFile.file, readTarget]);
 
+  useEffect(
+    () => setPreviewMode(location.openMode === "source" ? "source" : "preview"),
+    [location.openMode, navigationRevision, readTarget?.path],
+  );
+
   const previewKey = readTarget ? `${readTarget.cwd}:${readTarget.path}` : null;
-  useEffect(() => setPreviewMode("preview"), [previewKey]);
 
   const preview = resolvedPreview.key === previewKey ? resolvedPreview.file : null;
   const imagePreviewUri = useAttachmentPreviewUrl(
@@ -483,30 +533,132 @@ export function FilePane({
     preview?.kind === "text" ? (preview.content ?? "").split("\n").length : undefined;
   const errorMessage = getFileErrorMessage(liveFile.error, t("panels.file.failedToLoad"));
 
-  return (
-    <FilePanePresentation
-      serverId={serverId}
-      client={client}
-      readTarget={readTarget}
-      preview={preview}
-      liveFile={liveFile.model}
-      onRetryRead={liveFile.refresh}
-      retryingRead={liveFile.isRetrying}
-      retryLabel={t("common.actions.retry")}
-      filename={getFileNameFromPath(location.path) ?? location.path}
-      previewMode={canTogglePreviewMode ? previewMode : undefined}
-      onPreviewModeChange={canTogglePreviewMode ? setPreviewMode : undefined}
-      lineCount={lineCount}
-      editable={editable}
-      disconnectedMessage={t("workspace.terminal.hostDisconnected")}
-      errorMessage={errorMessage}
-      isLoading={liveFile.isFetching}
-      isMobile={isMobile}
-      location={location}
-      navigationRevision={navigationRevision}
-      imagePreviewUri={imagePreviewUri}
-    />
+  const handleOpenMarkdownFileLink = useCallback(
+    (target: InlinePathTarget, disposition: OpenFileDisposition) => {
+      void (async () => {
+        const targetRead = resolveFilePreviewReadTarget({
+          path: target.path,
+          workspaceRoot: normalizedWorkspaceRoot,
+        });
+        if (!client || !targetRead) {
+          showMarkdownFileNotFoundToast(toast, t, target.raw);
+          return;
+        }
+        try {
+          await client.readFile(targetRead.cwd, targetRead.path);
+        } catch {
+          showMarkdownFileNotFoundToast(toast, t, target.raw);
+          return;
+        }
+        openFileInWorkspace({
+          disposition: disposition === "side" ? "markdown-preview" : disposition,
+          location: {
+            path: target.path,
+            lineStart: target.lineStart,
+            lineEnd: target.lineEnd,
+            column: target.column,
+            openMode: "source",
+          },
+        });
+      })();
+    },
+    [client, normalizedWorkspaceRoot, openFileInWorkspace, t, toast],
   );
+
+  return (
+    <AssistantFileLinkResolverProvider
+      client={client}
+      serverId={serverId}
+      workspaceRoot={normalizedWorkspaceRoot}
+      primaryDisposition="side"
+      onOpenWorkspaceFile={handleOpenMarkdownFileLink}
+      toast={toast}
+    >
+      <FilePanePresentation
+        serverId={serverId}
+        client={client}
+        readTarget={readTarget}
+        preview={preview}
+        liveFile={liveFile.model}
+        onRetryRead={liveFile.refresh}
+        retryingRead={liveFile.isRetrying}
+        retryLabel={t("common.actions.retry")}
+        filename={getFileNameFromPath(location.path) ?? location.path}
+        previewMode={canTogglePreviewMode ? previewMode : undefined}
+        onPreviewModeChange={canTogglePreviewMode ? setPreviewMode : undefined}
+        lineCount={lineCount}
+        editable={editable}
+        supportsLsp={supportsLsp}
+        disconnectedMessage={t("workspace.terminal.hostDisconnected")}
+        errorMessage={errorMessage}
+        isLoading={liveFile.isFetching}
+        isMobile={isMobile}
+        location={location}
+        navigationRevision={navigationRevision}
+        imagePreviewUri={imagePreviewUri}
+        markdownParser={markdownParser}
+        markdownRules={markdownRules}
+      />
+    </AssistantFileLinkResolverProvider>
+  );
+}
+
+function showMarkdownFileNotFoundToast(
+  toast: ReturnType<typeof useToast>,
+  t: ReturnType<typeof useTranslation>["t"],
+  token: string,
+): void {
+  toast.show(t("common.errors.noFileFound", { token }), {
+    variant: "error",
+    testID: "assistant-file-link-not-found-toast",
+  });
+}
+
+interface FilePreviewMarkdownAstNode extends ASTNode {
+  sourceInfo?: string;
+}
+
+function createMarkdownFilePreviewRules(): RenderRules {
+  return {
+    ...createSharedMarkdownRules(),
+    link: (
+      node: FilePreviewMarkdownAstNode,
+      children: React.ReactNode[],
+      _parent: ASTNode[],
+      styles: MarkdownStyles,
+    ) => (
+      <AssistantMarkdownLink
+        key={node.key}
+        source={getMarkdownFilePreviewLinkSource(node)}
+        style={styles.link}
+      >
+        {React.Children.map(children, (child) => {
+          if (!React.isValidElement(child)) return child;
+          const childProps = child.props as { style?: StyleProp<TextStyle> };
+          return React.cloneElement(child, {
+            style: [childProps.style, { color: styles.link.color }],
+          } as Partial<{ style: StyleProp<TextStyle> }>);
+        })}
+      </AssistantMarkdownLink>
+    ),
+  };
+}
+
+function getMarkdownFilePreviewLinkSource(node: FilePreviewMarkdownAstNode) {
+  return {
+    href: typeof node.attributes?.href === "string" ? node.attributes.href : "",
+    text: getMarkdownNodeText(node),
+    markup: node.markup,
+    sourceInfo: node.sourceInfo,
+    sourceType: "file-preview" as const,
+  };
+}
+
+function getMarkdownNodeText(node: ASTNode): string {
+  if (!node.children.length) {
+    return node.content ?? "";
+  }
+  return node.children.map(getMarkdownNodeText).join("");
 }
 
 function isRenderablePreview(preview: ExplorerFile | null, path: string): boolean {
@@ -545,6 +697,7 @@ function FilePanePresentation({
   onPreviewModeChange,
   lineCount,
   editable,
+  supportsLsp,
   disconnectedMessage,
   errorMessage,
   isLoading,
@@ -552,6 +705,8 @@ function FilePanePresentation({
   location,
   navigationRevision,
   imagePreviewUri,
+  markdownParser,
+  markdownRules,
 }: {
   serverId: string;
   client: DaemonClient | null;
@@ -566,6 +721,7 @@ function FilePanePresentation({
   onPreviewModeChange?: (mode: "preview" | "source") => void;
   lineCount?: number;
   editable: boolean;
+  supportsLsp: boolean;
   disconnectedMessage: string;
   errorMessage: string | null;
   isLoading: boolean;
@@ -573,6 +729,8 @@ function FilePanePresentation({
   location: WorkspaceFileLocation;
   navigationRevision: number;
   imagePreviewUri: string | null;
+  markdownParser: ReturnType<typeof MarkdownIt>;
+  markdownRules: RenderRules;
 }) {
   if (!client && readTarget) {
     return (
@@ -589,6 +747,7 @@ function FilePanePresentation({
       <EditableFilePane
         key={`${serverId}:${readTarget.cwd}:${readTarget.path}`}
         client={client}
+        serverId={serverId}
         cwd={readTarget.cwd}
         path={readTarget.path}
         preview={preview as TextExplorerFile}
@@ -602,6 +761,9 @@ function FilePanePresentation({
         isMobile={isMobile}
         location={location}
         navigationRevision={navigationRevision}
+        supportsLsp={supportsLsp}
+        markdownParser={markdownParser}
+        markdownRules={markdownRules}
       />
     );
   }
@@ -637,6 +799,8 @@ function FilePanePresentation({
         location={location}
         navigationRevision={navigationRevision}
         imagePreviewUri={imagePreviewUri}
+        markdownParser={markdownParser}
+        markdownRules={markdownRules}
       />
     </View>
   );
@@ -644,6 +808,7 @@ function FilePanePresentation({
 
 function EditableFilePane({
   client,
+  serverId,
   cwd,
   path,
   preview,
@@ -657,8 +822,12 @@ function EditableFilePane({
   isMobile,
   location,
   navigationRevision,
+  supportsLsp,
+  markdownParser,
+  markdownRules,
 }: {
   client: DaemonClient;
+  serverId: string;
   cwd: string;
   path: string;
   preview: TextExplorerFile;
@@ -672,13 +841,41 @@ function EditableFilePane({
   isMobile: boolean;
   location: WorkspaceFileLocation;
   navigationRevision: number;
+  supportsLsp: boolean;
+  markdownParser: ReturnType<typeof MarkdownIt>;
+  markdownRules: RenderRules;
 }) {
   const { settings } = useAppSettings();
   const { t } = useTranslation();
   const [cursor, setCursor] = useState({ line: 1, column: 1 });
   const [vimMode, setVimMode] = useState<string | null>(settings.vimKeybindings ? "NORMAL" : null);
+  const language = lspLanguageForFile(filename);
+  const lspPreferences = useWorkspaceLspPreferences({ serverId, cwd, language });
+  const [lspStatus, setLspStatus] = useState<EditorLspStatus>("connecting");
+  const lspLease = useMemo(
+    () =>
+      supportsLsp && language && lspPreferences.enabled
+        ? acquireEditorLspSession({
+            client,
+            cwd,
+            path,
+            content: preview.content ?? "",
+            onStatus: setLspStatus,
+          })
+        : null,
+    [client, cwd, language, lspPreferences.enabled, path, preview.content, supportsLsp],
+  );
+  const lspSession = lspLease?.session ?? null;
+  const lspSessionRef = useRef(lspSession);
+  const formatOnSaveRef = useRef(lspPreferences.formatOnSave);
+  lspSessionRef.current = lspSession;
+  formatOnSaveRef.current = lspPreferences.formatOnSave;
   const session = useMemo(
     () => ({
+      async prepareWrite(content: string) {
+        const activeLsp = lspSessionRef.current;
+        return activeLsp && formatOnSaveRef.current ? activeLsp.format(content) : content;
+      },
       write(input: { content: string; expectedModifiedAt: string; expectedRevision?: string }) {
         return client.writeFile({ cwd, path, ...input });
       },
@@ -708,6 +905,7 @@ function EditableFilePane({
     return () => model.disconnectFileObservations();
   }, [liveFile, model]);
   const snapshot = useSyncExternalStore(model.subscribe, model.getSnapshot, model.getSnapshot);
+  const { openFileInWorkspace } = usePaneContext();
   const suspendPendingSave = useCallback(() => model.suspendAutosave(), [model]);
   usePublishPanelInstanceAttributes({ modified: snapshot.modified, suspendPendingSave });
   const theme = UnistylesRuntime.getTheme();
@@ -739,6 +937,14 @@ function EditableFilePane({
   );
 
   useEffect(() => () => model.dispose(), [model]);
+  useEffect(() => {
+    if (!lspSession) {
+      setLspStatus("connecting");
+      return;
+    }
+    void lspSession.open(model.getSnapshot().content);
+    return () => lspLease?.release();
+  }, [lspLease, lspSession, model]);
 
   const handleReload = useCallback(() => {
     if (!snapshot.modified) {
@@ -764,6 +970,30 @@ function EditableFilePane({
     retrying: retryingRead,
   });
   const handleVimModeChange = useCallback((nextMode: string | null) => setVimMode(nextMode), []);
+  const handleOpenDefinition = useCallback(
+    (definition: WorkspaceLspLocation) => {
+      let absolutePath: string;
+      try {
+        const url = new URL(definition.uri);
+        if (url.protocol !== "file:") return;
+        absolutePath = decodeURIComponent(url.pathname).replace(/^\/([A-Za-z]:\/)/, "$1");
+      } catch {
+        return;
+      }
+      const paths = resolveWorkspaceFilePaths({ path: absolutePath, workspaceRoot: cwd });
+      if (!paths?.relativePath) return;
+      openFileInWorkspace({
+        disposition: "main",
+        location: {
+          path: paths.relativePath,
+          lineStart: definition.range.start.line + 1,
+          lineEnd: definition.range.end.line + 1,
+          openMode: "source",
+        },
+      });
+    },
+    [cwd, openFileInWorkspace],
+  );
   const renderedPreview = useMemo<ExplorerFile>(
     () => ({
       ...preview,
@@ -775,6 +1005,28 @@ function EditableFilePane({
     [preview, snapshot.content, snapshot.version],
   );
   const showSource = mode !== "preview";
+  const lspBar = useMemo(
+    () =>
+      supportsLsp && language
+        ? {
+            enabled: lspPreferences.enabled,
+            formatOnSave: lspPreferences.formatOnSave,
+            language,
+            status: lspStatus,
+            onEnabledChange: lspPreferences.setEnabled,
+            onFormatOnSaveChange: lspPreferences.setFormatOnSave,
+          }
+        : undefined,
+    [
+      language,
+      lspPreferences.enabled,
+      lspPreferences.formatOnSave,
+      lspPreferences.setEnabled,
+      lspPreferences.setFormatOnSave,
+      lspStatus,
+      supportsLsp,
+    ],
+  );
 
   return (
     <View style={styles.container} testID="workspace-file-pane">
@@ -787,6 +1039,7 @@ function EditableFilePane({
         cursor={showSource ? cursor : undefined}
         vimMode={showSource ? vimMode : null}
         conflict={conflict}
+        lsp={lspBar}
         mode={mode}
         onModeChange={onModeChange}
       />
@@ -798,6 +1051,8 @@ function EditableFilePane({
           navigationRevision={navigationRevision}
           vimEnabled={settings.vimKeybindings}
           theme={visualTheme}
+          lspSession={lspSession}
+          onOpenDefinition={handleOpenDefinition}
           onCursorChange={setCursor}
           onVimModeChange={handleVimModeChange}
         />
@@ -810,6 +1065,8 @@ function EditableFilePane({
           location={location}
           navigationRevision={navigationRevision}
           imagePreviewUri={null}
+          markdownParser={markdownParser}
+          markdownRules={markdownRules}
         />
       )}
     </View>

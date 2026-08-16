@@ -146,7 +146,9 @@
       "id": "changes-source-navigation",
       "commitSubject": "feat(changes): add source search and navigation",
       "preservationFixes": [
-        "Share revision-safe LSP sessions with the editor and suppress stale buffers."
+        "Share revision-safe LSP sessions with the editor and suppress stale buffers.",
+        "Anchor LSP positions to current-side source text and pause Changes intelligence while the workspace is dirty.",
+        "Preserve the exact terminal-newline form when rebuilding paged source for shared LSP sessions."
       ],
       "permanent": false,
       "intent": "Search complete current-side changed files and use shared language intelligence directly from Changes.",
@@ -155,17 +157,28 @@
         "A hidden text match fully expands its file and is centered; deleted, binary and oversized files remain filename-searchable.",
         "Search and expansion use the active comparison's exact content revision and reject stale source.",
         "LSP hover, F12, Command/Ctrl-click and the Electron definition context menu operate only on current-side lines and share a reference-counted document session with the editor.",
+        "LSP columns are measured from rendered source text in unified, wrapped and split layouts; review and line-number gutters, hunk controls, deleted-side lines and other chrome are ineligible.",
+        "Eligible non-deleted C/C++ and Python headers acquire visibility-scoped sessions and show off, connecting, provider, unavailable, error and retry states without format-on-save controls.",
         "An unsaved editor buffer that differs from the diff revision suppresses Changes LSP instead of replacing the editor's document version.",
+        "Full-source reconstruction verifies terminal-newline candidates against the exact content revision before sharing a document session.",
+        "Live workspace dirtiness releases every Changes lease, disables its global control and all navigation triggers, preserves the workspace preference, and resumes visible files when clean.",
         "Changes exposes the same opt-in workspace language-intelligence preference and explicit old-host state as the editor."
       ],
       "contracts": [
-        "npx vitest run packages/app/src/git/changes-search.test.ts packages/app/src/file-pane/editor/lsp-session-pool.test.ts --bail=1"
+        "npx vitest run packages/app/src/git/changes-search.test.ts packages/app/src/git/changes-lsp-controller.test.ts packages/app/src/git/revisioned-source.test.ts packages/app/src/file-pane/editor/lsp-session-pool.test.ts --bail=1",
+        "npm run test:browser --workspace=@getpaseo/app -- src/git/changes-lsp-target.browser.test.ts --bail=1",
+        "npm run test:e2e --workspace=@getpaseo/app -- e2e/browser/changes-pane.spec.ts --grep 'Changes LSP'"
       ],
       "paths": [
         "packages/app/src/git/changes-search.ts",
+        "packages/app/src/git/changes-lsp-controller.ts",
+        "packages/app/src/git/changes-lsp-target.web.ts",
+        "packages/app/src/git/revisioned-source.ts",
+        "packages/app/src/git/use-diff-context-expansion.ts",
         "packages/app/src/git/use-changes-lsp.web.ts",
         "packages/app/src/git/diff-pane.tsx",
-        "packages/app/src/file-pane/editor/lsp-session-pool.ts"
+        "packages/app/src/file-pane/editor/lsp-session-pool.ts",
+        "packages/app/src/file-pane/lsp-status-menu.tsx"
       ]
     },
     {

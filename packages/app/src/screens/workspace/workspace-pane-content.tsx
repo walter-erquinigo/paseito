@@ -27,6 +27,7 @@ export interface BuildWorkspacePaneContentModelInput {
   onOpenTab: (target: WorkspaceTabDescriptor["target"]) => void;
   onCloseCurrentTab: () => void;
   onRetargetCurrentTab: (target: WorkspaceTabDescriptor["target"]) => void;
+  onFocusCurrentTab?: () => void;
   onOpenWorkspaceFile: (request: WorkspaceFileOpenRequest) => void;
   onOpenImportSheet: () => void;
 }
@@ -39,6 +40,7 @@ export function buildWorkspacePaneContentModel({
   onOpenTab,
   onCloseCurrentTab,
   onRetargetCurrentTab,
+  onFocusCurrentTab,
   onOpenWorkspaceFile,
   onOpenImportSheet,
 }: BuildWorkspacePaneContentModelInput): WorkspacePaneContentModel {
@@ -57,6 +59,7 @@ export function buildWorkspacePaneContentModel({
       openTab: onOpenTab,
       closeCurrentTab: onCloseCurrentTab,
       retargetCurrentTab: onRetargetCurrentTab,
+      focusCurrentTab: onFocusCurrentTab,
       openFileInWorkspace: onOpenWorkspaceFile,
       openImportSheet: onOpenImportSheet,
     },
@@ -80,6 +83,7 @@ export function WorkspacePaneContent({
   const openTab = useStableEvent(paneContextValue.openTab);
   const closeCurrentTab = useStableEvent(paneContextValue.closeCurrentTab);
   const retargetCurrentTab = useStableEvent(paneContextValue.retargetCurrentTab);
+  const focusCurrentTab = useStableEvent(paneContextValue.focusCurrentTab ?? (() => undefined));
   const openFileInWorkspace = useStableEvent(paneContextValue.openFileInWorkspace);
   const openImportSheet = useStableEvent(paneContextValue.openImportSheet);
   const stablePaneContextValue = useMemo(
@@ -92,6 +96,7 @@ export function WorkspacePaneContent({
       openTab,
       closeCurrentTab,
       retargetCurrentTab,
+      focusCurrentTab,
       openFileInWorkspace,
       openImportSheet,
     }),
@@ -106,6 +111,7 @@ export function WorkspacePaneContent({
       paneContextValue.target,
       paneContextValue.workspaceId,
       retargetCurrentTab,
+      focusCurrentTab,
     ],
   );
   const paneFocusValue = useMemo(

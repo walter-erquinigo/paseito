@@ -5,6 +5,7 @@ import {
   useLayoutEffect,
   useMemo,
   useRef,
+  useSyncExternalStore,
   memo,
   type ReactElement,
   type ReactNode,
@@ -52,6 +53,9 @@ import { buildDiffFlatItems, sumHeightsBefore, type DiffFlatItem } from "@/git/d
 import type { ChangesSearchMatch, ChangesSearchResult } from "@/git/changes-search";
 import type { ChangesLspController } from "@/git/use-changes-lsp";
 import { useChangesLsp } from "@/git/use-changes-lsp";
+import { LspStatusMenu } from "@/file-pane/lsp-status-menu";
+import { lspLanguageForFile } from "@/file-pane/editor/lsp-preferences";
+import { resolveChangesLspTarget, type ChangesLspTarget } from "@/git/changes-lsp-target";
 import { buildDiffTree, collectDirPaths, compressSingleChildChains } from "@/git/diff-tree";
 import { DiffFolderRow } from "@/git/diff-folder-row";
 import {
@@ -195,6 +199,8 @@ interface HighlightedTextProps {
   testID?: string;
 }
 
+const DIFF_SOURCE_TEXT_DATASET = { paseitoDiffSourceText: "true" } as const;
+
 type WrappedWebTextStyle = TextStyle & {
   whiteSpace?: "pre" | "pre-wrap";
   overflowWrap?: "normal" | "anywhere";
@@ -248,7 +254,7 @@ function HighlightedText({
   );
 
   return (
-    <Text style={containerStyle} testID={testID}>
+    <Text style={containerStyle} testID={testID} dataSet={DIFF_SOURCE_TEXT_DATASET}>
       {keyedTokens.map(({ key, token }) => (
         <HighlightedToken key={key} token={token} />
       ))}
@@ -282,6 +288,7 @@ interface DiffFileSectionProps {
   onToggleReviewed?: (path: string) => void;
   onExpandFile?: (path: string) => void;
   isExpandingFile?: boolean;
+  lsp?: ChangesLspController;
   testID?: string;
 }
 
@@ -373,45 +380,6 @@ interface ChangesSearchState {
   selectedIndex: number;
   truncated: boolean;
   error: string | null;
-}
-
-interface ChangesLspTarget {
-  filePath: string;
-  lineNumber: number;
-  column: number;
-  clientX: number;
-  clientY: number;
-}
-
-function resolveChangesLspTarget(event: MouseEvent): ChangesLspTarget | null {
-  if (!(event.target instanceof Node)) return null;
-  const element = event.target instanceof Element ? event.target : event.target.parentElement;
-  const row = element?.closest<HTMLElement>(
-    "[data-paseito-diff-file][data-paseito-diff-current-line]",
-  );
-  if (!row) return null;
-  const filePath = row.dataset.paseitoDiffFile;
-  const lineNumber = Number(row.dataset.paseitoDiffCurrentLine);
-  if (!filePath || !Number.isSafeInteger(lineNumber)) return null;
-  const documentWithCaret = document as Document & {
-    caretPositionFromPoint?(x: number, y: number): { offsetNode: Node; offset: number } | null;
-    caretRangeFromPoint?(x: number, y: number): Range | null;
-  };
-  const caretPosition = documentWithCaret.caretPositionFromPoint?.(event.clientX, event.clientY);
-  const caretRange = documentWithCaret.caretRangeFromPoint?.(event.clientX, event.clientY);
-  const offsetNode = caretPosition?.offsetNode ?? caretRange?.startContainer;
-  const offset = caretPosition?.offset ?? caretRange?.startOffset;
-  if (!offsetNode || offset === undefined || !row.contains(offsetNode)) return null;
-  const prefix = document.createRange();
-  prefix.selectNodeContents(row);
-  prefix.setEnd(offsetNode, offset);
-  return {
-    filePath,
-    lineNumber,
-    column: prefix.toString().length + 1,
-    clientX: event.clientX,
-    clientY: event.clientY,
-  };
 }
 
 const CLOSED_CHANGES_SEARCH: ChangesSearchState = {
@@ -880,7 +848,11 @@ function DiffCodeContent({
     );
   }
   return (
-    <Text style={textStyle} testID={textTestID}>
+    <Text
+      style={textStyle}
+      testID={textTestID}
+      dataSet={line.type === "header" ? undefined : DIFF_SOURCE_TEXT_DATASET}
+    >
       {formatDiffContentText(line.content)}
     </Text>
   );
@@ -1029,7 +1001,9 @@ function SplitTextLine({
           wrapLines={wrapLines}
         />
       ) : (
-        <Text style={textStyle}>{formatDiffContentText(line?.content)}</Text>
+        <Text style={textStyle} dataSet={line ? DIFF_SOURCE_TEXT_DATASET : undefined}>
+          {formatDiffContentText(line?.content)}
+        </Text>
       )}
     </LongPressableLine>
   );
@@ -1191,7 +1165,9 @@ function SplitDiffLine({
           wrapLines={wrapLines}
         />
       ) : (
-        <Text style={textStyle}>{formatDiffContentText(line?.content)}</Text>
+        <Text style={textStyle} dataSet={line ? DIFF_SOURCE_TEXT_DATASET : undefined}>
+          {formatDiffContentText(line?.content)}
+        </Text>
       )}
     </LongPressableLine>
   );
@@ -1706,6 +1682,7 @@ const DiffFileHeader = memo(function DiffFileHeader({
   onToggleReviewed,
   onExpandFile,
   isExpandingFile = false,
+  lsp,
   testID,
 }: DiffFileSectionProps) {
   const dragSourceRef = useWorkspaceFileDragSource({
@@ -1829,6 +1806,7 @@ const DiffFileHeader = memo(function DiffFileHeader({
         {file.isDeleted && <FileChangeIcon change="deleted" />}
       </View>
       <View style={styles.fileHeaderRight}>
+        {lsp?.supported ? <ChangesFileLspStatus file={file} lsp={lsp} /> : null}
         <DiffFileExpandButton
           file={file}
           isExpanding={isExpandingFile}
@@ -1912,6 +1890,38 @@ const DiffFileHeader = memo(function DiffFileHeader({
     </View>
   );
 });
+
+function ChangesFileLspStatus({ file, lsp }: { file: ParsedDiffFile; lsp: ChangesLspController }) {
+  const language = lspLanguageForFile(file.path);
+  const subscribe = useCallback(
+    (listener: () => void) => lsp.subscribeFile(file.path, listener),
+    [file.path, lsp],
+  );
+  const getSnapshot = useCallback(() => lsp.getFileSnapshot(file.path), [file.path, lsp]);
+  const snapshot = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+  useEffect(() => {
+    if (!language || file.isDeleted || !lsp.supported) return;
+    return lsp.acquireVisibleFile(file.path);
+  }, [file.isDeleted, file.path, language, lsp]);
+  const retry = useCallback(() => lsp.retry(file.path), [file.path, lsp]);
+  if (!language || file.isDeleted || !lsp.supported) return null;
+  return (
+    <LspStatusMenu
+      enabled={lsp.preferenceEnabled}
+      snapshot={snapshot}
+      language={language}
+      standaloneClangdSupported={lsp.standaloneClangdSupported}
+      pausedReason={
+        lsp.pauseReason === "dirty-worktree"
+          ? "Language intelligence is paused while this workspace has uncommitted changes. Clean the workspace to resume."
+          : null
+      }
+      onEnabledChange={lsp.setEnabled}
+      onRetry={retry}
+      testIDPrefix={`changes-lsp-${file.path}`}
+    />
+  );
+}
 
 function DiffFileExpandButton({
   file,
@@ -2638,6 +2648,7 @@ interface DiffOptionsMenuProps {
   wrapLines: boolean;
   lspSupported?: boolean;
   lspEnabled?: boolean;
+  lspPaused?: boolean;
   onRefresh?: () => void;
   onToggleHideWhitespace: () => void;
   onToggleWrapLines: () => void;
@@ -2655,6 +2666,7 @@ export function DiffOptionsMenu({
   wrapLines,
   lspSupported,
   lspEnabled = false,
+  lspPaused = false,
   onRefresh,
   onToggleHideWhitespace,
   onToggleWrapLines,
@@ -2669,6 +2681,9 @@ export function DiffOptionsMenu({
     ? t("workspace.git.diff.scrollLongLines")
     : t("workspace.git.diff.wrapLongLines");
   const optionsLabel = t("workspace.git.diff.options");
+  let lspLabel = t("workspace.git.diff.lspUpdateHost");
+  if (lspPaused) lspLabel = "LSP paused — clean the workspace to resume";
+  else if (lspSupported) lspLabel = t("workspace.git.diff.lsp");
   let refreshLabel = t("workspace.git.diff.refresh");
   if (isRefreshing) {
     refreshLabel = t("workspace.git.diff.refreshing");
@@ -2724,12 +2739,12 @@ export function DiffOptionsMenu({
         </DropdownMenuItem>
         {onToggleLsp ? (
           <DropdownMenuItem
-            disabled={!lspSupported}
+            disabled={!lspSupported || lspPaused}
             selected={lspEnabled}
             testID={`${testIDPrefix}-toggle-lsp`}
             onSelect={onToggleLsp}
           >
-            {lspSupported ? t("workspace.git.diff.lsp") : t("workspace.git.diff.lspUpdateHost")}
+            {lspLabel}
           </DropdownMenuItem>
         ) : null}
         {refreshSupported && onRefresh ? (
@@ -3780,6 +3795,7 @@ export function SharedDiffView({ files, displayPreferences, mode }: SharedDiffVi
     return () => {
       hoverSequence += 1;
       clearHoverTimer();
+      setLspHover(null);
       surface.removeEventListener("mousemove", handleMouseMove);
       surface.removeEventListener("click", handleClick);
       surface.removeEventListener("contextmenu", handleContextMenu);
@@ -4289,6 +4305,7 @@ export function SharedDiffView({ files, displayPreferences, mode }: SharedDiffVi
             onToggleReviewed={fileReviews ? handleToggleReviewed : undefined}
             onExpandFile={onExpandFile ? handleManualExpandFile : undefined}
             isExpandingFile={expandingFilePaths.has(item.file.path)}
+            lsp={changesLsp}
             testID={`diff-file-${item.fileIndex}`}
           />
         );
@@ -4329,6 +4346,7 @@ export function SharedDiffView({ files, displayPreferences, mode }: SharedDiffVi
       navigationHighlight,
       fileReviews,
       workspaceFileDragScope,
+      changesLsp,
       textMetricsStyle,
       viewMode,
       wrapLines,
@@ -4379,6 +4397,7 @@ export function SharedDiffView({ files, displayPreferences, mode }: SharedDiffVi
       lineReviewPresentation,
       navigationHighlight,
       fileReviews,
+      changesLsp,
       workspaceFileDragScope,
     }),
     [
@@ -4390,6 +4409,7 @@ export function SharedDiffView({ files, displayPreferences, mode }: SharedDiffVi
       lineReviewPresentation,
       navigationHighlight,
       fileReviews,
+      changesLsp,
       typographyKey,
       viewMode,
       workspaceFileDragScope,
@@ -5163,6 +5183,7 @@ export function GitDiffPane({
     serverId,
     cwd,
     active: enabled !== false && !changesTabOpen,
+    dirty: hasUncommittedChanges,
     loadSource: contextExpansion.loadSource,
     onOpenDefinition: handleOpenLspDefinition,
   });
@@ -5387,6 +5408,7 @@ export function GitDiffPane({
                 wrapLines={wrapLines}
                 lspSupported={changesLsp.supported}
                 lspEnabled={changesLsp.preferenceEnabled}
+                lspPaused={changesLsp.paused}
                 onRefresh={handleRefresh}
                 onToggleHideWhitespace={handleToggleHideWhitespace}
                 onToggleWrapLines={handleToggleWrapLines}

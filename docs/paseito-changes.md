@@ -111,7 +111,10 @@ Editor LSP now prefers the existing Lens broker but no longer depends on Lens fo
 When Lens is absent, the daemon starts one shared clangd for the workspace and automatically uses a
 compilation database from either the workspace root or its `build` directory. Hovering a token shows
 clangd information, while `F12`, Command/Ctrl-click, and the Electron **Go to Definition /
-Declaration** context-menu action open the source definition in Paseito.
+Declaration** context-menu action open the source definition in Paseito. Eligible file headers show
+the shared session's provider and retry state without adding format-on-save controls. Changes pauses
+these sessions and actions whenever the live workspace has uncommitted changes, then resumes visible
+files after the workspace is clean.
 
 ## Markdown preview source links
 

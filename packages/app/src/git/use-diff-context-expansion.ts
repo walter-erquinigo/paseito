@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ParsedDiffFile } from "@getpaseo/protocol/messages";
+import { CryptoDigestAlgorithm, digestStringAsync } from "expo-crypto";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
 import {
   type DiffContextRegion,
@@ -8,6 +9,7 @@ import {
   withExpandedDiffContext,
 } from "@/git/diff-context-expansion";
 import { searchChangesFiles } from "@/git/changes-search";
+import { reconstructRevisionedSource } from "@/git/revisioned-source";
 
 type ExpandDirection = "up" | "down" | "all";
 
@@ -238,7 +240,12 @@ export function useDiffContextExpansion(input: {
       const file = input.files.find((candidate) => candidate.path === filePath);
       if (!file) return null;
       const lines = await loadSourceLines(file);
-      return lines ? lines.join("\n") : null;
+      if (!lines || !file.revision) return null;
+      return reconstructRevisionedSource({
+        lines,
+        revision: file.revision,
+        digest: (content) => digestStringAsync(CryptoDigestAlgorithm.SHA256, content),
+      });
     },
     [input.files, loadSourceLines],
   );

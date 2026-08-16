@@ -221,6 +221,8 @@ instead of editing the list by hand.
   - Fix: Require the review-state capability in packaged and remote releases.
 - `changes-source-navigation` — Search complete current-side changed files and use shared language intelligence directly from Changes.
   - Fix: Share revision-safe LSP sessions with the editor and suppress stale buffers.
+  - Fix: Anchor LSP positions to current-side source text and pause Changes intelligence while the workspace is dirty.
+  - Fix: Preserve the exact terminal-newline form when rebuilding paged source for shared LSP sessions.
 - `changes-file-tree-navigator` — Navigate large working diffs from a dedicated right-hand file tree in the full desktop Changes tab.
   - Fix: Keep repeated file selections monotonic and independent from manual diff scrolling.
 - `lens-shared-editor-lsp` — Provide editor intelligence through the existing Lens language server when available and a daemon-owned clangd fallback for ordinary C/C++ workspaces.
