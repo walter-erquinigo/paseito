@@ -26,7 +26,7 @@ export interface HubInitScaffold {
 }
 
 export function hubLoginResumeCommand(step: "connect" | "init", origin: string): string {
-  return step === "connect" ? `paseo hub connect ${origin}` : "paseo hub init";
+  return step === "connect" ? `paseito hub connect ${origin}` : "paseito hub init";
 }
 
 export function resolveHubInitConnection(

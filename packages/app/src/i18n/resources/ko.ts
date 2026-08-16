@@ -1161,7 +1161,7 @@ export const ko: TranslationResources = {
       discord: "Discord",
       github: "GitHub 이슈 만들기",
       whatsNew: "새로운 소식",
-      appName: "Paseo",
+      appName: "Paseito",
     },
     sections: {
       sessions: "기록",
@@ -1454,6 +1454,7 @@ export const ko: TranslationResources = {
       },
     },
     integrations: {
+      ...en.desktop.integrations,
       cli: {
         statusFailed: "CLI 설치 상태를 확인할 수 없습니다.",
         installFailed: "Paseo CLI를 설치할 수 없습니다.",

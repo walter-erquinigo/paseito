@@ -115,18 +115,18 @@ function printNextSteps(pairingUrl: string | null, paseoHome: string, richUi: bo
   const daemonLogPath = path.join(paseoHome, "daemon.log");
   const nextStepsLines = [
     pairingUrl
-      ? "1. Open Paseo and scan the QR code above, or paste the pairing link."
-      : "1. Open Paseo and connect to your daemon.",
-    "2. Web app: https://app.paseo.sh",
-    "3. Desktop app: https://github.com/getpaseo/paseo/releases/latest",
-    "4. Docs: https://paseo.sh/docs",
-    `5. Example: paseo run --home ${JSON.stringify(paseoHome)} --output-schema schema.json "extract fields"`,
+      ? "1. Open Paseito and scan the QR code above, or paste the pairing link."
+      : "1. Open Paseito and connect to your daemon.",
+    "2. Source: https://github.com/walter-erquinigo/paseito",
+    "3. Desktop app: build and install the verified local checkout",
+    "4. Upstream docs: https://paseo.sh/docs",
+    `5. Example: paseito run --home ${JSON.stringify(paseoHome)} --output-schema schema.json "extract fields"`,
   ];
   const quickReferenceLines = [
-    "1. paseo --help",
-    `2. paseo ls --home ${JSON.stringify(paseoHome)}`,
-    `3. paseo run --home ${JSON.stringify(paseoHome)} "your prompt"`,
-    `4. paseo status --home ${JSON.stringify(paseoHome)}`,
+    "1. paseito --help",
+    `2. paseito ls --home ${JSON.stringify(paseoHome)}`,
+    `3. paseito run --home ${JSON.stringify(paseoHome)} "your prompt"`,
+    `4. paseito status --home ${JSON.stringify(paseoHome)}`,
     `5. Daemon logs: ${daemonLogPath}`,
   ];
 
@@ -152,7 +152,7 @@ export function onboardCommand(): Command {
   return addLocalDaemonOptions(new Command("onboard"))
     .description("Run first-time setup, start daemon, and print pairing instructions")
     .option("--listen <listen>", "Listen target (host:port, port, or unix socket path)")
-    .option("--port <port>", "Port to listen on (default: 6767)")
+    .option("--port <port>", "Port to listen on (default: 6769)")
     .option("--relay", "Enable relay connection without prompting")
     .option("--no-relay", "Disable relay connection")
     .option("--no-mcp", "Disable the Agent MCP HTTP endpoint")
@@ -233,7 +233,7 @@ function persistSetupChoices(paseoHome: string, options: OnboardOptions): void {
 export async function runOnboard(options: OnboardOptions): Promise<void> {
   const richUi = process.stdin.isTTY && process.stdout.isTTY;
   if (richUi) {
-    intro("Welcome to Paseo");
+    intro("Welcome to Paseito");
   }
 
   if (options.listen && options.port) {
@@ -248,7 +248,7 @@ export async function runOnboard(options: OnboardOptions): Promise<void> {
   const alreadyRunning = await readDaemonInstance(paseoHome);
   persistSetupChoices(paseoHome, options);
   if (richUi) {
-    renderNote(paseoHome, "Paseo home");
+    renderNote(paseoHome, "Paseito home");
   }
 
   const voiceEnabled = await resolveAndPersistVoice(paseoHome, options);
@@ -275,7 +275,7 @@ export async function runOnboard(options: OnboardOptions): Promise<void> {
   if (options.relay === false) {
     log.message("Relay pairing skipped because --no-relay was provided.");
     printNextSteps(null, paseoHome, richUi);
-    if (richUi) outro("Paseo daemon is running.");
+    if (richUi) outro("Paseito daemon is running.");
     return;
   }
 
@@ -289,7 +289,7 @@ export async function runOnboard(options: OnboardOptions): Promise<void> {
     if (!shouldEnable) {
       printDirectConnectionGuidance();
       printNextSteps(null, paseoHome, richUi);
-      if (richUi) outro("Paseo daemon is running.");
+      if (richUi) outro("Paseito daemon is running.");
       return;
     }
     pairing = await resolveLocalPairingOffer({ paseoHome, enableRelay: true });
@@ -300,7 +300,7 @@ export async function runOnboard(options: OnboardOptions): Promise<void> {
     log.warn("Relay pairing URL is unavailable for this daemon configuration.");
     printNextSteps(null, paseoHome, richUi);
     if (richUi) {
-      outro("Paseo daemon is running.");
+      outro("Paseito daemon is running.");
     }
     return;
   }
@@ -314,6 +314,6 @@ export async function runOnboard(options: OnboardOptions): Promise<void> {
   );
   printNextSteps(pairing.url, paseoHome, richUi);
   if (richUi) {
-    outro("Paseo is ready!");
+    outro("Paseito is ready!");
   }
 }

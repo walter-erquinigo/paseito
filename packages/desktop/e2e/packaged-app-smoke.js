@@ -7,7 +7,7 @@ const { setTimeout: delay } = require("node:timers/promises");
 const { chromium } = require("playwright");
 const { extractFile } = require("@electron/asar");
 
-const EXECUTABLE_NAME = "Paseo";
+const EXECUTABLE_NAME = "Paseito";
 const SMOKE_TIMEOUT_MS = 60_000;
 const EXIT_TIMEOUT_MS = 10_000;
 const TERMINAL_CAPTURE_ATTEMPTS = 20;
@@ -54,14 +54,14 @@ function getExecutablePath(appPath) {
 
 function getCliShimPath(appPath) {
   if (process.platform === "darwin") {
-    return path.join(appPath, "Contents", "Resources", "bin", "paseo");
+    return path.join(appPath, "Contents", "Resources", "bin", "paseito");
   }
 
   if (process.platform === "win32") {
-    return path.join(appPath, "resources", "bin", "paseo.cmd");
+    return path.join(appPath, "resources", "bin", "paseito.cmd");
   }
 
-  return path.join(appPath, "resources", "bin", "paseo");
+  return path.join(appPath, "resources", "bin", "paseito");
 }
 
 function getMacMainExecutablePath(appPath) {
@@ -129,10 +129,10 @@ function createDefaultDaemonEnv(extraEnv) {
   };
 }
 
-function createIsolatedDesktopEnv({ home, listen, userData, cdpPort }) {
+function createIsolatedDesktopEnv({ home, daemonHome, listen, userData, cdpPort }) {
   return {
     ...createDefaultDaemonEnv({ HOME: home, USERPROFILE: home }),
-    PASEO_HOME: home,
+    PASEO_HOME: daemonHome,
     PASEO_LISTEN: listen,
     PASEO_ELECTRON_USER_DATA_DIR: userData,
     PASEO_ELECTRON_FLAGS: `--remote-debugging-address=127.0.0.1 --remote-debugging-port=${cdpPort}`,
@@ -437,13 +437,13 @@ async function waitForPackagedAppPage(browser, deadline) {
     const page = browser
       .contexts()
       .flatMap((context) => context.pages())
-      .find((candidate) => candidate.url().startsWith("paseo://app/"));
+      .find((candidate) => candidate.url().startsWith("paseito://app/"));
     if (page) {
       return page;
     }
     await delay(250);
   }
-  throw new Error("Timed out waiting for the packaged paseo://app/ renderer");
+  throw new Error("Timed out waiting for the packaged paseito://app/ renderer");
 }
 
 async function assertPackagedRendererLoaded(page, deadline) {
@@ -845,7 +845,9 @@ async function smokePackagedDesktopApp({
   await smokeColdCliDaemonStart({ appPath });
 
   const userData = createTempDir("paseo-smoke-user-data-");
-  const daemonHome = createTempDir("paseo-smoke-daemon-home-");
+  const home = createTempDir("paseo-smoke-profile-home-");
+  const daemonHome = path.join(home, ".paseito");
+  fs.mkdirSync(daemonHome);
   const daemonPort = await reserveLocalTcpPort();
   let cdpPort = await reserveLocalTcpPort();
   for (let attempt = 0; cdpPort === daemonPort && attempt < 10; attempt += 1) {
@@ -857,7 +859,8 @@ async function smokePackagedDesktopApp({
   const listen = `127.0.0.1:${daemonPort}`;
   configureIsolatedDaemonHome(daemonHome, listen);
   const env = createIsolatedDesktopEnv({
-    home: daemonHome,
+    home,
+    daemonHome,
     listen,
     userData,
     cdpPort,
@@ -949,7 +952,7 @@ async function smokePackagedDesktopApp({
     }
     releaseChildHandles(child);
     await removeTempDir(userData);
-    await removeTempDir(daemonHome);
+    await removeTempDir(home);
   }
 }
 
@@ -961,7 +964,7 @@ if (require.main === module) {
   const appIndex = process.argv.indexOf("--app");
   const appPath = appIndex >= 0 ? process.argv[appIndex + 1] : null;
   if (!appPath) {
-    process.stderr.write("Usage: node smoke-packaged-desktop-app.js --app <Paseo.app>\n");
+    process.stderr.write("Usage: node smoke-packaged-desktop-app.js --app <Paseito.app>\n");
     process.exit(2);
   }
 

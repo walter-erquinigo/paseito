@@ -1,4 +1,4 @@
-export const PASEO_BROWSER_PROFILE_PARTITION = "persist:paseo-browser";
+export const PASEO_BROWSER_PROFILE_PARTITION = "persist:paseito-browser";
 const LEGACY_BROWSER_ID_PATTERN =
   /^(?:[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}|\d{13,}-[0-9a-f]+)$/i;
 const MAX_LEGACY_BROWSER_PROFILES = 1000;

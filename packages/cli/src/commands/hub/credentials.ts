@@ -158,7 +158,7 @@ function isMissingFile(error: unknown): boolean {
 function invalidCredentialFile(): HubCommandError {
   return new HubCommandError(
     "HUB_CREDENTIALS_INVALID",
-    "Stored Hub login is invalid. Run `paseo hub login <origin>` to replace it.",
+    "Stored Hub login is invalid. Run `paseito hub login <origin>` to replace it.",
   );
 }
 
