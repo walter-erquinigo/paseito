@@ -1513,17 +1513,16 @@ async function dragExactAddedText(
     }),
   ]);
   if (!bodyBounds) throw new Error("Expanded diff body has no bounds");
-  const lineHeight = Math.round(metrics.fontSize * 1.5);
-  const gutterWidth = Math.max(2, String(1).length) * Math.ceil(metrics.fontSize * 0.62) + 12;
-  const textLeft = bodyBounds.x + gutterWidth + 8;
+  const gutter = await firstReviewGutterBounds(page, bodyBounds);
+  const textLeft = gutter.x + gutter.width + 8;
   await page.mouse.move(
     textLeft + offsets.startOffset * metrics.characterWidth + 1,
-    bodyBounds.y + lineHeight * 1.5,
+    gutter.y + gutter.height / 2,
   );
   await page.mouse.down();
   await page.mouse.move(
     textLeft + offsets.endOffset * metrics.characterWidth - 1,
-    bodyBounds.y + lineHeight * 1.5,
+    gutter.y + gutter.height / 2,
     { steps: 8 },
   );
   await page.mouse.up();
@@ -1554,10 +1553,13 @@ async function dragAddedTextRange(
   ]);
   if (!bounds) throw new Error("Expanded diff body has no bounds");
   const lineHeight = Math.round(metrics.fontSize * 1.5);
-  const gutterWidth = 2 * Math.ceil(metrics.fontSize * 0.62) + 12;
+  const gutter = await firstReviewGutterBounds(
+    page,
+    bounds,
+    input.side === "right" ? "right" : "unified",
+  );
   const columnWidth = input.side ? bounds.width / 2 : bounds.width;
-  const columnLeft = input.side === "right" ? bounds.x + columnWidth : bounds.x;
-  const availableWidth = columnWidth - gutterWidth - 16;
+  const availableWidth = columnWidth - gutter.width - 16;
   const charactersPerFragment = Math.max(1, Math.floor(availableWidth / metrics.characterWidth));
   const fragmentsBefore = (line: number) =>
     input.wrapped
@@ -1573,12 +1575,12 @@ async function dragAddedTextRange(
     const localOffset = input.wrapped ? offset % charactersPerFragment : offset;
     return {
       x:
-        columnLeft +
-        gutterWidth +
+        gutter.x +
+        gutter.width +
         8 +
         localOffset * metrics.characterWidth -
         (input.horizontalOffset ?? 0),
-      y: bounds.y + (1 + fragmentsBefore(line) + fragment + 0.5) * lineHeight,
+      y: gutter.y + gutter.height / 2 + (fragmentsBefore(line) + fragment) * lineHeight,
     };
   };
   const start = point(input.start);
@@ -1621,14 +1623,10 @@ async function readSelectionPaintSamples(
 
 async function dragWithinFirstAddedGrapheme(page: Page): Promise<void> {
   const bodyBounds = await page.getByTestId("diff-file-0-body").boundingBox();
-  const fontSize = await page
-    .getByTestId("git-diff-canvas")
-    .evaluate((element) => Number.parseFloat(getComputedStyle(element).fontSize));
   if (!bodyBounds) throw new Error("Expanded diff body has no bounds");
-  const lineHeight = Math.round(fontSize * 1.5);
-  const gutterWidth = 2 * Math.ceil(fontSize * 0.62) + 12;
-  const x = bodyBounds.x + gutterWidth + 10;
-  const y = bodyBounds.y + lineHeight * 1.5;
+  const gutter = await firstReviewGutterBounds(page, bodyBounds);
+  const x = gutter.x + gutter.width + 10;
+  const y = gutter.y + gutter.height / 2;
   await page.mouse.move(x, y);
   await page.mouse.down();
   await page.mouse.move(x + 5, y, { steps: 3 });
@@ -1637,13 +1635,10 @@ async function dragWithinFirstAddedGrapheme(page: Page): Promise<void> {
 
 async function dragFirstAddedLineIntoHeader(page: Page): Promise<void> {
   const bodyBounds = await page.getByTestId("diff-file-0-body").boundingBox();
-  const fontSize = await page
-    .getByTestId("git-diff-canvas")
-    .evaluate((element) => Number.parseFloat(getComputedStyle(element).fontSize));
   if (!bodyBounds) throw new Error("Expanded diff body has no bounds");
-  const lineHeight = Math.round(fontSize * 1.5);
+  const gutter = await firstReviewGutterBounds(page, bodyBounds);
   const x = bodyBounds.x + 60;
-  await page.mouse.move(x, bodyBounds.y + lineHeight * 1.5);
+  await page.mouse.move(x, gutter.y + gutter.height / 2);
   await page.mouse.down();
   await page.mouse.move(x, bodyBounds.y - 10, { steps: 4 });
   await page.mouse.up();
