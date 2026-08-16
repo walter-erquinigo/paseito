@@ -179,7 +179,7 @@ export function WelcomeScreen({ onHostAdded }: WelcomeScreenProps) {
   }, [router]);
 
   const handleOpenPaseoSite = useCallback(() => {
-    void openExternalUrl("https://paseo.sh");
+    void openExternalUrl("https://github.com/walter-erquinigo/paseito");
   }, []);
 
   const handleOpenSettings = useCallback(() => {
