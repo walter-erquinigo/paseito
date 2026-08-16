@@ -28,7 +28,7 @@ function extractWorktreeName(path: string): string {
 }
 
 export function resolvePaseoHomePath(): string {
-  return process.env.PASEO_HOME ?? join(homedir(), ".paseo");
+  return process.env.PASEO_HOME ?? join(homedir(), ".paseito");
 }
 
 export function resolvePaseoWorktreesDir(): string {
@@ -71,7 +71,7 @@ export async function runLsCommand(
     const error: CommandError = {
       code: "DAEMON_NOT_RUNNING",
       message: `Cannot connect to daemon at ${host}: ${message}`,
-      details: "Start the daemon with: paseo daemon start",
+      details: "Start the daemon with: paseito daemon start",
     };
     throw error;
   }
