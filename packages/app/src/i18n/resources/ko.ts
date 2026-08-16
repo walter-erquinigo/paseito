@@ -1,4 +1,4 @@
-import type { TranslationResources } from "./en";
+import { en, type TranslationResources } from "./en";
 
 export const ko: TranslationResources = {
   common: {
@@ -99,6 +99,13 @@ export const ko: TranslationResources = {
       sendMessage: "메시지 보내기",
       queue: "대기열",
       send: "보내기",
+    },
+    queue: {
+      ...en.composer.queue,
+      steer: "조종",
+      steeringConversation: "진행 중인 작업 조종",
+      steerHint: "진행 중인 실행에 안내로 즉시 보냅니다",
+      replaceFallbackHint: "이 제공자는 이 메시지로 진행 중인 실행을 다시 시작합니다",
     },
     cancel: {
       cancelingAgent: "에이전트 취소 중",
@@ -844,6 +851,7 @@ export const ko: TranslationResources = {
         },
       },
       diff: {
+        ...en.workspace.git.diff,
         openChangesTab: "변경사항 탭 열기",
         closeChangesTab: "변경사항 탭 닫기",
         binaryFile: "바이너리 파일",
@@ -861,6 +869,8 @@ export const ko: TranslationResources = {
         showWhitespace: "공백 표시",
         scrollLongLines: "긴 줄 스크롤",
         wrapLongLines: "긴 줄 줄바꿈",
+        lsp: "언어 인텔리전스",
+        lspUpdateHost: "언어 인텔리전스를 사용하려면 호스트 업데이트",
         collapseAll: "모든 파일 접기",
         expandAll: "모든 파일 펼치기",
         collapseAllFolders: "모든 폴더 축소",
@@ -877,6 +887,13 @@ export const ko: TranslationResources = {
         diffMode: "Diff 모드",
         uncommitted: "커밋되지 않음",
         committed: "커밋됨",
+        search: {
+          placeholder: "변경된 파일 검색",
+          loading: "검색 중…",
+          noMatches: "일치 항목 없음",
+          submit: "Enter 검색 · n/N 이동 · Esc 닫기",
+          failed: "검색 실패",
+        },
         branchUnknown: "알 수 없음",
         base: "기준",
         newFile: "신규",
@@ -1016,7 +1033,7 @@ export const ko: TranslationResources = {
       discord: "Discord",
       github: "GitHub 이슈 만들기",
       whatsNew: "새로운 소식",
-      appName: "Paseo",
+      version: "Paseito {{version}}",
     },
     sections: {
       sessions: "기록",
@@ -1307,6 +1324,7 @@ export const ko: TranslationResources = {
     },
   },
   rootError: {
+    kicker: "문제가 발생했습니다",
     title: "Paseo에 문제가 발생했습니다.",
     body: "앱을 다시 로드해 보세요. 이런 일이 계속 발생하면 신고할 때 아래 세부정보를 포함하세요.",
     details: "세부",
@@ -1721,6 +1739,10 @@ export const ko: TranslationResources = {
     accessibility: "컨텍스트 윈도우 {{percentage}}% 사용됨",
   },
   review: {
+    composer: {
+      comment: "댓글",
+      codeChange: "코드 변경",
+    },
     comment: {
       add: "리뷰 댓글 추가",
       edit: "리뷰 댓글 편집",
@@ -1731,6 +1753,13 @@ export const ko: TranslationResources = {
       cancelAccessibility: "리뷰 댓글 취소",
       save: "댓글",
       saveAccessibility: "리뷰 댓글 저장",
+    },
+    suggestion: {
+      ...en.review.suggestion,
+      start: "편집 제안",
+      edit: "제안 편집",
+      delete: "제안 삭제",
+      save: "제안 추가",
     },
   },
   settings: {
@@ -1825,13 +1854,13 @@ export const ko: TranslationResources = {
       defaultSend: {
         label: "기본 전송",
         descriptions: {
-          interrupt:
-            "에이전트가 실행 중일 때 Enter는 중단합니다. Command/Ctrl+Enter는 대기열에 추가합니다.",
+          steer:
+            "에이전트가 실행 중일 때 Enter는 조종합니다. Command/Ctrl+Enter는 대기열에 추가합니다.",
           queue:
             "에이전트가 실행 중일 때 Enter는 대기열에 추가합니다. Command/Ctrl+Enter는 제출합니다.",
         },
         options: {
-          interrupt: "중단",
+          steer: "조종",
           queue: "대기열",
         },
       },
@@ -2038,6 +2067,7 @@ export const ko: TranslationResources = {
         toggleFocusMode: "집중 모드 토글",
         cycleTheme: "테마 순환",
         focusMessageInput: "메시지 입력란에 포커스",
+        focusChanges: "변경 사항에 포커스",
         cycleAgentMode: "에이전트 모드 전환",
         toggleVoiceMode: "음성 모드 토글",
         startStopDictation: "받아쓰기 시작/중지",

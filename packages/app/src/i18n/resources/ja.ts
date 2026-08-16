@@ -100,6 +100,12 @@ export const ja: TranslationResources = {
       queue: "キュー",
       send: "送信",
     },
+    queue: {
+      steer: "指示変更",
+      steeringConversation: "実行中の作業に指示を送信中",
+      steerHint: "実行中の作業への指示として今すぐ送信",
+      replaceFallbackHint: "このプロバイダーでは、このメッセージで実行中の作業を再開します",
+    },
     cancel: {
       cancelingAgent: "エージェントをキャンセル中",
       stopAgent: "エージェントを停止",
@@ -806,7 +812,7 @@ export const ja: TranslationResources = {
           updateCurrent: "このブランチはすでに{{baseRef}}と最新の状態のため、更新は利用できません",
           mergePrNoGithub: "GitHubが接続されていないため、PRのマージは現在利用できません",
           archiveNotWorktree:
-            "このワークスペースはPaseoワークツリーとして作成されていないため、アーカイブはここでは利用できません",
+            "このワークスペースはPaseitoワークツリーとして作成されていないため、アーカイブはここでは利用できません",
           mergePrNoForge: "{{brand}}が接続されていないため、{{noun}}のマージは現在利用できません",
           mergePrMissing: "プルリクエストがまだないため、PRのマージは利用できません",
           mergePrDraft: "プルリクエストがまだドラフトのため、PRのマージは利用できません",
@@ -850,6 +856,14 @@ export const ja: TranslationResources = {
       diff: {
         openChangesTab: "変更タブを開く",
         closeChangesTab: "変更タブを閉じる",
+        fileNavigator: "ファイル",
+        showFileNavigator: "ファイルナビゲーターを表示",
+        hideFileNavigator: "ファイルナビゲーターを非表示",
+        fileStatus: {
+          added: "追加",
+          deleted: "削除",
+          modified: "変更",
+        },
         binaryFile: "バイナリファイル",
         tooLarge: "差分が大きすぎて表示できません",
         previewTooLargeTitle: "この差分は大きすぎるためプレビューできません",
@@ -865,8 +879,11 @@ export const ja: TranslationResources = {
         showWhitespace: "空白を表示",
         scrollLongLines: "長い行をスクロール",
         wrapLongLines: "長い行を折り返す",
+        lsp: "言語インテリジェンス",
+        lspUpdateHost: "言語インテリジェンスを使用するにはホストを更新",
         collapseAll: "すべて折りたたむ",
         expandAll: "すべて展開",
+        expandUnreviewed: "未レビューのファイルを展開し、レビュー済みのファイルを折りたたむ",
         collapseAllFolders: "すべてのフォルダを折りたたむ",
         expandAllFolders: "すべてのフォルダを展開",
         refreshing: "更新中",
@@ -881,6 +898,43 @@ export const ja: TranslationResources = {
         diffMode: "差分モード",
         uncommitted: "未コミット",
         committed: "コミット済み",
+        baseSelectorLabel: "コミット済みの変更を {{baseRef}} と比較",
+        baseSelectorTitle: "比較するブランチ",
+        baseSelectorSearch: "ブランチを検索",
+        baseSelectorEmpty: "一致するブランチがありません",
+        baseSelectorMissing: "ブランチ {{baseRef}} は存在しません",
+        baseSelectorError: "比較ブランチを変更できませんでした",
+        baseSelectorUpdateHost: "ベースブランチを選択するにはホストを更新してください",
+        markReviewed: "レビュー済みにする",
+        markUnreviewed: "未レビューにする",
+        markFileReviewed: "{{file}}をレビュー済みにする",
+        markFileUnreviewed: "{{file}}を未レビューにする",
+        markAllReviewed: "すべてのファイルをレビュー済みにする",
+        clearAllReviewed: "レビュー済みをすべて解除",
+        reviewUpdateHost: "ファイルをレビュー済みにするにはホストを更新してください",
+        reviewBranchRequired:
+          "ファイルをレビュー済みにするにはブランチをチェックアウトしてください",
+        markLineReviewed: "{{line}}行目をレビュー済みにする",
+        markLineUnreviewed: "{{line}}行目を未レビューにする",
+        editLineUnavailable: "この行は内蔵エディターで開けません",
+        noUncheckedLines: "この方向に未レビューの行はありません",
+        lineReviewShortcuts:
+          "m / , 承認して移動 · Shift+M / Shift+. コンテキスト表示 · Space 切替 · E 編集 · U 元に戻す · Esc 解除",
+        context: {
+          hiddenLines: "非表示の {{count}} 行",
+          expandUp: "上の20行を表示",
+          expandDown: "下の20行を表示",
+          expandAll: "非表示の行をすべて表示",
+          expandFile: "ファイル全体を展開",
+          failedToExpand: "非表示の行を読み込めませんでした",
+        },
+        search: {
+          placeholder: "変更ファイルを検索",
+          loading: "検索中…",
+          noMatches: "一致なし",
+          submit: "Enter 検索 · n/N 移動 · Esc 閉じる",
+          failed: "検索に失敗しました",
+        },
         branchUnknown: "不明",
         base: "ベース",
         newFile: "新規",
@@ -1020,7 +1074,7 @@ export const ja: TranslationResources = {
       discord: "Discord",
       github: "GitHub Issueを作成",
       whatsNew: "新着情報",
-      appName: "Paseo",
+      version: "Paseito {{version}}",
     },
     sections: {
       sessions: "履歴",
@@ -1152,7 +1206,7 @@ export const ja: TranslationResources = {
   },
   desktop: {
     quitting: {
-      title: "Paseoを終了中...",
+      title: "Paseitoを終了中...",
       detail: "ローカルデーモンを停止中。",
     },
     daemon: {
@@ -1166,20 +1220,20 @@ export const ja: TranslationResources = {
       },
       management: {
         title: "組み込みデーモンを管理",
-        hint: "Paseoが組み込みデーモンを起動・停止できるようにする",
+        hint: "Paseitoが組み込みデーモンを起動・停止できるようにする",
         pauseTitle: "組み込みデーモンを一時停止",
         pauseMessage:
           "これにより組み込みデーモンが即座に停止します。組み込みデーモンに接続されている実行中のエージェントとターミナルが停止されます。",
         pauseAndStop: "一時停止して停止",
         registrationFailed:
-          "組み込みデーモンは起動しましたが、Paseoがlocalhostの接続を保存できませんでした。デーモン管理をオフにしてから再度オンにするか、localhostを手動で追加してください。",
+          "組み込みデーモンは起動しましたが、Paseitoがlocalhostの接続を保存できませんでした。デーモン管理をオフにしてから再度オンにするか、localhostを手動で追加してください。",
         pausedStopFailed:
-          "組み込みデーモン管理は一時停止されましたが、Paseoがデーモンを停止できませんでした。",
+          "組み込みデーモン管理は一時停止されましたが、Paseitoがデーモンを停止できませんでした。",
         updateFailed: "組み込みデーモン管理を更新できません。",
       },
       keepRunning: {
         title: "終了後もデーモンを実行し続ける",
-        hint: "Paseoを終了してもデーモンは実行し続けます",
+        hint: "Paseitoを終了してもデーモンは実行し続けます",
       },
       logs: {
         title: "ログファイル",
@@ -1194,7 +1248,7 @@ export const ja: TranslationResources = {
       fullStatus: {
         title: "詳細ステータス",
         modalTitle: "デーモンのステータス",
-        hint: "`paseo daemon status`を実行して出力を表示します",
+        hint: "`paseito daemon status`を実行して出力を表示します",
         view: "ステータスを表示",
         copied: "ステータスをクリップボードにコピーしました。",
         fetchFailed: "デーモンのステータスの取得に失敗しました: {{message}}",
@@ -1247,7 +1301,7 @@ export const ja: TranslationResources = {
     },
     rosetta: {
       title: "Apple Siliconビルドをダウンロード",
-      runningIntel: "Apple Silicon上のRosettaでPaseoのIntelビルドを実行しています。",
+      runningIntel: "Apple Silicon上のRosettaでPaseitoのIntelビルドを実行しています。",
       highCpu:
         "これにより高いCPU使用率が発生します。修正するにはApple Siliconビルドをダウンロードしてください。",
       download: "ダウンロード",
@@ -1290,7 +1344,7 @@ export const ja: TranslationResources = {
         microphone: "マイクのステータスはまだ確認されていません。",
       },
       testNotification: {
-        title: "Paseo通知テスト",
+        title: "Paseito通知テスト",
         body: "これが見えれば、デスクトップ通知は機能しています。",
         notDelivered: "通知が届きませんでした。システム設定 > 通知を確認してください。",
         failed: "通知の送信に失敗しました。",
@@ -1299,7 +1353,7 @@ export const ja: TranslationResources = {
     integrations: {
       cli: {
         statusFailed: "CLIのインストール状態を確認できません。",
-        installFailed: "Paseo CLIをインストールできません。",
+        installFailed: "Paseito CLIをインストールできません。",
       },
       skills: {
         statusFailed: "オーケストレーションスキルのステータスを確認できません。",
@@ -1311,7 +1365,8 @@ export const ja: TranslationResources = {
     },
   },
   rootError: {
-    title: "Paseo で問題が発生しました。",
+    kicker: "問題が発生しました",
+    title: "Paseito で問題が発生しました。",
     body: "アプリを再読み込みするにはもう一度お試しください。繰り返し発生する場合は、以下の詳細を添えて報告してください。",
     details: "詳細",
   },
@@ -1405,7 +1460,7 @@ export const ja: TranslationResources = {
     },
   },
   onboarding: {
-    title: "Paseoへようこそ",
+    title: "Paseitoへようこそ",
     subtitle: "始めるにはコンピューターに接続してください",
     actions: {
       settings: "設定",
@@ -1485,7 +1540,7 @@ export const ja: TranslationResources = {
     },
     direct: {
       title: "直接接続",
-      helper: "Paseoサーバーのアドレスを入力してください。",
+      helper: "Paseitoサーバーのアドレスを入力してください。",
       fields: {
         host: "ホスト",
         port: "ポート",
@@ -1576,7 +1631,7 @@ export const ja: TranslationResources = {
         "リレーを使わない場合は、TCP、Tailscale、または別の VPN で直接接続してください。QR コードは作成されません。",
       updateRequired: "Paseo Desktop からリレーを有効にするにはホストを更新してください。",
       unavailable: "ペアリングオファーが利用できません。",
-      hint: "スマートフォンのPaseoでこのQRコードをスキャンするか、以下のリンクをコピーしてください。",
+      hint: "スマートフォンのPaseitoでこのQRコードをスキャンするか、以下のリンクをコピーしてください。",
       qrUnavailable: "QRコードが利用できません。",
       qrAccessibility: "ペアリング QR コード",
       retry: "再試行",
@@ -1609,7 +1664,7 @@ export const ja: TranslationResources = {
   serviceUrl: {
     title: "サービスURLを開く",
     message: "{{url}}を開きますか？",
-    inPaseo: "Paseoで",
+    inPaseo: "Paseitoで",
     externalBrowser: "外部ブラウザ",
     dontAskAgain: "次回から確認しない",
   },
@@ -1707,8 +1762,8 @@ export const ja: TranslationResources = {
       other: "その他のツールを{{count}}回使用",
     },
     paseoCalls: {
-      one: "Paseoを{{count}}回呼び出し",
-      other: "Paseoを{{count}}回呼び出し",
+      one: "Paseitoを{{count}}回呼び出し",
+      other: "Paseitoを{{count}}回呼び出し",
     },
     and: "および",
   },
@@ -1727,6 +1782,10 @@ export const ja: TranslationResources = {
     accessibility: "コンテキストウィンドウ{{percentage}}%使用",
   },
   review: {
+    composer: {
+      comment: "コメント",
+      codeChange: "コード変更",
+    },
     comment: {
       add: "レビューコメントを追加",
       edit: "レビューコメントを編集",
@@ -1737,6 +1796,23 @@ export const ja: TranslationResources = {
       cancelAccessibility: "レビューコメントをキャンセル",
       save: "コメント",
       saveAccessibility: "レビューコメントを保存",
+    },
+    suggestion: {
+      start: "編集を提案",
+      edit: "提案を編集",
+      delete: "提案を削除",
+      save: "提案を追加",
+      replacement: "提案する置換内容",
+      note: "提案メモ",
+      notePlaceholder: "任意の説明",
+      lines: "{{start}}～{{end}}行",
+      stale: "古い提案 — 送信前に更新してください",
+      deleteLines: "選択した行を削除",
+      addLineAbove: "上の行を追加",
+      addLineBelow: "下の行を追加",
+      rangeHidden: "この範囲を選択する前に非表示の行を展開してください",
+      rangeTooLarge: "提案に含められるのは最大200行です",
+      rangeInvalid: "同じファイルとリビジョンの現在側の行を選択してください",
     },
   },
   settings: {
@@ -1831,11 +1907,11 @@ export const ja: TranslationResources = {
       defaultSend: {
         label: "デフォルトの送信",
         descriptions: {
-          interrupt: "エージェント実行中、Enterで中断します。Command/Ctrl+Enterでキューに追加。",
+          steer: "エージェント実行中、Enterで指示を変更します。Command/Ctrl+Enterでキューに追加。",
           queue: "エージェント実行中、Enterでキューに追加します。Command/Ctrl+Enterで送信。",
         },
         options: {
-          interrupt: "中断",
+          steer: "指示変更",
           queue: "キュー",
         },
       },
@@ -1844,7 +1920,7 @@ export const ja: TranslationResources = {
         description: "実行中のスクリプトからURLを開く場所",
         options: {
           ask: "確認する",
-          inApp: "Paseoで",
+          inApp: "Paseitoで",
           external: "外部ブラウザ",
         },
       },
@@ -1928,7 +2004,7 @@ export const ja: TranslationResources = {
         label: "アプリの更新",
         readyToInstall: "インストール準備完了: {{version}}",
         installTitle: "デスクトップの更新をインストール",
-        installMessage: "このコンピューターのPaseoを更新します",
+        installMessage: "このコンピューターのPaseitoを更新します",
         installConfirm: "更新をインストール",
         update: "更新",
         updateTo: "{{version}}に更新",
@@ -2043,6 +2119,7 @@ export const ja: TranslationResources = {
         toggleFocusMode: "フォーカスモードを切り替え",
         cycleTheme: "テーマを順に切り替え",
         focusMessageInput: "メッセージ入力にフォーカス",
+        focusChanges: "変更にフォーカス",
         cycleAgentMode: "エージェントモードを順に切り替え",
         toggleVoiceMode: "音声モードを切り替え",
         startStopDictation: "音声入力を開始/停止",
@@ -2073,11 +2150,11 @@ export const ja: TranslationResources = {
         title: "オーケストレーションスキル",
         description: "エージェントがCLI経由でオーケストレーションできるようにします。",
         updateAvailable: "更新が利用可能",
-        updateTitle: "Paseoスキルを更新しますか？",
+        updateTitle: "Paseitoスキルを更新しますか？",
         updateFallback: "バンドルされたスキルをマシンに同期します。",
-        uninstallTitle: "Paseoスキルをアンインストールしますか？",
+        uninstallTitle: "Paseitoスキルをアンインストールしますか？",
         uninstallMessage:
-          "~/.agents、~/.claude、~/.codexからすべてのPaseoオーケストレーションスキルを削除します。",
+          "~/.agents、~/.claude、~/.codexからすべてのPaseitoオーケストレーションスキルを削除します。",
         choose: "スキルを選択",
         chooseAll: "すべてのスキル",
         chooseAllHint:
@@ -2177,9 +2254,9 @@ export const ja: TranslationResources = {
         title: "オーケストレーション",
         unavailable: "オーケストレーションを管理するにはこのホストに接続してください",
         enableTools: {
-          title: "Paseoツールを有効にする",
+          title: "Paseitoツールを有効にする",
           hint: "エージェントがワークツリー、エージェント、スケジュールを管理できるようになります",
-          accessibilityLabel: "Paseoツールを有効にする",
+          accessibilityLabel: "Paseitoツールを有効にする",
         },
         systemPrompt: {
           title: "システムプロンプト",
@@ -2285,15 +2362,15 @@ export const ja: TranslationResources = {
             "このホストは接続されていません。再起動する前にオンラインになるまでお待ちください。",
           offlineTitle: "ホストオフライン",
           offlineMessage:
-            "このホストはオフラインです。Paseoが自動再接続します。再起動は、ホストがオンラインに戻ってから行ってください。",
+            "このホストはオフラインです。Paseitoが自動再接続します。再起動は、ホストがオンラインに戻ってから行ってください。",
           requestFailedTitle: "エラー",
           requestFailedMessage:
-            "再起動リクエストの送信に失敗しました。Paseoは自動的に再接続します。ホストがオンラインになったら再試行してください。",
+            "再起動リクエストの送信に失敗しました。Paseitoは自動的に再接続します。ホストがオンラインになったら再試行してください。",
           dialogFailedMessage: "再起動確認ダイアログを開けませんでした。",
         },
         update: {
           desktopManagedHint:
-            "このデーモンはPaseo Desktopによって管理されています。ホスト上のPaseo Desktopを更新してください。",
+            "このデーモンはPaseito Desktopによって管理されています。ホスト上のPaseito Desktopを更新してください。",
           title: "デーモンを更新",
           hint: "デーモンを最新バージョンに更新して再起動します",
           confirm: "更新",
@@ -2455,7 +2532,7 @@ export const ja: TranslationResources = {
         newScript: "新しいスクリプト",
         editScript: "{{name}}を編集",
         runAsService: "サービスとして実行",
-        serviceHint: "Paseoがプロセスを監督し、$PASEO_PORTを通じてポートを割り当てます",
+        serviceHint: "Paseitoがプロセスを監督し、$PASEO_PORTを通じてポートを割り当てます",
         actions: {
           add: "スクリプトを追加",
           edit: "編集",
@@ -2464,7 +2541,7 @@ export const ja: TranslationResources = {
       },
       metadata: {
         title: "メタデータ生成",
-        info: "Paseoがメタデータ生成に使うAIプロンプトへ追加する、プロジェクト固有の指示です。ブランチ名、コミット形式、PR形式など、チームの規約を反映するために使います。",
+        info: "Paseitoがメタデータ生成に使うAIプロンプトへ追加する、プロジェクト固有の指示です。ブランチ名、コミット形式、PR形式など、チームの規約を反映するために使います。",
         branchName: "ブランチ名",
         branchNamePlaceholder: "ブランチ名は feat/ または fix/ で始め、個人ブランチは mb/ にする",
         commitMessage: "コミットメッセージ",

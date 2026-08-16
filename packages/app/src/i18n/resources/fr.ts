@@ -102,6 +102,12 @@ export const fr: TranslationResources = {
       queue: "File d'attente",
       send: "Envoyer",
     },
+    queue: {
+      steer: "Rediriger",
+      steeringConversation: "Redirection du travail actif",
+      steerHint: "Envoyer maintenant comme instruction pour l'exécution active",
+      replaceFallbackHint: "Ce fournisseur redémarrera l'exécution active avec ce message",
+    },
     cancel: {
       cancelingAgent: "Agent d'annulation",
       stopAgent: "Agent d'arrêt",
@@ -820,7 +826,7 @@ export const fr: TranslationResources = {
           mergePrNoGithub:
             "La fusionPRn'est pas disponible pour le moment carGitHubn'est pas connecté",
           archiveNotWorktree:
-            "L'archive n'est pas disponible ici car cet espace de travail n'a pas été créé en tant qu'arbre de travailPaseo",
+            "L'archive n'est pas disponible ici car cet espace de travail n'a pas été créé en tant qu'arbre de travailPaseito",
           mergePrNoForge:
             "La fusion {{noun}} n'est pas disponible pour le moment car {{brand}} n'est pas connecté",
           mergePrMissing:
@@ -869,6 +875,14 @@ export const fr: TranslationResources = {
       diff: {
         openChangesTab: "Ouvrir l'onglet Modifications",
         closeChangesTab: "Fermer l'onglet Modifications",
+        fileNavigator: "Fichiers",
+        showFileNavigator: "Afficher le navigateur de fichiers",
+        hideFileNavigator: "Masquer le navigateur de fichiers",
+        fileStatus: {
+          added: "Ajouté",
+          deleted: "Supprimé",
+          modified: "Modifié",
+        },
         binaryFile: "Fichier binaire",
         tooLarge: "Diff trop grand pour être affiché",
         previewTooLargeTitle: "Ce diff est trop volumineux pour être prévisualisé",
@@ -884,8 +898,11 @@ export const fr: TranslationResources = {
         showWhitespace: "Afficher les espaces",
         scrollLongLines: "Faire défiler les longues lignes",
         wrapLongLines: "Enroulez les longues lignes",
+        lsp: "Intelligence du langage",
+        lspUpdateHost: "Mettez à jour l’hôte pour l’intelligence du langage",
         collapseAll: "Réduire tous les fichiers",
         expandAll: "Développer tous les fichiers",
+        expandUnreviewed: "Développer les fichiers non révisés et réduire les fichiers révisés",
         collapseAllFolders: "Réduire tous les dossiers",
         expandAllFolders: "Développer tous les dossiers",
         refreshing: "Rafraîchissant",
@@ -900,6 +917,42 @@ export const fr: TranslationResources = {
         diffMode: "Mode différentiel",
         uncommitted: "Non engagé",
         committed: "Engagé",
+        baseSelectorLabel: "Comparer les modifications validées à {{baseRef}}",
+        baseSelectorTitle: "Comparer à la branche",
+        baseSelectorSearch: "Rechercher des branches",
+        baseSelectorEmpty: "Aucune branche correspondante",
+        baseSelectorMissing: "La branche {{baseRef}} n’existe plus",
+        baseSelectorError: "Impossible de changer la branche de comparaison",
+        baseSelectorUpdateHost: "Mettez à jour l’hôte pour choisir une branche de base",
+        markReviewed: "Marquer comme révisé",
+        markUnreviewed: "Marquer comme non révisé",
+        markFileReviewed: "Marquer {{file}} comme révisé",
+        markFileUnreviewed: "Marquer {{file}} comme non révisé",
+        markAllReviewed: "Marquer tous les fichiers comme révisés",
+        clearAllReviewed: "Effacer tous les fichiers révisés",
+        reviewUpdateHost: "Mettez à jour l’hôte pour marquer les fichiers comme révisés",
+        reviewBranchRequired: "Basculez sur une branche pour marquer les fichiers comme révisés",
+        markLineReviewed: "Marquer la ligne {{line}} comme révisée",
+        markLineUnreviewed: "Marquer la ligne {{line}} comme non révisée",
+        editLineUnavailable: "Cette ligne ne peut pas être ouverte dans l’éditeur intégré",
+        noUncheckedLines: "Aucune ligne non cochée dans cette direction",
+        lineReviewShortcuts:
+          "m / , valider et avancer · Shift+M / Shift+. afficher le contexte · Espace basculer · E modifier · U annuler · Échap effacer",
+        context: {
+          hiddenLines: "{{count}} lignes masquées",
+          expandUp: "Afficher les 20 lignes précédentes",
+          expandDown: "Afficher les 20 lignes suivantes",
+          expandAll: "Afficher toutes les lignes masquées",
+          expandFile: "Développer le fichier entier",
+          failedToExpand: "Impossible de charger les lignes masquées",
+        },
+        search: {
+          placeholder: "Rechercher dans les fichiers modifiés",
+          loading: "Recherche…",
+          noMatches: "Aucun résultat",
+          submit: "Entrée recherche · n/N navigue · Échap ferme",
+          failed: "Échec de la recherche",
+        },
         branchUnknown: "Inconnu",
         base: "base",
         newFile: "Nouveau",
@@ -1039,7 +1092,7 @@ export const fr: TranslationResources = {
       discord: "Discord",
       github: "Créer un ticket GitHub",
       whatsNew: "Nouveautés",
-      appName: "Paseo",
+      version: "Paseito {{version}}",
     },
     sections: {
       sessions: "Historique",
@@ -1171,7 +1224,7 @@ export const fr: TranslationResources = {
   },
   desktop: {
     quitting: {
-      title: "QuitterPaseo...",
+      title: "QuitterPaseito...",
       detail: "Arrêt du démon local.",
     },
     daemon: {
@@ -1185,20 +1238,20 @@ export const fr: TranslationResources = {
       },
       management: {
         title: "Gérer le démon intégré",
-        hint: "LaissezPaseodémarrer et arrêter le démon intégré",
+        hint: "LaissezPaseitodémarrer et arrêter le démon intégré",
         pauseTitle: "Suspendre le démon intégré",
         pauseMessage:
           "Cela arrêtera immédiatement le démon intégré. Les agents en cours d'exécution et les terminaux connectés au démon intégré seront arrêtés.",
         pauseAndStop: "Pause et arrêt",
         registrationFailed:
-          "Built-in daemon started, but Paseo could not save the localhost connection. Toggle daemon management off and on again, or add localhost manually.",
+          "Built-in daemon started, but Paseito could not save the localhost connection. Toggle daemon management off and on again, or add localhost manually.",
         pausedStopFailed:
-          "La gestion du démon intégré a été suspendue, maisPaseon'a ​​pas pu arrêter le démon.",
+          "La gestion du démon intégré a été suspendue, maisPaseiton'a ​​pas pu arrêter le démon.",
         updateFailed: "Impossible de mettre à jour la gestion des démons intégrés.",
       },
       keepRunning: {
         title: "Laisser le démon fonctionner après avoir quitté",
-        hint: "Daemoncontinue de fonctionner lorsque vous quittezPaseo",
+        hint: "Daemoncontinue de fonctionner lorsque vous quittezPaseito",
       },
       logs: {
         title: "Fichier journal",
@@ -1213,7 +1266,7 @@ export const fr: TranslationResources = {
       fullStatus: {
         title: "Statut complet",
         modalTitle: "StatutDaemon",
-        hint: "Exécute`paseo daemon status`et affiche la sortie",
+        hint: "Exécute`paseito daemon status`et affiche la sortie",
         view: "Afficher l'état",
         copied: "Statut copié dans le presse-papiers.",
         fetchFailed: "Échec de la récupération de l'état du démon:{{message}}",
@@ -1268,7 +1321,7 @@ export const fr: TranslationResources = {
     },
     rosetta: {
       title: "Téléchargez la versionApple Silicon",
-      runningIntel: "Vous exécutez la versionInteldePaseosousRosettasurApple Silicon.",
+      runningIntel: "Vous exécutez la versionInteldePaseitosousRosettasurApple Silicon.",
       highCpu:
         "Cela entraîne une utilisation élevée du processeur. Téléchargez la versionApple Siliconpour le réparer.",
       download: "Télécharger",
@@ -1318,7 +1371,7 @@ export const fr: TranslationResources = {
         microphone: "L'état du microphone n'a pas encore été vérifié.",
       },
       testNotification: {
-        title: "Test de notificationPaseo",
+        title: "Test de notificationPaseito",
         body: "Si vous pouvez voir cela, les notifications sur le bureau fonctionnent.",
         notDelivered:
           "La notification n'a pas été délivrée. Vérifiez Paramètres système > Notifications.",
@@ -1328,7 +1381,7 @@ export const fr: TranslationResources = {
     integrations: {
       cli: {
         statusFailed: "Impossible de vérifier l'état de l'installation deCLI.",
-        installFailed: "Impossible d'installer lePaseoCLI.",
+        installFailed: "Impossible d'installer lePaseitoCLI.",
       },
       skills: {
         statusFailed: "Impossible de vérifier l'état des compétences d'orchestration.",
@@ -1341,7 +1394,8 @@ export const fr: TranslationResources = {
     },
   },
   rootError: {
-    title: "Paseo a rencontré un problème.",
+    kicker: "Une erreur s'est produite",
+    title: "Paseito a rencontré un problème.",
     body: "Réessayez pour recharger l'application. Si cela continue, joignez les détails ci-dessous au signalement.",
     details: "Détails",
   },
@@ -1436,7 +1490,7 @@ export const fr: TranslationResources = {
     },
   },
   onboarding: {
-    title: "Bienvenue surPaseo",
+    title: "Bienvenue surPaseito",
     subtitle: "Connectez votre ordinateur pour commencer",
     actions: {
       settings: "Paramètres",
@@ -1516,7 +1570,7 @@ export const fr: TranslationResources = {
     },
     direct: {
       title: "Connexion directe",
-      helper: "Saisissez l'adresse d'un serveurPaseo.",
+      helper: "Saisissez l'adresse d'un serveurPaseito.",
       fields: {
         host: "Host",
         port: "Port",
@@ -1607,7 +1661,7 @@ export const fr: TranslationResources = {
         "Sans relais, connectez-vous directement via TCP, Tailscale ou un autre VPN. Aucun code QR n’est créé.",
       updateRequired: "Mettez à jour l’hôte pour activer le relais depuis Paseo Desktop.",
       unavailable: "Offre de jumelage indisponible.",
-      hint: "Scannez ce codeQRavecPaseosur votre téléphone ou copiez le lien ci-dessous.",
+      hint: "Scannez ce codeQRavecPaseitosur votre téléphone ou copiez le lien ci-dessous.",
       qrUnavailable: "CodeQRindisponible.",
       qrAccessibility: "Code QR de couplage",
       retry: "Réessayer",
@@ -1640,7 +1694,7 @@ export const fr: TranslationResources = {
   serviceUrl: {
     title: "Service ouvertURL",
     message: "Ouvrir{{url}}?",
-    inPaseo: "DansPaseo",
+    inPaseo: "DansPaseito",
     externalBrowser: "Navigateur externe",
     dontAskAgain: "Ne demande plus",
   },
@@ -1738,8 +1792,8 @@ export const fr: TranslationResources = {
       other: "a utilisé {{count}} autres outils",
     },
     paseoCalls: {
-      one: "a appelé Paseo {{count}} fois",
-      other: "a appelé Paseo {{count}} fois",
+      one: "a appelé Paseito {{count}} fois",
+      other: "a appelé Paseito {{count}} fois",
     },
     and: "et",
   },
@@ -1758,6 +1812,10 @@ export const fr: TranslationResources = {
     accessibility: "Fenêtre contextuelle{{percentage}}% utilisé",
   },
   review: {
+    composer: {
+      comment: "Commentaire",
+      codeChange: "Modification du code",
+    },
     comment: {
       add: "Ajouter un commentaire",
       edit: "Modifier le commentaire de l'avis",
@@ -1768,6 +1826,23 @@ export const fr: TranslationResources = {
       cancelAccessibility: "Annuler le commentaire de révision",
       save: "Commentaire",
       saveAccessibility: "Enregistrer le commentaire de l'avis",
+    },
+    suggestion: {
+      start: "Suggérer une modification",
+      edit: "Modifier la suggestion",
+      delete: "Supprimer la suggestion",
+      save: "Ajouter la suggestion",
+      replacement: "Remplacement suggéré",
+      note: "Note de suggestion",
+      notePlaceholder: "Explication facultative",
+      lines: "Lignes {{start}}–{{end}}",
+      stale: "Suggestion obsolète — mettez-la à jour avant l’envoi",
+      deleteLines: "Supprimer les lignes sélectionnées",
+      addLineAbove: "Ajouter la ligne précédente",
+      addLineBelow: "Ajouter la ligne suivante",
+      rangeHidden: "Développez les lignes masquées avant de sélectionner cette plage",
+      rangeTooLarge: "Les suggestions peuvent contenir au maximum 200 lignes",
+      rangeInvalid: "Sélectionnez des lignes actuelles du même fichier et de la même révision",
     },
   },
   settings: {
@@ -1852,7 +1927,7 @@ export const fr: TranslationResources = {
         title: "Données du navigateur",
         siteData: "Cookies et données des sites",
         description:
-          "Les onglets du navigateur partagent les connexions et les données des sites dans Paseo.",
+          "Les onglets du navigateur partagent les connexions et les données des sites dans Paseito.",
         clear: "Effacer les données du navigateur",
         clearing: "Effacement...",
         confirmTitle: "Effacer les données du navigateur ?",
@@ -1863,13 +1938,13 @@ export const fr: TranslationResources = {
       defaultSend: {
         label: "Envoi par défaut",
         descriptions: {
-          interrupt:
-            "Lorsque l'agent est en cours d'exécution, Entrée interrompt. Commande/Ctrl+Entrée met en file d'attente.",
+          steer:
+            "Lorsque l'agent est en cours d'exécution, Entrée le redirige. Commande/Ctrl+Entrée met en file d'attente.",
           queue:
             "Lorsque l'agent est en cours d'exécution, Entrée met en file d'attente. Commande/Ctrl+Entrée envoie.",
         },
         options: {
-          interrupt: "Interrompre",
+          steer: "Rediriger",
           queue: "File d'attente",
         },
       },
@@ -1878,7 +1953,7 @@ export const fr: TranslationResources = {
         description: "Où ouvrir les URL à partir de scripts en cours d'exécution",
         options: {
           ask: "Demander",
-          inApp: "DansPaseo",
+          inApp: "DansPaseito",
           external: "Navigateur externe",
         },
       },
@@ -1963,7 +2038,7 @@ export const fr: TranslationResources = {
         label: "Mises à jour de l'application",
         readyToInstall: "Prêt à installer:{{version}}",
         installTitle: "Installer la mise à jour du bureau",
-        installMessage: "Cela met à jourPaseosur cet ordinateur",
+        installMessage: "Cela met à jourPaseitosur cet ordinateur",
         installConfirm: "Installer la mise à jour",
         update: "Mise à jour",
         updateTo: "Mise à jour vers{{version}}",
@@ -2078,6 +2153,7 @@ export const fr: TranslationResources = {
         toggleFocusMode: "Basculer le mode de mise au point",
         cycleTheme: "Thème du cycle",
         focusMessageInput: "Saisie du message de focus",
+        focusChanges: "Focus sur les modifications",
         cycleAgentMode: "Parcourir les modes de l'agent",
         toggleVoiceMode: "Changer le mode vocal",
         startStopDictation: "Démarrer la dictée/stop",
@@ -2108,11 +2184,11 @@ export const fr: TranslationResources = {
         title: "Compétences en orchestration",
         description: "Apprenez à vos agents à orchestrer via leCLI",
         updateAvailable: "Mise à jour disponible",
-        updateTitle: "Mettre à jour les compétencesPaseo?",
+        updateTitle: "Mettre à jour les compétencesPaseito?",
         updateFallback: "Synchronisez les compétences regroupées sur votre machine.",
-        uninstallTitle: "Désinstaller les compétencesPaseo?",
+        uninstallTitle: "Désinstaller les compétencesPaseito?",
         uninstallMessage:
-          "Supprime toutes les compétences d'orchestrationPaseode ~/.agents, ~/.claude, ~/.codex.",
+          "Supprime toutes les compétences d'orchestrationPaseitode ~/.agents, ~/.claude, ~/.codex.",
         choose: "Choisir les compétences",
         chooseAll: "Toutes les compétences",
         chooseAllHint:
@@ -2212,9 +2288,9 @@ export const fr: TranslationResources = {
         title: "Orchestration",
         unavailable: "Connectez-vous à cet hôte pour gérer l'orchestration",
         enableTools: {
-          title: "Activer les outilsPaseo",
+          title: "Activer les outilsPaseito",
           hint: "Les agents pourront gérer les arbres de travail, les agents et les horaires",
-          accessibilityLabel: "Injecter les outilsPaseo",
+          accessibilityLabel: "Injecter les outilsPaseito",
         },
         systemPrompt: {
           title: "Invite système",
@@ -2321,16 +2397,16 @@ export const fr: TranslationResources = {
             "Cet hôte n'est pas connecté. Attendez qu'il soit en ligne avant de redémarrer.",
           offlineTitle: "Hosthors ligne",
           offlineMessage:
-            "Cet hôte est hors ligne.Paseose reconnecte automatiquement: attendez qu'il soit de nouveau en ligne avant de redémarrer.",
+            "Cet hôte est hors ligne.Paseitose reconnecte automatiquement: attendez qu'il soit de nouveau en ligne avant de redémarrer.",
           requestFailedTitle: "Erreur",
           requestFailedMessage:
-            "Échec de l'envoi de la demande de redémarrage.Paseose reconnecte automatiquement - réessayez une fois que l'hôte apparaît comme en ligne.",
+            "Échec de l'envoi de la demande de redémarrage.Paseitose reconnecte automatiquement - réessayez une fois que l'hôte apparaît comme en ligne.",
           dialogFailedMessage:
             "Impossible d'ouvrir la boîte de dialogue de confirmation de redémarrage.",
         },
         update: {
           desktopManagedHint:
-            "Ce daemon est géré par Paseo Desktop. Mettez à jour Paseo Desktop sur l’hôte.",
+            "Ce daemon est géré par Paseito Desktop. Mettez à jour Paseito Desktop sur l’hôte.",
           title: "Update daemon",
           hint: "Update the daemon to the latest version and restart it",
           confirm: "Update",
@@ -2491,7 +2567,7 @@ export const fr: TranslationResources = {
         newScript: "Nouveau scénario",
         editScript: "Modifier{{name}}",
         runAsService: "Exécuter en tant que service",
-        serviceHint: "Paseosupervise le processus et attribue un port via $PASEO_PORT",
+        serviceHint: "Paseitosupervise le processus et attribue un port via $PASEO_PORT",
         actions: {
           add: "Ajouter un script",
           edit: "Modifier",
@@ -2500,7 +2576,7 @@ export const fr: TranslationResources = {
       },
       metadata: {
         title: "Génération de métadonnées",
-        info: "Instructions spécifiques au projet injectées dans les invites de l'IA quePaseoutilise pour générer des métadonnées: utilisez-les pour appliquer les conventions de votre équipe telles que la dénomination des branches, le style de validation ou le formatPR.",
+        info: "Instructions spécifiques au projet injectées dans les invites de l'IA quePaseitoutilise pour générer des métadonnées: utilisez-les pour appliquer les conventions de votre équipe telles que la dénomination des branches, le style de validation ou le formatPR.",
         branchName: "Noms des succursales",
         branchNamePlaceholder:
           "Préfixez les branches avec feat/ ou fix/, mb/ pour les branches personnelles",

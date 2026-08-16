@@ -3,7 +3,12 @@ import { resolve, dirname, basename, isAbsolute, relative } from "path";
 import { existsSync, realpathSync } from "fs";
 import { open as openFile, readFile, stat as statFile } from "fs/promises";
 import { TTLCache } from "@isaacs/ttlcache";
-import type { CheckoutCommit, CheckoutCommitFile } from "@getpaseo/protocol/messages";
+import type {
+  CheckoutCommit,
+  CheckoutCommitFile,
+  CheckoutDiffSearchRequest as CheckoutDiffSearchWireRequest,
+  CheckoutDiffSearchResponse,
+} from "@getpaseo/protocol/messages";
 import { parseGitHubRemoteIdentity, parseGitRemoteLocation } from "@getpaseo/protocol/git-remote";
 import { maxBase64EncryptedPlaintextByteLength } from "@getpaseo/relay";
 import type { Logger } from "pino";
@@ -922,6 +927,16 @@ export interface CheckoutDiffContextResult {
   hasMore: boolean;
   truncated?: boolean;
 }
+
+export type CheckoutDiffSearchRequest = Omit<
+  CheckoutDiffSearchWireRequest,
+  "type" | "cwd" | "requestId"
+>;
+
+export type CheckoutDiffSearchResult = Pick<
+  CheckoutDiffSearchResponse["payload"],
+  "matches" | "truncated"
+>;
 
 export interface MergeToBaseOptions {
   baseRef?: string;
@@ -3411,12 +3426,13 @@ async function resolveContextFileContent(
   compare: CheckoutDiffCompare,
   filePath: string,
   context?: CheckoutContext,
+  resolvedRefs?: CheckoutDiffRefs,
 ): Promise<string> {
   if (isAbsolute(filePath) || filePath.split(/[\\/]/).includes("..")) {
     throw new Error("Diff context path must stay within the repository");
   }
 
-  const refs = await resolveCheckoutDiffRefs(cwd, compare, context);
+  const refs = resolvedRefs ?? (await resolveCheckoutDiffRefs(cwd, compare, context));
   if (!refs) {
     throw new Error("No comparison base is available");
   }
@@ -3547,6 +3563,145 @@ export async function getCheckoutDiffContext(
     hasMore: offset + consumed < region.lineCount,
     ...(consumed < requestedCount ? { truncated: true } : {}),
   };
+}
+
+function searchMatchOffsets(value: string, query: string, caseSensitive: boolean): number[] {
+  const haystack = caseSensitive ? value : value.toLocaleLowerCase();
+  const needle = caseSensitive ? query : query.toLocaleLowerCase();
+  const offsets: number[] = [];
+  let offset = 0;
+  while (offset <= haystack.length - needle.length) {
+    const match = haystack.indexOf(needle, offset);
+    if (match < 0) break;
+    offsets.push(match);
+    offset = match + Math.max(1, needle.length);
+  }
+  return offsets;
+}
+
+function appendContentSearchMatches(input: {
+  filePath: string;
+  content: string;
+  query: string;
+  caseSensitive: boolean;
+  append: (match: CheckoutDiffSearchResult["matches"][number]) => boolean;
+}): boolean {
+  for (const [lineIndex, line] of splitContentLines(input.content).entries()) {
+    for (const offset of searchMatchOffsets(line, input.query, input.caseSensitive)) {
+      if (
+        input.append({
+          kind: "text",
+          filePath: input.filePath,
+          lineNumber: lineIndex + 1,
+          columnStart: offset + 1,
+          preview: line,
+        })
+      ) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+function assertDiffSearchSnapshot(
+  requested: CheckoutDiffSearchRequest["files"],
+  actual: readonly ParsedDiffFile[],
+): void {
+  if (requested.length !== actual.length) {
+    throw new Error("Changes changed while searching");
+  }
+  const requestedPaths = new Set(requested.map((file) => file.path));
+  if (
+    requestedPaths.size !== requested.length ||
+    actual.some((file) => !requestedPaths.has(file.path))
+  ) {
+    throw new Error("Changes changed while searching");
+  }
+  const actualByPath = new Map(actual.map((file) => [file.path, file] as const));
+  for (const expected of requested) {
+    const file = actualByPath.get(expected.path);
+    if (!file || (expected.expectedRevision && file.revision !== expected.expectedRevision)) {
+      throw new Error("Changes changed while searching");
+    }
+  }
+}
+
+export async function searchCheckoutDiff(
+  cwd: string,
+  request: CheckoutDiffSearchRequest,
+  context?: CheckoutContext,
+  snapshotFiles?: readonly ParsedDiffFile[],
+): Promise<CheckoutDiffSearchResult> {
+  const query = request.query.trim();
+  if (!query) return { matches: [], truncated: false };
+
+  let files = snapshotFiles;
+  if (!files) {
+    const diff = await getCheckoutDiff(
+      cwd,
+      { ...request.compare, includeStructured: true },
+      context,
+    );
+    if (diff.diffTooLarge || !diff.structured) {
+      throw new Error("Changes are too large to search");
+    }
+    files = diff.structured;
+  }
+  assertDiffSearchSnapshot(request.files, files);
+  const refs = await resolveCheckoutDiffRefs(cwd, request.compare, context);
+  if (!refs) {
+    throw new Error("No comparison base is available");
+  }
+
+  const caseSensitive = query !== query.toLocaleLowerCase();
+  const matches: CheckoutDiffSearchResult["matches"] = [];
+  const append = (match: CheckoutDiffSearchResult["matches"][number]): boolean => {
+    matches.push(match);
+    return matches.length >= request.limit;
+  };
+
+  const batchSize = 16;
+  for (let batchStart = 0; batchStart < files.length; batchStart += batchSize) {
+    const batch = files.slice(batchStart, batchStart + batchSize);
+    const contents = await Promise.all(
+      batch.map(async (file) => {
+        if (
+          file.isDeleted ||
+          file.status === "binary" ||
+          file.status === "too_large" ||
+          !file.revision
+        ) {
+          return null;
+        }
+        return resolveContextFileContent(cwd, request.compare, file.path, context, refs);
+      }),
+    );
+    for (const [fileIndex, file] of batch.entries()) {
+      for (const offset of searchMatchOffsets(file.path, query, caseSensitive)) {
+        if (append({ kind: "file", filePath: file.path, columnStart: offset + 1 })) {
+          return { matches, truncated: true };
+        }
+      }
+      const content = contents[fileIndex];
+      if (content === null) continue;
+      if (hashFileContent(content) !== file.revision) {
+        throw new Error("Changes changed while searching");
+      }
+      if (
+        appendContentSearchMatches({
+          filePath: file.path,
+          content,
+          query,
+          caseSensitive,
+          append,
+        })
+      ) {
+        return { matches, truncated: true };
+      }
+    }
+  }
+  return { matches, truncated: false };
 }
 
 export async function getCheckoutDiff(
