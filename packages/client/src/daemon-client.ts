@@ -108,6 +108,8 @@ import type {
   AgentSkillSelection,
   AgentSkillsStatus,
   AgentSkillsSaveResult,
+  WorkspaceLspRequest,
+  WorkspaceLspResult,
 } from "@getpaseo/protocol/messages";
 import type {
   AgentPermissionRequest,
@@ -341,6 +343,7 @@ export interface DaemonClientTrace {
 export interface SendMessageOptions {
   messageId?: string;
   activeTurnBehavior?: ActiveTurnBehavior;
+  activeRunBehavior?: "replace" | "steer";
   images?: Array<{ data: string; mimeType: string }>;
   attachments?: SendAgentMessageRequest["attachments"];
 }
@@ -913,6 +916,7 @@ function toTimeoutError(error: unknown, label: string, timeoutMs: number): Error
 const DEFAULT_RECONNECT_BASE_DELAY_MS = 1500;
 const DEFAULT_RECONNECT_MAX_DELAY_MS = 30000;
 const DEFAULT_SESSION_RPC_TIMEOUT_MS = 60_000;
+const WORKSPACE_LSP_RPC_TIMEOUT_MS = 30_000;
 const PUSH_TOKEN_REVOCATION_TIMEOUT_MS = 2_000;
 const DEFAULT_CONNECT_TIMEOUT_MS = 15_000;
 const DEFAULT_LIVENESS_TIMEOUT_MS = 5000;
@@ -3049,6 +3053,7 @@ export class DaemonClient {
       text,
       ...(messageId ? { messageId } : {}),
       ...(options?.activeTurnBehavior ? { activeTurnBehavior: options.activeTurnBehavior } : {}),
+      ...(options?.activeRunBehavior ? { activeRunBehavior: options.activeRunBehavior } : {}),
       ...(options?.images ? { images: options.images } : {}),
       ...(options?.attachments ? { attachments: options.attachments } : {}),
     });
@@ -3791,6 +3796,14 @@ export class DaemonClient {
     });
   }
 
+  async checkoutAmendCommit(
+    cwd: string,
+  ): Promise<CorrelatedResponsePayload<"checkout.commit.amend.response">> {
+    return this.sendNamespacedCorrelatedSessionRequest<"checkout.commit.amend.response">({
+      message: { type: "checkout.commit.amend.request", cwd },
+    });
+  }
+
   async checkoutMerge(
     cwd: string,
     input: { baseRef?: string; strategy?: "merge" | "squash"; requireCleanTarget?: boolean },
@@ -3861,14 +3874,15 @@ export class DaemonClient {
 
   async listCheckoutCommits(
     cwd: string,
-    requestId?: string,
+    options?: { baseRef?: string; requestId?: string },
   ): Promise<{ baseRef: string | null; commits: CheckoutCommit[] }> {
     const payload =
       await this.sendNamespacedCorrelatedSessionRequest<"checkout.commits.list.response">({
-        requestId,
+        requestId: options?.requestId,
         message: {
           type: "checkout.commits.list.request",
           cwd,
+          ...(options?.baseRef ? { baseRef: options.baseRef } : {}),
         },
         timeout: 60000,
       });
@@ -3899,6 +3913,68 @@ export class DaemonClient {
       throw new Error(payload.error.message);
     }
     return { file: payload.file };
+  }
+
+  async getCheckoutDiffContext(
+    cwd: string,
+    input: {
+      compare: { mode: "uncommitted" | "base"; baseRef?: string; ignoreWhitespace?: boolean };
+      filePath: string;
+      expectedRevision?: string;
+      region: { oldStart: number; newStart: number; lineCount: number };
+      offset: number;
+      limit: number;
+    },
+    requestId?: string,
+  ) {
+    const payload =
+      await this.sendNamespacedCorrelatedSessionRequest<"checkout.diff.get_context.response">({
+        requestId,
+        message: {
+          type: "checkout.diff.get_context.request",
+          cwd,
+          compare: this.normalizeCheckoutDiffCompare(input.compare),
+          filePath: input.filePath,
+          ...(input.expectedRevision ? { expectedRevision: input.expectedRevision } : {}),
+          region: input.region,
+          offset: input.offset,
+          limit: input.limit,
+        },
+        timeout: 60_000,
+      });
+    if (payload.error) {
+      throw new Error(payload.error.message);
+    }
+    return payload;
+  }
+
+  async searchCheckoutDiff(
+    cwd: string,
+    input: {
+      compare: { mode: "uncommitted" | "base"; baseRef?: string; ignoreWhitespace?: boolean };
+      query: string;
+      files: Array<{ path: string; expectedRevision?: string }>;
+      limit: number;
+    },
+    requestId?: string,
+  ) {
+    const payload =
+      await this.sendNamespacedCorrelatedSessionRequest<"checkout.diff.search.response">({
+        requestId,
+        message: {
+          type: "checkout.diff.search.request",
+          cwd,
+          compare: this.normalizeCheckoutDiffCompare(input.compare),
+          query: input.query,
+          files: input.files,
+          limit: input.limit,
+        },
+        timeout: 60_000,
+      });
+    if (payload.error) {
+      throw new Error(payload.error.message);
+    }
+    return payload;
   }
 
   async checkoutPrCreate(
@@ -4279,6 +4355,7 @@ export class DaemonClient {
       includeFiles?: boolean;
       includeDirectories?: boolean;
       matchMode?: "fuzzy" | "suffix";
+      prepareOnly?: boolean;
     },
     requestId?: string,
   ): Promise<DirectorySuggestionsPayload> {
@@ -4291,6 +4368,7 @@ export class DaemonClient {
         includeFiles: options.includeFiles,
         includeDirectories: options.includeDirectories,
         matchMode: options.matchMode,
+        prepareOnly: options.prepareOnly,
         limit: options.limit,
       },
       responseType: "directory_suggestions_response",
@@ -4467,6 +4545,23 @@ export class DaemonClient {
     return this.sendNamespacedCorrelatedSessionRequest<"checkout.discard_changes.response">({
       message: { type: "checkout.discard_changes.request", cwd, paths: input.paths },
     });
+  }
+
+  async requestWorkspaceLsp(
+    input: Omit<WorkspaceLspRequest, "type" | "requestId">,
+  ): Promise<WorkspaceLspResult> {
+    const payload = await this.sendCorrelatedSessionRequest({
+      message: { type: "workspace.lsp.request", ...input },
+      responseType: "workspace.lsp.response",
+      timeout: WORKSPACE_LSP_RPC_TIMEOUT_MS,
+    });
+    if (payload.error || !payload.result) {
+      throw new Error(payload.error ?? "Workspace LSP returned no result");
+    }
+    if (payload.documentVersion !== input.documentVersion) {
+      throw new Error("Workspace LSP returned a stale document version");
+    }
+    return payload.result;
   }
 
   async uploadFile(input: FileUploadInput): Promise<FileUploadResult> {
