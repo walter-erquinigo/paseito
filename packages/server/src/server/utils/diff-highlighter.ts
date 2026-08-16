@@ -26,6 +26,9 @@ export interface ParsedDiffFile {
   deletions: number;
   hunks: DiffHunk[];
   status?: "ok" | "too_large" | "binary";
+  oldLineCount?: number;
+  newLineCount?: number;
+  revision?: string;
 }
 
 interface HighlightDiffWithFileContentOptions {
