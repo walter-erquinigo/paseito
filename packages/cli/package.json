@@ -1,9 +1,19 @@
 {
+  "name": "@getpaseo/cli",
+  "version": "0.4.0",
+  "description": "Paseito CLI - control your AI coding agents from the command line",
+  "bin": {
+    "paseito": "bin/paseito"
+  },
   "files": [
     "bin",
     "dist",
     "!dist/**/*.map"
   ],
+  "type": "module",
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "clean": "node ../../scripts/clean-package-dist.mjs",
     "build": "tsc -p tsconfig.json --incremental false",
@@ -16,15 +26,6 @@
     "test:e2e": "npm run test:local",
     "test:e2e:lifecycle": "npx tsx tests/e2e/agent-lifecycle.test.ts"
   },
-  "publishConfig": {
-    "access": "public"
-  },
-  "version": "0.4.0",
-  "description": "Paseito CLI - control your AI coding agents from the command line",
-  "bin": {
-    "paseito": "bin/paseito"
-  },
-  "type": "module",
   "dependencies": {
     "@clack/prompts": "^1.0.0",
     "@getpaseo/client": "0.4.0",
@@ -45,6 +46,5 @@
     "typescript": "^5.2.2",
     "vitest": "^4.1.6",
     "zx": "^8.8.5"
-  },
-  "name": "@getpaseo/cli"
+  }
 }
