@@ -39,6 +39,7 @@ import {
 } from "@/components/sidebar-resize-handle-layout";
 import { resolveExplorerSidebarWidth } from "@/components/explorer-sidebar-layout";
 import { useWorkspaceLayoutStore } from "@/stores/workspace-layout-store";
+import type { WorkspaceFileOpenOptions } from "@/workspace/file-open";
 
 function logExplorerSidebar(_event: string, _details: Record<string, unknown>): void {}
 
@@ -47,7 +48,7 @@ interface ExplorerSidebarProps {
   workspaceId?: string | null;
   workspaceRoot: string;
   isGit: boolean;
-  onOpenFile?: (filePath: string) => void;
+  onOpenFile?: (filePath: string, options?: WorkspaceFileOpenOptions) => void;
 }
 
 interface ExplorerSidebarSharedState {
@@ -298,7 +299,7 @@ interface SidebarContentProps {
   workspaceRoot: string;
   isGit: boolean;
   isOpen: boolean;
-  onOpenFile?: (filePath: string) => void;
+  onOpenFile?: (filePath: string, options?: WorkspaceFileOpenOptions) => void;
 }
 
 function ExplorerSidebarContent({

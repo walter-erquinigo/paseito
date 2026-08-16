@@ -948,6 +948,12 @@ export const en = {
         markFileUnreviewed: "Mark {{file}} unreviewed",
         markAllReviewed: "Mark all files reviewed",
         clearAllReviewed: "Clear all reviewed files",
+        reviewMenu: "Review {{reviewed}}/{{total}}",
+        reviewProgress:
+          "Review progress: {{reviewedLines}} of {{totalLines}} lines and {{reviewedFiles}} of {{totalFiles}} files",
+        markAllChangesReviewed: "Mark all changes reviewed",
+        markAllChangesUnreviewed: "Mark all changes unreviewed",
+        organizeByReview: "Organize files by review status",
         reviewUpdateHost: "Update the host to mark files reviewed",
         reviewBranchRequired: "Check out a branch to mark files reviewed",
         markLineReviewed: "Mark line {{line}} reviewed",
