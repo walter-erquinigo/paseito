@@ -65,7 +65,7 @@ import { usePublishPanelInstanceAttributes } from "@/panels/panel-instance-attri
 import type { Theme } from "@/styles/theme";
 import { usePaneContext } from "@/panels/pane-context";
 import { useToast } from "@/contexts/toast-context";
-import type { EditorLspStatus } from "./editor/lsp-session";
+import type { EditorLspSnapshot } from "./editor/lsp-session";
 import { acquireEditorLspSession } from "./editor/lsp-session-pool";
 import { lspLanguageForFile, useWorkspaceLspPreferences } from "./editor/lsp-preferences";
 import { createMarkdownFilePreviewParser } from "./markdown-file-links";
@@ -463,6 +463,10 @@ export function FilePane({
   const supportsLsp = useSessionStore(
     (state) => state.sessions[serverId]?.serverInfo?.features?.workspaceLsp === true,
   );
+  // COMPAT(workspaceLspClangd): added in Paseito v0.4.0-paseito.15, remove after 2027-02-16.
+  const supportsStandaloneClangd = useSessionStore(
+    (state) => state.sessions[serverId]?.serverInfo?.features?.workspaceLspClangd === true,
+  );
   const normalizedWorkspaceRoot = useMemo(() => workspaceRoot.trim(), [workspaceRoot]);
   const markdownParser = useMemo(
     () => createMarkdownFilePreviewParser(normalizedWorkspaceRoot),
@@ -589,6 +593,7 @@ export function FilePane({
         lineCount={lineCount}
         editable={editable}
         supportsLsp={supportsLsp}
+        supportsStandaloneClangd={supportsStandaloneClangd}
         disconnectedMessage={t("workspace.terminal.hostDisconnected")}
         errorMessage={errorMessage}
         isLoading={liveFile.isFetching}
@@ -698,6 +703,7 @@ function FilePanePresentation({
   lineCount,
   editable,
   supportsLsp,
+  supportsStandaloneClangd,
   disconnectedMessage,
   errorMessage,
   isLoading,
@@ -722,6 +728,7 @@ function FilePanePresentation({
   lineCount?: number;
   editable: boolean;
   supportsLsp: boolean;
+  supportsStandaloneClangd: boolean;
   disconnectedMessage: string;
   errorMessage: string | null;
   isLoading: boolean;
@@ -762,6 +769,7 @@ function FilePanePresentation({
         location={location}
         navigationRevision={navigationRevision}
         supportsLsp={supportsLsp}
+        supportsStandaloneClangd={supportsStandaloneClangd}
         markdownParser={markdownParser}
         markdownRules={markdownRules}
       />
@@ -823,6 +831,7 @@ function EditableFilePane({
   location,
   navigationRevision,
   supportsLsp,
+  supportsStandaloneClangd,
   markdownParser,
   markdownRules,
 }: {
@@ -842,6 +851,7 @@ function EditableFilePane({
   location: WorkspaceFileLocation;
   navigationRevision: number;
   supportsLsp: boolean;
+  supportsStandaloneClangd: boolean;
   markdownParser: ReturnType<typeof MarkdownIt>;
   markdownRules: RenderRules;
 }) {
@@ -851,7 +861,11 @@ function EditableFilePane({
   const [vimMode, setVimMode] = useState<string | null>(settings.vimKeybindings ? "NORMAL" : null);
   const language = lspLanguageForFile(filename);
   const lspPreferences = useWorkspaceLspPreferences({ serverId, cwd, language });
-  const [lspStatus, setLspStatus] = useState<EditorLspStatus>("connecting");
+  const [lspSnapshot, setLspSnapshot] = useState<EditorLspSnapshot>({
+    status: "connecting",
+    error: null,
+    provider: null,
+  });
   const lspLease = useMemo(
     () =>
       supportsLsp && language && lspPreferences.enabled
@@ -860,7 +874,7 @@ function EditableFilePane({
             cwd,
             path,
             content: preview.content ?? "",
-            onStatus: setLspStatus,
+            onStatus: setLspSnapshot,
           })
         : null,
     [client, cwd, language, lspPreferences.enabled, path, preview.content, supportsLsp],
@@ -870,6 +884,9 @@ function EditableFilePane({
   const formatOnSaveRef = useRef(lspPreferences.formatOnSave);
   lspSessionRef.current = lspSession;
   formatOnSaveRef.current = lspPreferences.formatOnSave;
+  const retryLsp = useCallback(() => {
+    void lspSessionRef.current?.retry();
+  }, []);
   const session = useMemo(
     () => ({
       async prepareWrite(content: string) {
@@ -918,6 +935,9 @@ function EditableFilePane({
       foregroundMuted: theme.colors.foregroundMuted,
       border: theme.colors.border,
       selection: theme.colors.terminal.selectionBackground,
+      surfaceRaised: theme.colors.surface3,
+      codeBackground: theme.colors.surface2,
+      uiFont: theme.fontFamily.ui,
       monoFont: theme.fontFamily.mono,
       codeFontSize: theme.fontSize.code,
       syntax: theme.colors.syntax,
@@ -927,11 +947,14 @@ function EditableFilePane({
       theme.colors.foreground,
       theme.colors.foregroundMuted,
       theme.colors.surface0,
+      theme.colors.surface2,
+      theme.colors.surface3,
       theme.colors.syntax,
       theme.colors.terminal.cursor,
       theme.colors.terminal.selectionBackground,
       theme.colorScheme,
       theme.fontFamily.mono,
+      theme.fontFamily.ui,
       theme.fontSize.code,
     ],
   );
@@ -939,7 +962,7 @@ function EditableFilePane({
   useEffect(() => () => model.dispose(), [model]);
   useEffect(() => {
     if (!lspSession) {
-      setLspStatus("connecting");
+      setLspSnapshot({ status: "connecting", error: null, provider: null });
       return;
     }
     void lspSession.open(model.getSnapshot().content);
@@ -1012,9 +1035,11 @@ function EditableFilePane({
             enabled: lspPreferences.enabled,
             formatOnSave: lspPreferences.formatOnSave,
             language,
-            status: lspStatus,
+            snapshot: lspSnapshot,
+            standaloneClangdSupported: supportsStandaloneClangd,
             onEnabledChange: lspPreferences.setEnabled,
             onFormatOnSaveChange: lspPreferences.setFormatOnSave,
+            onRetry: retryLsp,
           }
         : undefined,
     [
@@ -1023,7 +1048,9 @@ function EditableFilePane({
       lspPreferences.formatOnSave,
       lspPreferences.setEnabled,
       lspPreferences.setFormatOnSave,
-      lspStatus,
+      lspSnapshot,
+      retryLsp,
+      supportsStandaloneClangd,
       supportsLsp,
     ],
   );
