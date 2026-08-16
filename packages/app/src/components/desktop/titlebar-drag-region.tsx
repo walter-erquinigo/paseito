@@ -27,16 +27,17 @@ const DRAG_OVERLAY_STYLE: React.CSSProperties = {
   ...titlebarDragSurfaceStyle,
   top: 0,
   left: 0,
+  right: 0,
   display: "block",
   position: "absolute",
-  width: "100%",
   height: "100%",
 };
 
 const TOP_RESIZER_STYLE: React.CSSProperties = {
   position: "absolute",
   top: 0,
-  width: "100%",
+  left: 0,
+  right: 0,
   height: 4,
   // @ts-expect-error — WebkitAppRegion is not in CSSProperties
   WebkitAppRegion: "no-drag",

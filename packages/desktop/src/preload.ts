@@ -8,7 +8,7 @@ import type { DesktopWindowChromeMode } from "./window/chrome.js";
 // window.paseoDesktop undefined (the 0.1.108 regression, #2103). Keep this literal in sync
 // with PASEO_BROWSER_PROFILE_PARTITION in features/browser-profile.ts; preload-sandbox.test.ts
 // guards both the no-local-import rule and this drift. Type-only imports are fine (erased at emit).
-const PASEO_BROWSER_PROFILE_PARTITION = "persist:paseo-browser";
+const PASEO_BROWSER_PROFILE_PARTITION = "persist:paseito-browser";
 
 type EventHandler = (payload: unknown) => void;
 

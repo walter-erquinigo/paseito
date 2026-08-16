@@ -32,7 +32,7 @@ export async function connectScheduleClient(
     throw {
       code: "DAEMON_NOT_RUNNING",
       message: `Cannot connect to daemon at ${resolvedHost}: ${message}`,
-      details: "Start the daemon with: paseo daemon start",
+      details: "Start the daemon with: paseito daemon start",
     } satisfies CommandError;
   }
 }
@@ -120,13 +120,13 @@ function resolveScheduleTarget(args: {
   }
 
   if (targetValue === "self") {
-    // COMPAT(scheduleSelfTarget): heartbeat creation moved to `paseo heartbeat create`.
+    // COMPAT(scheduleSelfTarget): heartbeat creation moved to `paseito heartbeat create`.
     // Added in v0.2.0; remove after 2027-01-17.
     const currentAgentId = process.env.PASEO_AGENT_ID?.trim();
     if (!currentAgentId) {
       throw {
         code: "INVALID_TARGET",
-        message: "--target self requires running inside a Paseo agent",
+        message: "--target self requires running inside a Paseito agent",
       } satisfies CommandError;
     }
     return { type: "self", agentId: currentAgentId };

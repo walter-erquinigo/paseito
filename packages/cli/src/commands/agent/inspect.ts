@@ -224,7 +224,7 @@ export async function runInspectCommand(
     const error: CommandError = {
       code: "MISSING_AGENT_ID",
       message: "Agent ID is required",
-      details: "Usage: paseo agent inspect <id>",
+      details: "Usage: paseito agent inspect <id>",
     };
     throw error;
   }
@@ -237,7 +237,7 @@ export async function runInspectCommand(
     const error: CommandError = {
       code: "DAEMON_NOT_RUNNING",
       message: `Cannot connect to daemon at ${host}: ${message}`,
-      details: "Start the daemon with: paseo daemon start",
+      details: "Start the daemon with: paseito daemon start",
     };
     throw error;
   }
@@ -248,7 +248,7 @@ export async function runInspectCommand(
       const error: CommandError = {
         code: "AGENT_NOT_FOUND",
         message: `Agent not found: ${agentIdArg}`,
-        details: 'Use "paseo ls" to list available agents',
+        details: 'Use "paseito ls" to list available agents',
       };
       throw error;
     }
