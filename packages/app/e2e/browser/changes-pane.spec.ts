@@ -254,6 +254,7 @@ test("line review controls stay in the fixed gutter across diff layouts", async 
   const reviewFocusMarker = page.getByTestId(/^diff-review-focus-/);
   await reviewCheckboxes.nth(1).click();
   await expect(reviewCheckboxes.nth(1)).toHaveAccessibleName(/unreviewed$/);
+  await expect(page.getByTestId("line-review-shortcut-hint")).toContainText("⌘; focus Changes");
   await expect(reviewFocusMarker).toHaveCount(1);
   await expect(reviewFocusMarker).toHaveAttribute(
     "data-testid",
@@ -913,7 +914,7 @@ test("shows a revert error returned by the daemon", async ({ page }) => {
     .toBe(AFTER);
 });
 
-test("Changes switches between inline and full-tab navigation", async ({ page }) => {
+test("Changes keeps inline and full-tab navigation independent", async ({ page }) => {
   const workspace = await createWorkspaceWithMountedTabDiff({
     includeDeletedFile: true,
   });
@@ -966,10 +967,18 @@ test("Changes switches between inline and full-tab navigation", async ({ page })
   await expect(visiblePanel.getByTestId("diff-file-0-body")).toHaveCount(0);
   await expect(visiblePanel.getByTestId("diff-file-1-body")).toBeVisible();
 
-  await page.getByTestId("explorer-content-area").getByTestId("diff-file-0-toggle").click();
-  await expect(
-    page.getByTestId("explorer-content-area").getByTestId("diff-file-0-body"),
-  ).toHaveCount(0);
+  const inlineFileBody = page.getByTestId("explorer-content-area").getByTestId("diff-file-0-body");
+  const inlineFileToggle = page
+    .getByTestId("explorer-content-area")
+    .getByTestId("diff-file-0-toggle");
+  if (!(await inlineFileBody.isVisible())) {
+    await inlineFileToggle.click();
+  }
+  await expect(inlineFileBody).toBeVisible();
+  await inlineFileToggle.click();
+  await expect(inlineFileBody).toHaveCount(0);
+  await inlineFileToggle.click();
+  await expect(inlineFileBody).toBeVisible();
   await expect(page.getByTestId(/^workspace-working-diff-close-/)).toHaveCount(1);
 
   await writeFile(path.join(workspace.repoPath, "src/use-mounted-tab-set.ts"), BEFORE);
@@ -992,13 +1001,9 @@ test("Changes switches between inline and full-tab navigation", async ({ page })
 
   await changesTabToggle.click();
   await expect(page.getByTestId(/^workspace-working-diff-close-/)).toHaveCount(0);
-  await expect(
-    page.getByTestId("explorer-content-area").getByTestId("diff-file-0-body"),
-  ).toBeVisible();
-  await page.getByTestId("explorer-content-area").getByTestId("diff-file-0-toggle").click();
-  await expect(
-    page.getByTestId("explorer-content-area").getByTestId("diff-file-0-body"),
-  ).toHaveCount(0);
+  await expect(inlineFileBody).toBeVisible();
+  await inlineFileToggle.click();
+  await expect(inlineFileBody).toHaveCount(0);
 });
 
 test("changes diff switches between flat and tree file lists", async ({ page }) => {
