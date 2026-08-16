@@ -12,9 +12,12 @@ import {
   type BranchSuggestion,
   type CheckoutSnapshotFacts,
   type CheckoutDiffCompare,
+  type CheckoutDiffContextRequest,
+  type CheckoutDiffContextResult,
   type CheckoutDiffResult,
   getCheckoutDiff,
   getCheckoutRefDerivedState,
+  getCheckoutDiffContext,
   getCheckoutSnapshotFacts,
   getCheckoutShortstat,
   getCheckoutStatus,
@@ -193,6 +196,10 @@ export interface WorkspaceGitService {
     options: CheckoutDiffCompare,
     readOptions?: WorkspaceGitReadOptions,
   ): Promise<CheckoutDiffResult>;
+  getCheckoutDiffContext(
+    cwd: string,
+    request: CheckoutDiffContextRequest,
+  ): Promise<CheckoutDiffContextResult>;
   validateBranchRef(
     cwd: string,
     ref: string,
@@ -340,6 +347,7 @@ interface WorkspaceGitServiceDependencies {
   getCheckoutShortstat: typeof getCheckoutShortstat;
   getCheckoutWorktreeState: typeof getCheckoutWorktreeState;
   getCheckoutDiff: typeof getCheckoutDiff;
+  getCheckoutDiffContext: typeof getCheckoutDiffContext;
   getPullRequestStatus: typeof getPullRequestStatus;
   resolveBranchCheckout: typeof resolveBranchCheckout;
   resolveRepositoryDefaultBranch: typeof resolveRepositoryDefaultBranch;
@@ -495,6 +503,7 @@ function buildDefaultWorkspaceGitServiceDeps(
     getCheckoutShortstat,
     getCheckoutWorktreeState,
     getCheckoutDiff,
+    getCheckoutDiffContext,
     getPullRequestStatus,
     resolveBranchCheckout,
     resolveRepositoryDefaultBranch,
@@ -741,6 +750,17 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
         worktreesRoot: this.worktreesRoot,
       }),
     );
+  }
+
+  getCheckoutDiffContext(
+    cwd: string,
+    request: CheckoutDiffContextRequest,
+  ): Promise<CheckoutDiffContextResult> {
+    const normalizedCwd = resolve(cwd);
+    return this.deps.getCheckoutDiffContext(normalizedCwd, request, {
+      paseoHome: this.paseoHome,
+      worktreesRoot: this.worktreesRoot,
+    });
   }
 
   private normalizeCheckoutDiffOptions(options: CheckoutDiffCompare): CheckoutDiffCompare {
