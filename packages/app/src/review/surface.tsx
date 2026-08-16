@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { Pencil, Plus, Trash2 } from "lucide-react-native";
+import { Code2, Pencil, Plus, Trash2 } from "lucide-react-native";
 import {
   Pressable,
+  type PointerEvent as NativePointerEvent,
   type PressableStateCallbackType,
   Text,
   type TextStyle,
@@ -17,19 +18,45 @@ import {
   EditingTextInput as TextInput,
   type EditingTextInputHandle,
 } from "@/components/ui/text-input";
-import { isWeb } from "@/constants/platform";
+import { Shortcut } from "@/components/ui/shortcut";
+import { getIsElectronMac, isWeb } from "@/constants/platform";
+import { useHasFinePointer } from "@/hooks/use-fine-pointer";
 import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
 import type { Theme } from "@/styles/theme";
-import { useReviewDraftComments, useReviewDraftStore, type ReviewDraftComment } from "./store";
+import type { ShortcutKey } from "@/utils/format-shortcut";
+import { focusWithRetries } from "@/utils/web-focus";
+import {
+  useReviewDraftComments,
+  useReviewDraftStore,
+  type ReviewDraftComment,
+  type ReviewDraftSuggestion,
+} from "./store";
 import { buildReviewableDiffTargetKey, type ReviewableDiffTarget } from "@/utils/diff-layout";
 import {
+  buildSuggestionRange,
+  editableSuggestionTargetContent,
+  isSuggestibleTarget,
+  type SuggestionRangeFailure,
+} from "./suggestion-range";
+import {
+  getInlineReviewThreadState,
+  getSplitInlineReviewThreadState,
   INLINE_REVIEW_EDITOR_HEIGHT,
-  INLINE_REVIEW_GAP,
-  INLINE_REVIEW_VERTICAL_PADDING,
+  INLINE_SUGGESTION_EDITOR_HEIGHT,
+  INLINE_SUGGESTION_HEIGHT,
   isInlineReviewEditorForTarget,
   type InlineReviewActions,
   type InlineReviewEditorState,
-} from "./geometry";
+  type InlineSuggestionEditorState,
+} from "./inline-review";
+
+export {
+  getInlineReviewThreadState,
+  getSplitInlineReviewThreadState,
+  isInlineReviewEditorForTarget,
+  type InlineReviewActions,
+  type InlineReviewEditorState,
+};
 
 type PressableState = PressableStateCallbackType & { hovered?: boolean };
 function iconButtonStyle({ hovered, pressed }: PressableState): StyleProp<ViewStyle> {
@@ -48,7 +75,40 @@ function getWebTextInputElement(input: EditingTextInputHandle | null): HTMLEleme
   return element instanceof HTMLElement ? element : null;
 }
 
+function revealWithinNearestVerticalViewport(element: HTMLElement): void {
+  if (!isWeb) return;
+  let viewport = element.closest<HTMLElement>('[data-testid="git-diff-scroll"]');
+  if (viewport === element) viewport = null;
+  if (!viewport) {
+    let candidate = element.parentElement;
+    while (candidate) {
+      const style = getComputedStyle(candidate);
+      if (
+        candidate.scrollHeight > candidate.clientHeight &&
+        (style.overflowY === "auto" || style.overflowY === "scroll")
+      ) {
+        viewport = candidate;
+        break;
+      }
+      candidate = candidate.parentElement;
+    }
+  }
+  if (!viewport) return;
+
+  const viewportBounds = viewport.getBoundingClientRect();
+  const elementBounds = element.getBoundingClientRect();
+  if (elementBounds.top < viewportBounds.top) {
+    viewport.scrollTop += elementBounds.top - viewportBounds.top;
+  } else if (elementBounds.bottom > viewportBounds.bottom) {
+    viewport.scrollTop += elementBounds.bottom - viewportBounds.bottom;
+  }
+}
+
+const INLINE_REVIEW_GAP = 6;
 export const SMALL_ACTION_HIT_SLOP = 8;
+const REVIEW_CANCEL_SHORTCUT_KEYS: ShortcutKey[] = ["Esc"];
+const REVIEW_SAVE_SHORTCUT_KEYS: ShortcutKey[] = ["mod", "Enter"];
+const EMPTY_SUGGESTIONS: ReviewDraftSuggestion[] = [];
 const foregroundMutedIconColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 const destructiveIconColorMapping = (theme: Theme) => ({ color: theme.colors.destructive });
 const accentForegroundIconColorMapping = (theme: Theme) => ({
@@ -57,34 +117,13 @@ const accentForegroundIconColorMapping = (theme: Theme) => ({
 const ThemedPencil = withUnistyles(Pencil);
 const ThemedPlus = withUnistyles(Plus);
 const ThemedTrash2 = withUnistyles(Trash2);
+const ThemedCode2 = withUnistyles(Code2);
 
-function InlineReviewAddIcon({ style, testID }: { style?: StyleProp<ViewStyle>; testID?: string }) {
-  return (
-    <View style={[styles.gutterActionVisual, style]} testID={testID}>
-      <ThemedPlus size={16} strokeWidth={2.4} uniProps={accentForegroundIconColorMapping} />
-    </View>
-  );
-}
-
-export function InlineReviewAddButton({
-  onPress,
-  style,
-}: {
-  onPress: () => void;
-  style?: StyleProp<ViewStyle>;
-}) {
-  const { t } = useTranslation();
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={t("review.comment.add")}
-      hitSlop={SMALL_ACTION_HIT_SLOP}
-      onPress={onPress}
-      style={[styles.gutterActionVisual, style]}
-    >
-      <ThemedPlus size={16} strokeWidth={2.4} uniProps={accentForegroundIconColorMapping} />
-    </Pressable>
-  );
+interface InlineSuggestionSelectionState {
+  kind: "drag" | "shift";
+  anchor: ReviewableDiffTarget;
+  focus: ReviewableDiffTarget;
+  moved: boolean;
 }
 
 export function groupInlineReviewCommentsByTarget(
@@ -92,40 +131,173 @@ export function groupInlineReviewCommentsByTarget(
 ): Map<string, ReviewDraftComment[]> {
   const grouped = new Map<string, ReviewDraftComment[]>();
   for (const comment of comments) {
-    const key = buildReviewableDiffTargetKey(comment);
+    const key = buildReviewableDiffTargetKey({
+      filePath: comment.filePath,
+      side: comment.side,
+      lineNumber: comment.endLine ?? comment.lineNumber,
+    });
     grouped.set(key, [...(grouped.get(key) ?? []), comment]);
   }
   return grouped;
 }
 
-export function useInlineReviewController(input: { reviewDraftKey: string }): InlineReviewActions {
+function replacementByteLength(value: string): number {
+  return new TextEncoder().encode(value).byteLength;
+}
+
+function groupSuggestionsByTarget(
+  suggestions: readonly ReviewDraftSuggestion[],
+): Map<string, ReviewDraftSuggestion[]> {
+  const grouped = new Map<string, ReviewDraftSuggestion[]>();
+  for (const suggestion of suggestions) {
+    const key = buildReviewableDiffTargetKey({
+      filePath: suggestion.filePath,
+      side: "new",
+      lineNumber: suggestion.endLine,
+    });
+    grouped.set(key, [...(grouped.get(key) ?? []), suggestion]);
+  }
+  return grouped;
+}
+
+export function useInlineReviewController(input: {
+  reviewDraftKey: string;
+  availableTargets?: readonly ReviewableDiffTarget[];
+  suggestionsSupported?: boolean;
+}): InlineReviewActions {
   const reviewComments = useReviewDraftComments(input.reviewDraftKey);
   const commentsByTarget = useMemo(
     () => groupInlineReviewCommentsByTarget(reviewComments),
     [reviewComments],
   );
   const [editor, setEditor] = useState<InlineReviewEditorState | null>(null);
+  const suggestions = useReviewDraftStore(
+    (state) => state.suggestions[input.reviewDraftKey] ?? EMPTY_SUGGESTIONS,
+  );
+  const suggestionsByTarget = useMemo(() => groupSuggestionsByTarget(suggestions), [suggestions]);
+  const [suggestionEditor, setSuggestionEditor] = useState<InlineSuggestionEditorState | null>(
+    null,
+  );
+  const [composerMode, setComposerMode] = useState<"comment" | "suggestion" | null>(null);
+  const [suggestionSelection, setSuggestionSelectionState] =
+    useState<InlineSuggestionSelectionState | null>(null);
+  const suggestionSelectionRef = useRef<InlineSuggestionSelectionState | null>(null);
+  const availableTargetsRef = useRef(input.availableTargets ?? []);
+  availableTargetsRef.current = input.availableTargets ?? [];
+  const suppressNextGutterPressRef = useRef(false);
+  const [suggestionRangeError, setSuggestionRangeError] = useState<SuggestionRangeFailure | null>(
+    null,
+  );
   const addComment = useReviewDraftStore((state) => state.addComment);
   const updateComment = useReviewDraftStore((state) => state.updateComment);
   const deleteComment = useReviewDraftStore((state) => state.deleteComment);
+  const addSuggestion = useReviewDraftStore((state) => state.addSuggestion);
+  const updateSuggestion = useReviewDraftStore((state) => state.updateSuggestion);
+  const deleteSuggestion = useReviewDraftStore((state) => state.deleteSuggestion);
 
   useEffect(() => {
     setEditor(null);
+    setSuggestionEditor(null);
+    setComposerMode(null);
+    suggestionSelectionRef.current = null;
+    setSuggestionSelectionState(null);
+    setSuggestionRangeError(null);
   }, [input.reviewDraftKey]);
 
-  const handleStartComment = useCallback((target: ReviewableDiffTarget) => {
-    setEditor({ target, commentId: null, body: "" });
-  }, []);
-
-  const handleEditComment = useCallback(
-    (target: ReviewableDiffTarget, comment: ReviewDraftComment) => {
-      setEditor({ target, commentId: comment.id, body: comment.body });
+  const setSuggestionSelection = useCallback(
+    (
+      next:
+        | InlineSuggestionSelectionState
+        | null
+        | ((
+            current: InlineSuggestionSelectionState | null,
+          ) => InlineSuggestionSelectionState | null),
+    ) => {
+      const resolved = typeof next === "function" ? next(suggestionSelectionRef.current) : next;
+      suggestionSelectionRef.current = resolved;
+      setSuggestionSelectionState(resolved);
     },
     [],
   );
 
+  const suppressNextGutterPress = useCallback(() => {
+    suppressNextGutterPressRef.current = true;
+    setTimeout(() => {
+      suppressNextGutterPressRef.current = false;
+    }, 0);
+  }, []);
+
+  const openSuggestionEditor = useCallback(
+    (targets: ReviewableDiffTarget[], note = "", preserveComment = false) => {
+      const first = targets[0];
+      if (!first?.sourceRevision) return;
+      if (!preserveComment) setEditor(null);
+      setSuggestionEditor({
+        targets,
+        suggestionId: null,
+        replacement: targets.map(editableSuggestionTargetContent).join("\n"),
+        note,
+        sourceRevision: first.sourceRevision,
+      });
+      setComposerMode("suggestion");
+      setSuggestionSelection(null);
+    },
+    [setSuggestionSelection],
+  );
+
+  const completeSuggestionRange = useCallback(
+    (selection: InlineSuggestionSelectionState): boolean => {
+      const result = buildSuggestionRange({
+        anchor: selection.anchor,
+        focus: selection.focus,
+        availableTargets: availableTargetsRef.current,
+      });
+      if (!result.ok) {
+        setSuggestionRangeError(result.reason);
+        setSuggestionSelection(null);
+        return false;
+      }
+      openSuggestionEditor(result.targets);
+      return true;
+    },
+    [openSuggestionEditor, setSuggestionSelection],
+  );
+
+  const handleStartComment = useCallback(
+    (target: ReviewableDiffTarget) => {
+      setSuggestionEditor(null);
+      setSuggestionSelection(null);
+      setEditor({ targets: [target], commentId: null, body: "" });
+      setComposerMode("comment");
+    },
+    [setSuggestionSelection],
+  );
+
+  const handleEditComment = useCallback(
+    (target: ReviewableDiffTarget, comment: ReviewDraftComment) => {
+      setSuggestionEditor(null);
+      const rangeEnd = comment.endLine ?? comment.lineNumber;
+      const targets = (input.availableTargets ?? []).filter(
+        (candidate) =>
+          candidate.filePath === comment.filePath &&
+          candidate.side === comment.side &&
+          candidate.lineNumber >= comment.lineNumber &&
+          candidate.lineNumber <= rangeEnd,
+      );
+      setEditor({
+        targets: targets.length > 0 ? targets : [target],
+        commentId: comment.id,
+        body: comment.body,
+      });
+      setComposerMode("comment");
+    },
+    [input.availableTargets],
+  );
+
   const handleCancelEditor = useCallback(() => {
     setEditor(null);
+    setSuggestionEditor(null);
+    setComposerMode(null);
   }, []);
 
   const handleSaveEditor = useCallback(
@@ -142,17 +314,23 @@ export function useInlineReviewController(input: { reviewDraftKey: string }): In
           updates: { body: trimmedBody },
         });
       } else {
+        const first = editor.targets[0];
+        const last = editor.targets.at(-1);
+        if (!first || !last) return;
         addComment({
           key: input.reviewDraftKey,
           comment: {
-            filePath: editor.target.filePath,
-            side: editor.target.side,
-            lineNumber: editor.target.lineNumber,
+            filePath: first.filePath,
+            side: first.side,
+            lineNumber: first.lineNumber,
+            ...(last.lineNumber !== first.lineNumber ? { endLine: last.lineNumber } : {}),
             body: trimmedBody,
           },
         });
       }
       setEditor(null);
+      setSuggestionEditor(null);
+      setComposerMode(null);
     },
     [addComment, editor, input.reviewDraftKey, updateComment],
   );
@@ -165,26 +343,384 @@ export function useInlineReviewController(input: { reviewDraftKey: string }): In
     [deleteComment, input.reviewDraftKey],
   );
 
+  const handleStartSuggestion = useCallback(
+    (target: ReviewableDiffTarget, note = "") => {
+      if (!input.suggestionsSupported || !isSuggestibleTarget(target)) return;
+      if (
+        suggestionEditor &&
+        suggestionEditor.suggestionId === null &&
+        suggestionEditor.targets.at(-1)?.key === target.key
+      ) {
+        setEditor((current) => (current ? { ...current, body: note } : current));
+        setSuggestionEditor({ ...suggestionEditor, note });
+        setComposerMode("suggestion");
+        return;
+      }
+      const preserveComment = Boolean(
+        editor && editor.commentId === null && editor.targets.at(-1)?.key === target.key,
+      );
+      if (preserveComment) setEditor((current) => (current ? { ...current, body: note } : current));
+      openSuggestionEditor([target], note, preserveComment);
+    },
+    [editor, input.suggestionsSupported, openSuggestionEditor, suggestionEditor],
+  );
+
+  const handleSwitchSuggestionToComment = useCallback(
+    (replacement: string, note: string) => {
+      if (!suggestionEditor || suggestionEditor.suggestionId) return;
+      const target = suggestionEditor.targets.at(-1);
+      if (!target) return;
+      setSuggestionEditor({ ...suggestionEditor, replacement, note });
+      setEditor((current) =>
+        current
+          ? { ...current, body: note }
+          : { targets: suggestionEditor.targets, commentId: null, body: note },
+      );
+      setComposerMode("comment");
+    },
+    [suggestionEditor],
+  );
+
+  const handleBeginSuggestionDrag = useCallback(
+    (target: ReviewableDiffTarget) => {
+      if (!input.suggestionsSupported || !isSuggestibleTarget(target)) return;
+      setSuggestionRangeError(null);
+      setEditor(null);
+      setSuggestionEditor(null);
+      setComposerMode(null);
+      setSuggestionSelection({ kind: "drag", anchor: target, focus: target, moved: false });
+    },
+    [input.suggestionsSupported, setSuggestionSelection],
+  );
+
+  const handleUpdateSuggestionDrag = useCallback(
+    (target: ReviewableDiffTarget) => {
+      setSuggestionSelection((current) => {
+        if (!current || current.kind !== "drag" || !isSuggestibleTarget(target)) return current;
+        if (
+          target.filePath !== current.anchor.filePath ||
+          target.sourceRevision !== current.anchor.sourceRevision
+        ) {
+          return current;
+        }
+        return {
+          ...current,
+          focus: target,
+          moved: current.moved || target.lineNumber !== current.anchor.lineNumber,
+        };
+      });
+    },
+    [setSuggestionSelection],
+  );
+
+  const handleShiftSuggestionRange = useCallback(
+    (target: ReviewableDiffTarget) => {
+      if (!input.suggestionsSupported || !isSuggestibleTarget(target)) return;
+      suppressNextGutterPress();
+      const current = suggestionSelectionRef.current;
+      if (current?.kind === "shift") {
+        completeSuggestionRange({ ...current, focus: target, moved: true });
+        return;
+      }
+      setSuggestionRangeError(null);
+      setEditor(null);
+      setSuggestionEditor(null);
+      setComposerMode(null);
+      setSuggestionSelection({ kind: "shift", anchor: target, focus: target, moved: false });
+    },
+    [
+      completeSuggestionRange,
+      input.suggestionsSupported,
+      setSuggestionSelection,
+      suppressNextGutterPress,
+    ],
+  );
+
+  const handlePressReviewGutter = useCallback(
+    (target: ReviewableDiffTarget) => {
+      if (suppressNextGutterPressRef.current) {
+        suppressNextGutterPressRef.current = false;
+        return;
+      }
+      handleStartComment(target);
+    },
+    [handleStartComment],
+  );
+
+  const handleCancelSuggestionRange = useCallback(() => {
+    setSuggestionSelection(null);
+  }, [setSuggestionSelection]);
+
+  const handleClearSuggestionRangeError = useCallback(() => setSuggestionRangeError(null), []);
+
+  useEffect(() => {
+    if (!isWeb || typeof window === "undefined" || suggestionSelection?.kind !== "drag") return;
+    const handlePointerUp = () => {
+      const current = suggestionSelectionRef.current;
+      if (!current || current.kind !== "drag") return;
+      setSuggestionSelection(null);
+      if (current.moved) {
+        suppressNextGutterPress();
+        completeSuggestionRange(current);
+      }
+    };
+    window.addEventListener("pointerup", handlePointerUp);
+    return () => window.removeEventListener("pointerup", handlePointerUp);
+  }, [
+    completeSuggestionRange,
+    setSuggestionSelection,
+    suggestionSelection?.kind,
+    suppressNextGutterPress,
+  ]);
+
+  useEffect(() => {
+    if (!isWeb || typeof window === "undefined" || !suggestionSelection) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setSuggestionSelection(null);
+    };
+    const handlePointerDown = (event: PointerEvent) => {
+      if (suggestionSelection.kind !== "shift") return;
+      const element = event.target instanceof Element ? event.target : null;
+      if (!element?.closest("[data-paseito-suggestion-gutter]")) {
+        setSuggestionSelection(null);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("pointerdown", handlePointerDown, true);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("pointerdown", handlePointerDown, true);
+    };
+  }, [setSuggestionSelection, suggestionSelection]);
+
+  const handleEditSuggestion = useCallback(
+    (suggestion: ReviewDraftSuggestion) => {
+      const anchor = (input.availableTargets ?? []).find(
+        (target) =>
+          target.filePath === suggestion.filePath &&
+          target.side === "new" &&
+          target.lineNumber === suggestion.startLine,
+      );
+      const focus = (input.availableTargets ?? []).find(
+        (target) =>
+          target.filePath === suggestion.filePath &&
+          target.side === "new" &&
+          target.lineNumber === suggestion.endLine,
+      );
+      if (!anchor || !focus) return;
+      const result = buildSuggestionRange({
+        anchor,
+        focus,
+        availableTargets: input.availableTargets ?? [],
+      });
+      if (!result.ok || result.targets.length !== suggestion.originalLines.length) return;
+      setEditor(null);
+      setSuggestionEditor({
+        targets: result.targets,
+        suggestionId: suggestion.id,
+        replacement: suggestion.replacement,
+        note: suggestion.note,
+        sourceRevision: suggestion.sourceRevision,
+      });
+      setComposerMode("suggestion");
+    },
+    [input.availableTargets],
+  );
+
+  const handleExtendSuggestion = useCallback(
+    (direction: "up" | "down") => {
+      setSuggestionEditor((current) => {
+        if (!current || current.targets.length >= 200 || current.suggestionId) return current;
+        const edge = direction === "up" ? current.targets[0] : current.targets.at(-1);
+        if (!edge) return current;
+        const candidate = (input.availableTargets ?? []).find(
+          (target) =>
+            target.filePath === edge.filePath &&
+            target.side === "new" &&
+            target.lineNumber === edge.lineNumber + (direction === "up" ? -1 : 1) &&
+            isSuggestibleTarget(target),
+        );
+        if (!candidate) return current;
+        const targets =
+          direction === "up" ? [candidate, ...current.targets] : [...current.targets, candidate];
+        return {
+          ...current,
+          targets,
+          replacement: targets.map(editableSuggestionTargetContent).join("\n"),
+        };
+      });
+    },
+    [input.availableTargets],
+  );
+
+  const handleSaveSuggestion = useCallback(
+    (replacement: string, note: string) => {
+      if (!suggestionEditor) return;
+      const originalLines = suggestionEditor.targets.map(editableSuggestionTargetContent);
+      const currentRevision = suggestionEditor.targets[0]?.sourceRevision;
+      const isStale = Boolean(
+        currentRevision && currentRevision !== suggestionEditor.sourceRevision,
+      );
+      if (
+        (!isStale && replacement === originalLines.join("\n")) ||
+        replacementByteLength(replacement) > 65_536
+      )
+        return;
+      if (suggestionEditor.suggestionId) {
+        const first = suggestionEditor.targets[0];
+        if (!first?.sourceRevision) return;
+        updateSuggestion({
+          key: input.reviewDraftKey,
+          id: suggestionEditor.suggestionId,
+          updates: {
+            replacement,
+            note,
+            originalLines,
+            sourceRevision: first.sourceRevision,
+          },
+        });
+      } else {
+        const first = suggestionEditor.targets[0];
+        const last = suggestionEditor.targets.at(-1);
+        if (!first || !last || !first.sourceRevision) return;
+        addSuggestion({
+          key: input.reviewDraftKey,
+          suggestion: {
+            filePath: first.filePath,
+            startLine: first.lineNumber,
+            endLine: last.lineNumber,
+            originalLines,
+            replacement,
+            note: note.trim(),
+            sourceRevision: first.sourceRevision,
+          },
+        });
+      }
+      setSuggestionEditor(null);
+      setEditor(null);
+      setComposerMode(null);
+    },
+    [addSuggestion, input.reviewDraftKey, suggestionEditor, updateSuggestion],
+  );
+
+  const handleDeleteSuggestion = useCallback(
+    (id: string) => {
+      deleteSuggestion({ key: input.reviewDraftKey, id });
+      setSuggestionEditor((current) => (current?.suggestionId === id ? null : current));
+    },
+    [deleteSuggestion, input.reviewDraftKey],
+  );
+  const handleCancelSuggestion = useCallback(() => {
+    setEditor(null);
+    setSuggestionEditor(null);
+    setComposerMode(null);
+    setSuggestionSelection(null);
+  }, [setSuggestionSelection]);
+
+  useEffect(() => {
+    const current = suggestionSelectionRef.current;
+    if (!current) return;
+    const availableKeys = new Set((input.availableTargets ?? []).map((target) => target.key));
+    if (!availableKeys.has(current.anchor.key) || !availableKeys.has(current.focus.key)) {
+      setSuggestionSelection(null);
+    }
+  }, [input.availableTargets, setSuggestionSelection]);
+
+  const selectedRangeTargetKeys = useMemo<ReadonlySet<string>>(() => {
+    if (composerMode === "comment" && editor) {
+      return new Set(editor.targets.map((target) => target.key));
+    }
+    if (composerMode === "suggestion" && suggestionEditor) {
+      return new Set(suggestionEditor.targets.map((target) => target.key));
+    }
+    if (!suggestionSelection) return new Set();
+    const result = buildSuggestionRange({
+      anchor: suggestionSelection.anchor,
+      focus: suggestionSelection.focus,
+      availableTargets: input.availableTargets ?? [],
+    });
+    if (result.ok) return new Set(result.targets.map((target) => target.key));
+    return new Set([suggestionSelection.anchor.key, suggestionSelection.focus.key]);
+  }, [composerMode, editor, input.availableTargets, suggestionEditor, suggestionSelection]);
+
   return useMemo<InlineReviewActions>(
     () => ({
       commentsByTarget,
+      canSuggest: input.suggestionsSupported === true,
+      composerMode,
       editor,
+      suggestionsByTarget,
+      suggestionEditor,
+      selectedRangeTargetKeys,
+      suggestionRangeError,
       onStartComment: handleStartComment,
       onEditComment: handleEditComment,
       onCancelEditor: handleCancelEditor,
       onSaveEditor: handleSaveEditor,
       onDeleteComment: handleDeleteComment,
+      onStartSuggestion: handleStartSuggestion,
+      onSwitchSuggestionToComment: handleSwitchSuggestionToComment,
+      onBeginSuggestionDrag: handleBeginSuggestionDrag,
+      onUpdateSuggestionDrag: handleUpdateSuggestionDrag,
+      onShiftSuggestionRange: handleShiftSuggestionRange,
+      onPressReviewGutter: handlePressReviewGutter,
+      onCancelSuggestionRange: handleCancelSuggestionRange,
+      onClearSuggestionRangeError: handleClearSuggestionRangeError,
+      onCancelSuggestion: handleCancelSuggestion,
+      onEditSuggestion: handleEditSuggestion,
+      onExtendSuggestion: handleExtendSuggestion,
+      onSaveSuggestion: handleSaveSuggestion,
+      onDeleteSuggestion: handleDeleteSuggestion,
     }),
     [
       commentsByTarget,
+      input.suggestionsSupported,
+      composerMode,
       editor,
+      suggestionsByTarget,
+      suggestionEditor,
+      selectedRangeTargetKeys,
+      suggestionRangeError,
       handleCancelEditor,
       handleDeleteComment,
       handleEditComment,
       handleSaveEditor,
       handleStartComment,
+      handleStartSuggestion,
+      handleSwitchSuggestionToComment,
+      handleBeginSuggestionDrag,
+      handleUpdateSuggestionDrag,
+      handleShiftSuggestionRange,
+      handlePressReviewGutter,
+      handleCancelSuggestionRange,
+      handleClearSuggestionRangeError,
+      handleCancelSuggestion,
+      handleEditSuggestion,
+      handleExtendSuggestion,
+      handleSaveSuggestion,
+      handleDeleteSuggestion,
     ],
   );
+}
+
+function activeCommentEditorForTarget(
+  reviewActions: InlineReviewActions,
+  reviewTarget: ReviewableDiffTarget,
+): InlineReviewEditorState | null {
+  if (reviewActions.composerMode !== "comment") return null;
+  return isInlineReviewEditorForTarget(reviewActions.editor, reviewTarget)
+    ? reviewActions.editor
+    : null;
+}
+
+function activeSuggestionEditorForTarget(
+  reviewActions: InlineReviewActions,
+  reviewTarget: ReviewableDiffTarget,
+): InlineSuggestionEditorState | null {
+  if (reviewActions.composerMode !== "suggestion") return null;
+  return reviewActions.suggestionEditor?.targets.at(-1)?.key === reviewTarget.key
+    ? reviewActions.suggestionEditor
+    : null;
 }
 
 export function InlineReviewGutterCell({
@@ -194,8 +730,10 @@ export function InlineReviewGutterCell({
   isLineHovered = false,
   lineHeight,
   onStartComment,
+  reviewActions,
   style,
   actionTestID,
+  testID,
 }: {
   children: ReactNode;
   reviewTarget: ReviewableDiffTarget | null | undefined;
@@ -204,8 +742,10 @@ export function InlineReviewGutterCell({
   isLineHovered?: boolean;
   lineHeight?: number;
   onStartComment: (target: ReviewableDiffTarget) => void;
+  reviewActions?: InlineReviewActions;
   style?: StyleProp<ViewStyle>;
   actionTestID?: string;
+  testID?: string;
 }) {
   const { t } = useTranslation();
   const canComment = Boolean(reviewTarget);
@@ -215,13 +755,67 @@ export function InlineReviewGutterCell({
   const [isDismissedAfterPress, setIsDismissedAfterPress] = useState(false);
   const isInteractionActive = isGutterHovered || isLineHovered || isPressed;
   const showAction = canComment && isInteractionActive && !isDismissedAfterPress;
+  const canSelectSuggestionRange = Boolean(
+    reviewTarget &&
+    reviewActions?.canSuggest &&
+    isSuggestibleTarget(reviewTarget) &&
+    getIsElectronMac(),
+  );
 
-  const handlePress = useCallback(() => {
-    if (reviewTarget) {
-      setIsDismissedAfterPress(true);
-      onStartComment(reviewTarget);
-    }
-  }, [reviewTarget, onStartComment]);
+  const handlePress = useCallback(
+    (event: { stopPropagation: () => void }) => {
+      event.stopPropagation();
+      if (reviewTarget) {
+        setIsDismissedAfterPress(true);
+        if (canSelectSuggestionRange && reviewActions) {
+          reviewActions.onPressReviewGutter(reviewTarget);
+        } else {
+          onStartComment(reviewTarget);
+        }
+      }
+    },
+    [canSelectSuggestionRange, onStartComment, reviewActions, reviewTarget],
+  );
+
+  const handlePointerDown = useCallback(
+    (event: NativePointerEvent) => {
+      if (
+        !canSelectSuggestionRange ||
+        !reviewTarget ||
+        !reviewActions ||
+        event.nativeEvent.button !== 0
+      )
+        return;
+      if (event.nativeEvent.shiftKey) {
+        reviewActions.onShiftSuggestionRange(reviewTarget);
+      } else {
+        reviewActions.onBeginSuggestionDrag(reviewTarget);
+      }
+    },
+    [canSelectSuggestionRange, reviewActions, reviewTarget],
+  );
+
+  const handlePointerEnter = useCallback(
+    (event: NativePointerEvent) => {
+      if (
+        canSelectSuggestionRange &&
+        reviewTarget &&
+        reviewActions &&
+        (event.nativeEvent.buttons & 1) === 1
+      ) {
+        reviewActions.onUpdateSuggestionDrag(reviewTarget);
+      }
+    },
+    [canSelectSuggestionRange, reviewActions, reviewTarget],
+  );
+
+  const desktopRangeProps = canSelectSuggestionRange
+    ? {
+        dataSet: { paseitoSuggestionGutter: "true" },
+        onPointerDown: handlePointerDown,
+        onPointerEnter: handlePointerEnter,
+      }
+    : {};
 
   const handleHoverIn = useCallback(() => {
     setIsGutterHovered(true);
@@ -272,6 +866,7 @@ export function InlineReviewGutterCell({
 
   return (
     <Pressable
+      {...desktopRangeProps}
       accessibilityRole={canComment ? "button" : undefined}
       accessibilityLabel={canComment ? t("review.comment.add") : undefined}
       hitSlop={canComment ? SMALL_ACTION_HIT_SLOP : undefined}
@@ -282,12 +877,15 @@ export function InlineReviewGutterCell({
       onPressIn={handlePressIn}
       onPressOut={handlePressOut}
       style={pressableStyle}
+      testID={testID}
     >
       <View style={innerStyle}>
         <View style={labelStyle}>
           {children}
           {showAction ? (
-            <InlineReviewAddIcon style={actionIconStyle} testID={actionTestID} />
+            <View style={actionIconStyle} testID={actionTestID}>
+              <ThemedPlus size={16} strokeWidth={2.4} uniProps={accentForegroundIconColorMapping} />
+            </View>
           ) : null}
         </View>
       </View>
@@ -311,23 +909,15 @@ export function InlineReviewThread({
   testID?: string;
 }) {
   const comments = reviewActions.commentsByTarget.get(reviewTarget.key) ?? [];
-  const editor = isInlineReviewEditorForTarget(reviewActions.editor, reviewTarget)
-    ? reviewActions.editor
-    : null;
-  const editingCommentId = editor?.commentId ?? null;
-  const editingExisting =
-    editingCommentId !== null && comments.some((comment) => comment.id === editingCommentId);
-
-  const editorElement = editor ? (
-    <InlineReviewEditor
-      key={editingCommentId ?? "new"}
-      initialBody={editor.body}
-      onCancel={reviewActions.onCancelEditor}
-      onSave={reviewActions.onSaveEditor}
-      testID="inline-review-editor"
-    />
-  ) : null;
-
+  const suggestions = reviewActions.suggestionsByTarget.get(reviewTarget.key) ?? [];
+  const editor = activeCommentEditorForTarget(reviewActions, reviewTarget);
+  const handleSuggestEdit = useCallback(
+    (note: string) => reviewActions.onStartSuggestion(reviewTarget, note),
+    [reviewActions, reviewTarget],
+  );
+  const canStartSuggestion =
+    reviewActions.canSuggest && editor?.commentId === null && isSuggestibleTarget(reviewTarget);
+  const suggestionEditor = activeSuggestionEditorForTarget(reviewActions, reviewTarget);
   const containerStyle = useMemo<StyleProp<ViewStyle>>(
     () => [
       styles.threadContainer,
@@ -339,23 +929,107 @@ export function InlineReviewThread({
 
   return (
     <View style={containerStyle} testID={testID}>
-      {comments.map((comment) => {
-        if (comment.id === editingCommentId) {
-          return <React.Fragment key={comment.id}>{editorElement}</React.Fragment>;
-        }
-        return (
-          <CommentRow
-            key={comment.id}
-            comment={comment}
-            reviewTarget={reviewTarget}
-            onEditComment={reviewActions.onEditComment}
-            onDeleteComment={reviewActions.onDeleteComment}
-          />
-        );
-      })}
-      {editor && !editingExisting ? editorElement : null}
+      <InlineCommentBlocks
+        comments={comments}
+        editor={editor}
+        onSuggestEdit={canStartSuggestion ? handleSuggestEdit : undefined}
+        reviewTarget={reviewTarget}
+        reviewActions={reviewActions}
+      />
+      <InlineSuggestionBlocks
+        suggestions={suggestions}
+        editor={suggestionEditor}
+        reviewTarget={reviewTarget}
+        reviewActions={reviewActions}
+      />
     </View>
   );
+}
+
+function InlineCommentBlocks({
+  comments,
+  editor,
+  onSuggestEdit,
+  reviewTarget,
+  reviewActions,
+}: {
+  comments: ReviewDraftComment[];
+  editor: InlineReviewEditorState | null;
+  onSuggestEdit?: (body: string) => void;
+  reviewTarget: ReviewableDiffTarget;
+  reviewActions: InlineReviewActions;
+}) {
+  const editingCommentId = editor?.commentId ?? null;
+  const editingExisting = comments.some((comment) => comment.id === editingCommentId);
+  const editorElement = editor ? (
+    <InlineReviewEditor
+      key={editingCommentId ?? "new"}
+      initialBody={editor.body}
+      onCancel={reviewActions.onCancelEditor}
+      onSave={reviewActions.onSaveEditor}
+      onSuggestEdit={onSuggestEdit}
+      testID="inline-review-editor"
+    />
+  ) : null;
+  const blocks = comments.map((comment) => {
+    if (comment.id === editingCommentId) {
+      return <React.Fragment key={comment.id}>{editorElement}</React.Fragment>;
+    }
+    return (
+      <CommentRow
+        key={comment.id}
+        comment={comment}
+        reviewTarget={reviewTarget}
+        onEditComment={reviewActions.onEditComment}
+        onDeleteComment={reviewActions.onDeleteComment}
+      />
+    );
+  });
+  if (editorElement && !editingExisting) blocks.push(editorElement);
+  return blocks;
+}
+
+function InlineSuggestionBlocks({
+  suggestions,
+  editor,
+  reviewTarget,
+  reviewActions,
+}: {
+  suggestions: ReviewDraftSuggestion[];
+  editor: InlineSuggestionEditorState | null;
+  reviewTarget: ReviewableDiffTarget;
+  reviewActions: InlineReviewActions;
+}) {
+  const editingSuggestionId = editor?.suggestionId ?? null;
+  const editingExisting = suggestions.some((suggestion) => suggestion.id === editingSuggestionId);
+  const editorElement = editor ? (
+    <InlineSuggestionEditor
+      key={`${editor.suggestionId ?? "new-suggestion"}:${editor.targets[0]?.lineNumber}:${editor.targets.at(-1)?.lineNumber}:${editor.sourceRevision}`}
+      editor={editor}
+      onCancel={reviewActions.onCancelSuggestion}
+      onExtend={reviewActions.onExtendSuggestion}
+      onSave={reviewActions.onSaveSuggestion}
+      onSwitchToComment={
+        editor.suggestionId ? undefined : reviewActions.onSwitchSuggestionToComment
+      }
+    />
+  ) : null;
+  const blocks = suggestions.map((suggestion) => {
+    if (suggestion.id === editingSuggestionId) {
+      return <React.Fragment key={suggestion.id}>{editorElement}</React.Fragment>;
+    }
+    return (
+      <SuggestionRow
+        key={suggestion.id}
+        suggestion={suggestion}
+        stale={suggestion.sourceRevision !== reviewTarget.sourceRevision}
+        onEdit={reviewActions.onEditSuggestion}
+        onDelete={reviewActions.onDeleteSuggestion}
+      />
+    );
+  });
+  if (editorElement && !editingExisting) blocks.push(editorElement);
+  return blocks;
 }
 
 function CommentRow({
@@ -411,6 +1085,187 @@ function CommentRow({
   );
 }
 
+function SuggestionRow({
+  suggestion,
+  stale,
+  onEdit,
+  onDelete,
+}: {
+  suggestion: ReviewDraftSuggestion;
+  stale: boolean;
+  onEdit: (suggestion: ReviewDraftSuggestion) => void;
+  onDelete: (id: string) => void;
+}) {
+  const { t } = useTranslation();
+  const handleEdit = useCallback(() => onEdit(suggestion), [onEdit, suggestion]);
+  const handleDelete = useCallback(() => onDelete(suggestion.id), [onDelete, suggestion.id]);
+  return (
+    <View style={[styles.commentBlock, styles.suggestionBlock]}>
+      <View style={styles.suggestionBody}>
+        <Text style={styles.suggestionLabel}>
+          {stale
+            ? t("review.suggestion.stale")
+            : t("review.suggestion.lines", {
+                start: suggestion.startLine,
+                end: suggestion.endLine,
+              })}
+        </Text>
+        <Text style={styles.suggestionCode} numberOfLines={2}>
+          {suggestion.replacement || t("review.suggestion.deleteLines")}
+        </Text>
+      </View>
+      <View style={styles.commentActions}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t("review.suggestion.edit")}
+          onPress={handleEdit}
+          style={iconButtonStyle}
+        >
+          <ThemedPencil size={14} uniProps={foregroundMutedIconColorMapping} />
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t("review.suggestion.delete")}
+          onPress={handleDelete}
+          style={iconButtonDestructiveStyle}
+        >
+          <ThemedTrash2 size={14} uniProps={destructiveIconColorMapping} />
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+function ReviewComposerTabs({
+  mode,
+  onSelect,
+}: {
+  mode: "comment" | "suggestion";
+  onSelect: (mode: "comment" | "suggestion") => void;
+}) {
+  const { t } = useTranslation();
+  const selectComment = useCallback(() => onSelect("comment"), [onSelect]);
+  const selectSuggestion = useCallback(() => onSelect("suggestion"), [onSelect]);
+  const commentAccessibilityState = useMemo(() => ({ selected: mode === "comment" }), [mode]);
+  const suggestionAccessibilityState = useMemo(() => ({ selected: mode === "suggestion" }), [mode]);
+  return (
+    <View
+      accessibilityRole="tablist"
+      style={styles.composerTabs}
+      testID="inline-review-composer-tabs"
+    >
+      <Pressable
+        accessibilityRole="tab"
+        accessibilityLabel={t("review.composer.comment")}
+        accessibilityState={commentAccessibilityState}
+        aria-selected={mode === "comment"}
+        onPress={selectComment}
+        style={[styles.composerTab, mode === "comment" && styles.composerTabSelected]}
+      >
+        <Text
+          style={[styles.composerTabText, mode === "comment" && styles.composerTabTextSelected]}
+        >
+          {t("review.composer.comment")}
+        </Text>
+      </Pressable>
+      <Pressable
+        accessibilityRole="tab"
+        accessibilityLabel={t("review.composer.codeChange")}
+        accessibilityState={suggestionAccessibilityState}
+        aria-selected={mode === "suggestion"}
+        onPress={selectSuggestion}
+        style={[styles.composerTab, mode === "suggestion" && styles.composerTabSelected]}
+      >
+        <Text
+          style={[styles.composerTabText, mode === "suggestion" && styles.composerTabTextSelected]}
+        >
+          {t("review.composer.codeChange")}
+        </Text>
+      </Pressable>
+    </View>
+  );
+}
+
+function InlineSuggestionEditor({
+  editor,
+  onCancel,
+  onExtend,
+  onSave,
+  onSwitchToComment,
+}: {
+  editor: InlineSuggestionEditorState;
+  onCancel: () => void;
+  onExtend: (direction: "up" | "down") => void;
+  onSave: (replacement: string, note: string) => void;
+  onSwitchToComment?: (replacement: string, note: string) => void;
+}) {
+  const { t } = useTranslation();
+  const original = editor.targets.map(editableSuggestionTargetContent).join("\n");
+  const [replacement, setReplacement] = useState(editor.replacement);
+  const [note, setNote] = useState(editor.note);
+  const isStale = editor.targets[0]?.sourceRevision !== editor.sourceRevision;
+  const canSave =
+    (isStale || replacement !== original) && replacementByteLength(replacement) <= 65_536;
+  const extendUp = useCallback(() => onExtend("up"), [onExtend]);
+  const extendDown = useCallback(() => onExtend("down"), [onExtend]);
+  const handleSave = useCallback(() => onSave(replacement, note), [note, onSave, replacement]);
+  const handleSelectMode = useCallback(
+    (mode: "comment" | "suggestion") => {
+      if (mode === "comment") onSwitchToComment?.(replacement, note);
+    },
+    [note, onSwitchToComment, replacement],
+  );
+  return (
+    <View style={styles.suggestionEditorBlock} testID="inline-suggestion-editor">
+      {onSwitchToComment ? (
+        <ReviewComposerTabs mode="suggestion" onSelect={handleSelectMode} />
+      ) : null}
+      <View style={styles.suggestionEditorHeader}>
+        <ThemedCode2 size={14} uniProps={foregroundMutedIconColorMapping} />
+        <Text style={styles.suggestionLabel}>
+          {t("review.suggestion.lines", {
+            start: editor.targets[0]?.lineNumber,
+            end: editor.targets.at(-1)?.lineNumber,
+          })}
+        </Text>
+      </View>
+      {!editor.suggestionId ? (
+        <View style={styles.suggestionRangeActions}>
+          <Button size="xs" variant="ghost" onPress={extendUp}>
+            {t("review.suggestion.addLineAbove")}
+          </Button>
+          <Button size="xs" variant="ghost" onPress={extendDown}>
+            {t("review.suggestion.addLineBelow")}
+          </Button>
+        </View>
+      ) : null}
+      <TextInput
+        accessibilityLabel={t("review.suggestion.replacement")}
+        multiline
+        initialValue={replacement}
+        onChangeText={setReplacement}
+        style={[styles.editorInput, styles.suggestionReplacementInput]}
+      />
+      <TextInput
+        accessibilityLabel={t("review.suggestion.note")}
+        placeholder={t("review.suggestion.notePlaceholder")}
+        placeholderTextColor={styles.placeholderColor.color}
+        initialValue={note}
+        onChangeText={setNote}
+        style={[styles.editorInput, styles.suggestionNoteInput]}
+      />
+      <View style={styles.editorActions}>
+        <Button size="xs" variant="ghost" onPress={onCancel}>
+          {t("review.comment.cancel")}
+        </Button>
+        <Button size="xs" disabled={!canSave} onPress={handleSave}>
+          {t("review.suggestion.save")}
+        </Button>
+      </View>
+    </View>
+  );
+}
+
 export function getInlineReviewThreadViewportStyle({
   viewportWidth,
   pinToViewport,
@@ -431,31 +1286,69 @@ export function InlineReviewEditor({
   initialBody,
   onCancel,
   onSave,
+  onSuggestEdit,
   testID,
 }: {
   initialBody: string;
   onCancel: () => void;
   onSave: (body: string) => void;
+  onSuggestEdit?: (body: string) => void;
   testID?: string;
 }) {
   const { t } = useTranslation();
   const inputRef = useRef<EditingTextInputHandle | null>(null);
+  const editorRef = useRef<View | null>(null);
+  const canShowKeyboardHints = useHasFinePointer();
   const [body, setBody] = useState(initialBody);
   const [isFocused, setIsFocused] = useState(false);
   const trimmedBody = body.trim();
   const canSave = trimmedBody.length > 0;
+  const showKeyboardHints = isFocused && canShowKeyboardHints;
 
   useEffect(() => {
-    inputRef.current?.focus();
+    if (!isWeb) {
+      inputRef.current?.focus();
+      return;
+    }
+    let revealFrame: number | null = requestAnimationFrame(() => {
+      revealFrame = requestAnimationFrame(() => {
+        const editor = editorRef.current;
+        if (editor instanceof HTMLElement) revealWithinNearestVerticalViewport(editor);
+      });
+    });
+    const stopFocusing = focusWithRetries({
+      focus: () => getWebTextInputElement(inputRef.current)?.focus({ preventScroll: true }),
+      isFocused: () => {
+        const element = getWebTextInputElement(inputRef.current);
+        return Boolean(element) && document.activeElement === element;
+      },
+    });
+    return () => {
+      stopFocusing();
+      if (revealFrame !== null) cancelAnimationFrame(revealFrame);
+    };
+    // Opening the editor is the focus handoff. Retrying on later renders would
+    // steal focus back after the reviewer deliberately moves elsewhere.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleFocus = useCallback(() => {
-    setIsFocused(true);
-  }, []);
-  const handleBlur = useCallback(() => {
-    setIsFocused(false);
-  }, []);
+  const handleFocus = useCallback(() => setIsFocused(true), []);
+  const handleBlur = useCallback(() => setIsFocused(false), []);
   const handleSave = useCallback(() => onSave(trimmedBody), [onSave, trimmedBody]);
+  const handleSelectMode = useCallback(
+    (mode: "comment" | "suggestion") => {
+      if (mode === "suggestion") onSuggestEdit?.(body);
+    },
+    [body, onSuggestEdit],
+  );
+  const cancelShortcut = useMemo(
+    () => (showKeyboardHints ? <Shortcut keys={REVIEW_CANCEL_SHORTCUT_KEYS} /> : null),
+    [showKeyboardHints],
+  );
+  const saveShortcut = useMemo(
+    () => (showKeyboardHints ? <Shortcut keys={REVIEW_SAVE_SHORTCUT_KEYS} /> : null),
+    [showKeyboardHints],
+  );
 
   useEffect(() => {
     const element = getWebTextInputElement(inputRef.current);
@@ -497,7 +1390,8 @@ export function InlineReviewEditor({
   );
 
   return (
-    <View style={styles.editorBlock} testID={testID}>
+    <View ref={editorRef} style={styles.editorBlock} testID={testID}>
+      {onSuggestEdit ? <ReviewComposerTabs mode="comment" onSelect={handleSelectMode} /> : null}
       <TextInput
         ref={inputRef}
         accessibilityLabel={t("review.comment.label")}
@@ -519,6 +1413,7 @@ export function InlineReviewEditor({
           onPress={onCancel}
           variant="ghost"
           size="xs"
+          trailing={cancelShortcut}
         >
           {t("review.comment.cancel")}
         </Button>
@@ -530,6 +1425,7 @@ export function InlineReviewEditor({
           onPress={handleSave}
           variant="default"
           size="xs"
+          trailing={saveShortcut}
         >
           {t("review.comment.save")}
         </Button>
@@ -561,8 +1457,6 @@ const styles = StyleSheet.create((theme) => ({
     position: "absolute",
     right: -10,
     top: Math.floor((theme.lineHeight.diff - 22) / 2),
-  },
-  gutterActionVisual: {
     width: 22,
     height: 22,
     borderRadius: theme.borderRadius.md,
@@ -579,8 +1473,31 @@ const styles = StyleSheet.create((theme) => ({
     flex: 1,
     minWidth: 0,
     gap: INLINE_REVIEW_GAP,
-    paddingVertical: INLINE_REVIEW_VERTICAL_PADDING,
+    paddingVertical: theme.spacing[2],
     paddingHorizontal: theme.spacing[3],
+  },
+  composerTabs: {
+    flexDirection: "row",
+    alignSelf: "flex-start",
+    gap: theme.spacing[1],
+    padding: 2,
+    borderRadius: theme.borderRadius.md,
+    backgroundColor: theme.colors.surface1,
+  },
+  composerTab: {
+    paddingHorizontal: theme.spacing[2],
+    paddingVertical: theme.spacing[1],
+    borderRadius: theme.borderRadius.base,
+  },
+  composerTabSelected: {
+    backgroundColor: theme.colors.surface3,
+  },
+  composerTabText: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
+  },
+  composerTabTextSelected: {
+    color: theme.colors.foreground,
   },
   commentBlock: {
     backgroundColor: theme.colors.surface2,
@@ -593,12 +1510,55 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     gap: theme.spacing[2],
   },
+  suggestionBlock: {
+    minHeight: INLINE_SUGGESTION_HEIGHT,
+    borderColor: theme.colors.accent,
+  },
+  suggestionBody: {
+    flex: 1,
+    minWidth: 0,
+    gap: theme.spacing[1],
+  },
+  suggestionLabel: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
+  },
+  suggestionCode: {
+    color: theme.colors.foreground,
+    fontFamily: theme.fontFamily.mono,
+    fontSize: theme.fontSize.sm,
+  },
+  suggestionEditorBlock: {
+    minHeight: INLINE_SUGGESTION_EDITOR_HEIGHT,
+    backgroundColor: theme.colors.surface2,
+    borderWidth: theme.borderWidth[1],
+    borderColor: theme.colors.accent,
+    borderRadius: theme.borderRadius.lg,
+    padding: theme.spacing[2],
+    gap: theme.spacing[2],
+  },
+  suggestionEditorHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
+  },
+  suggestionRangeActions: {
+    flexDirection: "row",
+    gap: theme.spacing[1],
+  },
+  suggestionReplacementInput: {
+    minHeight: 96,
+    fontFamily: theme.fontFamily.mono,
+  },
+  suggestionNoteInput: {
+    minHeight: 40,
+  },
   commentBody: {
     flex: 1,
     minWidth: 0,
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.content,
-    lineHeight: theme.fontSize.content * 1.4,
+    fontSize: theme.fontSize.sm,
+    lineHeight: theme.fontSize.sm * 1.4,
   },
   commentActions: {
     flexDirection: "row",
@@ -646,8 +1606,8 @@ const styles = StyleSheet.create((theme) => ({
     borderRadius: theme.borderRadius.md,
     paddingHorizontal: theme.spacing[3],
     paddingVertical: theme.spacing[2],
-    fontSize: theme.fontSize.content,
-    lineHeight: theme.fontSize.content * 1.4,
+    fontSize: theme.fontSize.sm,
+    lineHeight: theme.fontSize.sm * 1.4,
     textAlignVertical: "top",
     ...(isWeb
       ? {
