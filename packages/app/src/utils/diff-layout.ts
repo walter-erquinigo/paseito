@@ -22,6 +22,9 @@ export interface ReviewableDiffTarget {
   lineNumber: number;
   lineType: ReviewableLineType;
   content: string;
+  /** Best current-file line to focus when this diff target is opened for editing. */
+  editLineNumber?: number;
+  sourceRevision?: string;
 }
 
 export function buildReviewableDiffTargetKey(input: ReviewableDiffTargetKeyInput): string {
@@ -115,6 +118,8 @@ function toReviewTarget(cell: NumberedDiffCell): ReviewableDiffTarget {
     lineNumber: cell.lineNumber,
     lineType: cell.lineType,
     content: cell.content,
+    ...(cell.editLineNumber ? { editLineNumber: cell.editLineNumber } : {}),
+    ...(cell.sourceRevision ? { sourceRevision: cell.sourceRevision } : {}),
   };
 }
 
@@ -134,6 +139,9 @@ export function buildNumberedDiffHunks(file: ParsedDiffFile): NumberedDiffHunk[]
     for (const [lineIndex, line] of hunk.lines.entries()) {
       let oldLineNumber: number | null = null;
       let newLineNumber: number | null = null;
+      const currentEditLineNumber = file.isDeleted
+        ? undefined
+        : Math.max(1, Math.min(newLineNo, file.newLineCount ?? newLineNo));
 
       if (line.type === "remove") {
         oldLineNumber = oldLineNo;
@@ -157,6 +165,9 @@ export function buildNumberedDiffHunks(file: ParsedDiffFile): NumberedDiffHunk[]
         oldLineNumber,
         newLineNumber,
         side: "old",
+        editLineNumber:
+          line.type === "remove" ? currentEditLineNumber : (newLineNumber ?? undefined),
+        sourceRevision: file.revision,
       });
       const newCell = buildNumberedCell({
         filePath: file.path,
@@ -167,6 +178,8 @@ export function buildNumberedDiffHunks(file: ParsedDiffFile): NumberedDiffHunk[]
         oldLineNumber,
         newLineNumber,
         side: "new",
+        editLineNumber: newLineNumber ?? undefined,
+        sourceRevision: file.revision,
       });
 
       lines.push({
@@ -199,6 +212,8 @@ function buildNumberedCell(input: {
   oldLineNumber: number | null;
   newLineNumber: number | null;
   side: ReviewSide;
+  editLineNumber?: number;
+  sourceRevision?: string;
 }): NumberedDiffCell | null {
   if (input.line.type === "header") {
     return null;
@@ -231,6 +246,8 @@ function buildNumberedCell(input: {
     lineNumber,
     lineType: input.line.type,
     content: input.line.content,
+    ...(input.editLineNumber ? { editLineNumber: input.editLineNumber } : {}),
+    ...(input.sourceRevision ? { sourceRevision: input.sourceRevision } : {}),
     line: input.line,
   };
 }
