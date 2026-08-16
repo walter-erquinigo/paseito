@@ -56,6 +56,7 @@ import { mountBrowserAutomationDaemonClientHandler } from "@/desktop/browser/aut
 import { schedulesQueryBaseKey } from "@/schedules/aggregated-schedules";
 import { dispatchComposerAgentMessage, sendQueuedComposerMessageNow } from "@/composer/actions";
 import { createMessageSubmissionWriter } from "@/composer/submission/writer";
+import { createComposerQueueWriter, useComposerQueueStore } from "@/composer/queue-store";
 import { resolveComposerAttachmentSubmitFormat } from "@/composer/attachments/submit";
 import { encodeImages } from "@/utils/encode-images";
 import { DirectorySync, type RefreshAgentDirectoryResult } from "@/runtime/directory-sync";
@@ -1285,7 +1286,7 @@ export class HostRuntimeController {
 }
 
 const REGISTRY_STORAGE_KEY = "@paseo:daemon-registry";
-const LOCALHOST_FALLBACK_ENDPOINT = "localhost:6767";
+const LOCALHOST_FALLBACK_ENDPOINT = "localhost:6769";
 const DEFAULT_LOCALHOST_BOOTSTRAP_TIMEOUT_MS = 2500;
 const E2E_STORAGE_KEY = "@paseo:e2e";
 const INITIAL_DAEMON_CONNECTION_HINT_GLOBAL_KEY = "__PASEO_INITIAL_DAEMON_CONNECTION__";
@@ -1616,6 +1617,7 @@ export class HostRuntimeStore {
     rekeyMap(this.lastConnectionStatusByServer, oldServerId, newServerId);
     rekeyMap(this.connectionStatusStartedAtByServer, oldServerId, newServerId);
     rekeyMap(this.directoryBootstrapInFlight, oldServerId, newServerId);
+    useComposerQueueStore.getState().rekeyServer(oldServerId, newServerId);
     this.replicaCache.reconcileServerId(oldServerId, newServerId);
     projectIconCache.reconcileServerId(oldServerId, newServerId);
     this.directorySyncByServer.get(oldServerId)?.dispose();
@@ -1877,6 +1879,7 @@ export class HostRuntimeStore {
     await this.revokePushNotifications({ client: this.getClient(serverId), serverId });
     const remaining = this.hosts.filter((daemon) => daemon.serverId !== serverId);
     this.setHostsAndSync(remaining);
+    useComposerQueueStore.getState().removeServer(serverId);
     await this.persistHosts();
   }
 
@@ -2164,9 +2167,16 @@ export class HostRuntimeStore {
   drainQueuedAgentMessage(serverId: string, agentId: string): void {
     const drainKey = `${serverId}:${agentId}`;
     if (this.queuedAgentDrainInFlight.has(drainKey)) return;
+    if (!useComposerQueueStore.getState().hasHydrated) {
+      void Promise.resolve(useComposerQueueStore.persist.rehydrate()).then(() => {
+        this.drainQueuedAgentMessage(serverId, agentId);
+        return undefined;
+      });
+      return;
+    }
     const store = useSessionStore.getState();
     const session = store.sessions[serverId];
-    const queue = session?.queuedMessages.get(agentId);
+    const queue = useComposerQueueStore.getState().read(serverId, agentId);
     const client = session?.client;
     if (!client || !queue?.length || session.initializingAgents.get(agentId) === true) {
       return;
@@ -2176,11 +2186,7 @@ export class HostRuntimeStore {
     void sendQueuedComposerMessageNow({
       agentId,
       messageId: next.id,
-      queue: {
-        read: (queuedAgentId) =>
-          useSessionStore.getState().sessions[serverId]?.queuedMessages.get(queuedAgentId) ?? [],
-        write: (update) => useSessionStore.getState().setQueuedMessages(serverId, update),
-      },
+      queue: createComposerQueueWriter(serverId),
       submitMessage: async ({ text, attachments }) => {
         const supportsForgeAttachments =
           useSessionStore.getState().sessions[serverId]?.serverInfo?.features?.forgeSearch === true;

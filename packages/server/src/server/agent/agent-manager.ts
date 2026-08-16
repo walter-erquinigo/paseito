@@ -48,6 +48,7 @@ import {
   type ImportableProviderSession,
   type ListImportableSessionsOptions,
 } from "./agent-sdk-types.js";
+import type { ActiveTurnBehavior } from "@getpaseo/protocol/messages";
 import { buildArchivedAgentRecord, type ArchivedStoredAgentRecord } from "./agent-archive.js";
 import type { StoredAgentRecord, AgentStorage } from "./agent-storage.js";
 import type { AgentOwner } from "./agent-owner.js";
@@ -315,6 +316,16 @@ export interface WaitForAgentResult {
 export interface WaitForAgentStartOptions {
   signal?: AbortSignal;
 }
+
+export interface StartAgentRunOptions {
+  replaceRunning?: boolean;
+  activeTurnBehavior?: ActiveTurnBehavior;
+  runOptions?: AgentRunOptions;
+}
+
+export type StartAgentRunResult =
+  | { outOfBand: true }
+  | { outOfBand: false; events: AsyncGenerator<AgentStreamEvent> };
 
 type AttentionState =
   | { requiresAttention: false }
@@ -2110,6 +2121,36 @@ export class AgentManager {
       }
     })();
     return true;
+  }
+
+  async startAgentRun(
+    agentId: string,
+    prompt: AgentPromptInput,
+    options?: StartAgentRunOptions,
+  ): Promise<StartAgentRunResult> {
+    // Out-of-band commands (e.g. /goal pause) must run WITHOUT canceling an
+    // in-flight turn. Keeping this policy here makes every send surface share
+    // the same replace-vs-stream decision.
+    if (this.tryRunOutOfBand(agentId, prompt, options?.runOptions)) {
+      return { outOfBand: true };
+    }
+
+    const shouldReplace = Boolean(options?.replaceRunning && this.hasInFlightRun(agentId));
+    const runOptions = options?.runOptions;
+    if (shouldReplace && options?.activeTurnBehavior === "steer") {
+      const dispatch = await this.steerOrReplaceActiveTurn(agentId, prompt, runOptions);
+      if (dispatch.status === "steered") {
+        return { outOfBand: false, events: (async function* () {})() };
+      }
+      if (dispatch.status === "replaced") {
+        return { outOfBand: false, events: dispatch.iterator };
+      }
+    }
+
+    const events = shouldReplace
+      ? await this.replaceAgentRun(agentId, prompt, runOptions)
+      : this.streamAgent(agentId, prompt, runOptions);
+    return { outOfBand: false, events };
   }
 
   async appendTimelineItem(agentId: string, item: AgentTimelineItem): Promise<void> {
