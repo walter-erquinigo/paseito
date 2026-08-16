@@ -63,7 +63,12 @@ import Svg, { Defs, LinearGradient as SvgLinearGradient, Rect, Stop } from "reac
 import { CODE_SURFACE_DATASET } from "@/styles/code-surface";
 import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
 import { MarkdownRenderer, type MarkdownStyles } from "@/components/markdown/renderer";
-import type { TaskActivity, TodoEntry, UserMessageImageAttachment } from "@/types/stream";
+import type {
+  TaskActivity,
+  TodoEntry,
+  UserMessageDeliveryHint,
+  UserMessageImageAttachment,
+} from "@/types/stream";
 import type { AgentAttachment } from "@getpaseo/protocol/messages";
 import type { ToolCallDetail } from "@getpaseo/protocol/agent-types";
 import { buildToolCallPresentation } from "@/tool-calls/presentation";
@@ -102,6 +107,7 @@ import {
   AttachmentThumbnail,
 } from "@/components/attachment-pill";
 import { AttachmentLightbox } from "@/components/attachment-lightbox";
+import { ReviewAttachmentCard } from "@/components/review-attachment-card";
 import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
 import { isWeb, isNative } from "@/constants/platform";
 import type { AgentCapabilityFlags } from "@getpaseo/protocol/agent-types";
@@ -132,6 +138,7 @@ interface UserMessageProps {
   isLastInGroup?: boolean;
   isPending?: boolean;
   disableOuterSpacing?: boolean;
+  deliveryHint?: UserMessageDeliveryHint;
 }
 
 const MessageOuterSpacingContext = createContext(false);
@@ -395,6 +402,12 @@ const userMessageStylesheet = StyleSheet.create((theme) => ({
     color: theme.colors.foregroundMuted,
     fontSize: STREAM_METADATA_FONT_SIZE,
   },
+  deliveryHintLabel: {
+    alignSelf: "flex-end",
+    marginTop: theme.spacing[1],
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.xs,
+  },
 }));
 
 interface UserMessageImagePillProps {
@@ -428,6 +441,7 @@ export const UserMessage = memo(function UserMessage({
   isLastInGroup = true,
   isPending = false,
   disableOuterSpacing,
+  deliveryHint,
 }: UserMessageProps) {
   const isCompact = useIsCompactFormFactor();
   const { t } = useTranslation();
@@ -513,11 +527,15 @@ export const UserMessage = memo(function UserMessage({
           {hasAttachments ? (
             <View style={attachmentPreviewContainerStyle}>
               {attachments.map((attachment, index) => {
+                const attachmentKey = `${attachment.type}:${
+                  "number" in attachment ? attachment.number : index
+                }`;
+                if (attachment.type === "review") {
+                  return <ReviewAttachmentCard key={attachmentKey} attachment={attachment} />;
+                }
                 const content = getAgentAttachmentPillContent(attachment, t);
                 return (
-                  <AttachmentFrame
-                    key={`${attachment.type}:${"number" in attachment ? attachment.number : index}`}
-                  >
+                  <AttachmentFrame key={attachmentKey}>
                     <AttachmentLabel
                       icon={content.icon}
                       title={content.title}
@@ -557,6 +575,11 @@ export const UserMessage = memo(function UserMessage({
               accessibilityLabel={t("message.actions.copyMessage")}
             />
           </View>
+        ) : null}
+        {deliveryHint === "steering" ? (
+          <Text style={userMessageStylesheet.deliveryHintLabel}>
+            {t("composer.queue.steeringConversation")}
+          </Text>
         ) : null}
       </View>
       <AttachmentLightbox metadata={lightboxMetadata} onClose={handleLightboxClose} />

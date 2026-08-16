@@ -217,6 +217,7 @@ const CODEX_APP_SERVER_CAPABILITIES: AgentCapabilityFlags = {
   supportsRewindConversation: true,
   supportsRewindFiles: false,
   supportsRewindBoth: false,
+  supportsSteering: true,
 };
 
 const CODEX_MODES: AgentMode[] = [
@@ -3204,6 +3205,7 @@ export class CodexAppServerAgentSession implements AgentSession {
   private nextTurnOrdinal = 0;
   private activeForegroundTurnId: string | null = null;
   private activeClientMessageId: string | null = null;
+  private activeAppServerTurnId: string | null = null;
   private cachedRuntimeInfo: AgentRuntimeInfo | null = null;
   private serviceTier: "fast" | null = null;
   private planModeEnabled = false;
@@ -3989,6 +3991,13 @@ export class CodexAppServerAgentSession implements AgentSession {
     );
   }
 
+  private async buildEffectivePromptInput(prompt: AgentPromptInput): Promise<CodexPromptInput> {
+    const slashCommand = await this.resolveSlashCommandInvocation(prompt);
+    return slashCommand
+      ? await this.buildCommandPromptInput(slashCommand.commandName, slashCommand.args)
+      : prompt;
+  }
+
   async run(prompt: AgentPromptInput, options?: AgentRunOptions): Promise<AgentRunResult> {
     let currentAssistantMessageId: string | null = null;
     let currentAssistantMessageHasBoundary = false;
@@ -4048,11 +4057,7 @@ export class CodexAppServerAgentSession implements AgentSession {
       if (!this.client) {
         throw new Error("Codex client not initialized");
       }
-
-      const slashCommand = await this.resolveSlashCommandInvocation(prompt);
-      const effectivePrompt = slashCommand
-        ? await this.buildCommandPromptInput(slashCommand.commandName, slashCommand.args)
-        : prompt;
+      const effectivePrompt = await this.buildEffectivePromptInput(prompt);
 
       if (this.currentThreadId) {
         await this.ensureThreadLoaded();
@@ -4064,6 +4069,7 @@ export class CodexAppServerAgentSession implements AgentSession {
       const turnId = this.createTurnId();
       this.activeForegroundTurnId = turnId;
       this.activeClientMessageId = options?.clientMessageId ?? null;
+      this.activeAppServerTurnId = null;
       this.currentTurnId = null;
       this.pendingForegroundTurnIdentification?.resolve(null);
       let resolveTurnIdentification!: (identifiedTurnId: string | null) => void;
@@ -4085,13 +4091,19 @@ export class CodexAppServerAgentSession implements AgentSession {
         hasDeveloperInstructions: turnStart.hasDeveloperInstructions,
         hasCodexConfig: turnStart.hasCodexConfig,
       });
-      await this.client.request("turn/start", turnStart.params, TURN_START_TIMEOUT_MS);
+      const response = await this.client.request(
+        "turn/start",
+        turnStart.params,
+        TURN_START_TIMEOUT_MS,
+      );
+      this.rememberStartedAppServerTurn(response);
       return { turnId };
     } catch (error) {
       this.pendingForegroundTurnIdentification?.resolve(null);
       this.pendingForegroundTurnIdentification = null;
       this.activeForegroundTurnId = null;
       this.activeClientMessageId = null;
+      this.activeAppServerTurnId = null;
       throw error;
     }
   }
@@ -4129,6 +4141,36 @@ export class CodexAppServerAgentSession implements AgentSession {
       resolve: (messageId) => this.userMessageTurnIndexes.get(messageId) ?? null,
       count: () => this.userMessageTurnIds.length,
     };
+  }
+
+  private rememberStartedAppServerTurn(response: unknown): void {
+    const record = toObjectRecord(response);
+    const turn = toObjectRecord(record?.turn);
+    this.activeAppServerTurnId = typeof turn?.id === "string" ? turn.id : null;
+  }
+
+  async steerTurn(prompt: AgentPromptInput, _options?: AgentRunOptions): Promise<void> {
+    await this.connect();
+    if (!this.client) {
+      throw new Error("Codex client not initialized");
+    }
+    if (!this.currentThreadId) {
+      throw new Error("Cannot steer Codex turn without an active thread");
+    }
+    if (!this.activeForegroundTurnId) {
+      throw new Error("Cannot steer Codex turn without an active foreground turn");
+    }
+    if (!this.activeAppServerTurnId) {
+      throw new Error("Cannot steer Codex turn without an active app-server turn");
+    }
+
+    const effectivePrompt = await this.buildEffectivePromptInput(prompt);
+    const input = await this.buildUserInput(effectivePrompt);
+    await this.client.request("turn/steer", {
+      threadId: this.currentThreadId,
+      input,
+      expectedTurnId: this.activeAppServerTurnId,
+    });
   }
 
   subscribe(callback: (event: AgentStreamEvent) => void): () => void {
@@ -4514,6 +4556,7 @@ export class CodexAppServerAgentSession implements AgentSession {
     this.subscribers.clear();
     this.activeForegroundTurnId = null;
     this.activeClientMessageId = null;
+    this.activeAppServerTurnId = null;
     this.pendingForegroundTurnIdentification?.resolve(null);
     this.pendingForegroundTurnIdentification = null;
     await this.disposeClient();
@@ -5588,6 +5631,7 @@ export class CodexAppServerAgentSession implements AgentSession {
       pendingIdentification.resolve(parsed.turnId);
       this.pendingForegroundTurnIdentification = null;
     }
+    this.activeAppServerTurnId = parsed.turnId;
     this.resetTurnTrackingState();
     this.emitEvent({ type: "turn_started", provider: CODEX_PROVIDER });
   }
@@ -5631,6 +5675,7 @@ export class CodexAppServerAgentSession implements AgentSession {
     this.pendingForegroundTurnIdentification?.resolve(null);
     this.pendingForegroundTurnIdentification = null;
     this.pendingSubAgentNotificationsByThreadId.clear();
+    this.activeAppServerTurnId = null;
     this.resetTurnTrackingState();
   }
 
