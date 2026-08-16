@@ -180,3 +180,62 @@ The app runs on iOS, Android, web (browser), and web (Electron desktop). Code is
 ## Debugging
 
 Find the complete daemon logs and traces in the $PASEO_HOME/daemon.log
+
+## Verify the build the user is actually running
+
+Source changes are not visible in an already-running packaged Paseito app. Before reporting a desktop UI change as complete or diagnosing a missing UI element:
+
+0. Every commit that changes Paseito must increment the numeric `paseito.N` prerelease identifier in the root and desktop package versions. Never publish two different Paseito commits with the same visible version.
+1. Identify the exact version and path of the running app and daemon. On macOS, inspect the process path and the app's `Info.plist`; do not infer the running version from `package.json`.
+2. Compare that version with the version or commit that introduced the feature. Treat a stale running bundle as the first suspect when source-level tests pass but the UI is absent.
+3. For desktop UI work, run `npm run build:desktop` and verify the produced app's embedded `CFBundleShortVersionString` before claiming that a packaged build contains the change.
+4. Validate the new bundle in an isolated development profile and on non-production ports when possible. A source checkout, passing unit tests, or an Expo export alone is not proof that the user's packaged app has been updated.
+5. State the relaunch/install requirement explicitly in the handoff. Do not imply that an existing Electron process hot-reloads a newly built bundle.
+6. Never replace, quit, or relaunch the packaged app—and never restart its daemon on port `6767`—without the user's permission. Building an artifact is allowed; activating it is a separate step.
+
+For capability-gated UI, verify both sides of the runtime contract: the client bundle must contain the feature and the connected daemon must advertise the required `server_info.features.*` capability. When the capability is absent, the UI must show an explicit upgrade message rather than silently hiding the feature.
+
+See [docs/development.md](docs/development.md) for isolated runtime ports and [docs/release.md](docs/release.md) for packaging and release checks.
+
+<!-- PASEITO-LOCAL-FEATURES:START -->
+
+## Paseito local feature preservation
+
+`automation/feature-registry.json` is authoritative. Before and after every upstream rebase,
+verify each feature and its preservation fixes; update the registry and regenerate this block
+instead of editing the list by hand.
+
+- `independent-desktop-identity` — Keep Paseito independently installable beside Paseo with distinct app, daemon, CLI, storage, protocol and visual identities.
+  - Fix: Keep the desktop bundle, daemon, CLI, storage, URL scheme, updater and artwork independent from Paseo.
+- `changes-base-selector` — Let the Changes tab select and remember a read-only comparison base without changing merge, update or pull-request targets.
+  - Fix: Default ahead branches to their committed branch diff without hiding the explicit Uncommitted view.
+  - Fix: Sort every werquinigo/ branch first in literal name order on both current and legacy hosts.
+- `changes-context-expansion` — Load and review omitted source context on demand from the Changes diff without transferring entire files by default.
+  - Fix: Keep context expansion bounded, revision-validated and available to comments and suggestions.
+- `review-suggestions-v1` — Let a reviewer send persisted, structured one- or multi-line replacement suggestions to the destination agent from Changes.
+  - Fix: Keep multi-line comment editors focused without viewport jumps.
+  - Fix: Keep comment threads aligned with fixed diff-gutter rows.
+  - Fix: Keep review attachment contracts intact after upstream reconciliation.
+- `branch-file-review-state` — Let reviewers mark branch files or individual edited lines reviewed while preserving checks only for identical branch-side content.
+  - Fix: Expand a file when it is marked unreviewed.
+  - Fix: Require the review-state capability in packaged and remote releases.
+- `changes-source-navigation` — Search complete current-side changed files and use shared language intelligence directly from Changes.
+  - Fix: Share revision-safe LSP sessions with the editor and suppress stale buffers.
+- `changes-file-tree-navigator` — Navigate large working diffs from a dedicated right-hand file tree in the full desktop Changes tab.
+  - Fix: Keep repeated file selections monotonic and independent from manual diff scrolling.
+- `lens-shared-editor-lsp` — Provide editor intelligence through the existing Lens language server when available and a daemon-owned clangd fallback for ordinary C/C++ workspaces.
+  - Fix: Keep cold-index deadlines, document-version rejection and safe save fallback behavior.
+- `markdown-preview-source-links` — Open source locations from a Markdown file preview in an existing review surface or a reusable split pane without replacing the preview.
+  - Fix: Route source links to a visible inline Changes surface before creating an editor split.
+- `retained-chat-scroll-position` — Preserve a chat's reading position while switching agent tabs or workspaces on desktop.
+  - Fix: Freeze hidden chat measurements and resume bottom-following only when it was previously active.
+- `local-semantic-maintenance` — Use human-supervised weekly Codex reconciliation, fail-closed verification, provenance-bound installation, migration and daily reporting.
+  - Fix: Normalize local history into one commit per feature before inspecting or rebasing onto upstream.
+  - Fix: Keep Git metadata controller-owned and independent semantic review read-only.
+  - Fix: Verify deferred browser contracts, release provenance, installers and remote-daemon rollback before promotion.
+  - Fix: Keep weekly overlap decisions interactive and scheduled publication credentials local.
+  - Fix: Open weekly work in iTerm2 and finish locally when GitHub Actions quota is exhausted.
+- `agent-message-delivery-control` — Let users queue durable follow-up messages or explicitly steer an active agent run without conflating the two actions.
+  - Fix: Restore failed sends to their original queue position and preserve legacy replacement behavior.
+
+<!-- PASEITO-LOCAL-FEATURES:END -->
