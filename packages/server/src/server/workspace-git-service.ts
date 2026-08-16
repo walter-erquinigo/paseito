@@ -11,6 +11,7 @@ import {
   type BranchCheckoutResolution,
   type BranchSuggestion,
   type CheckoutSnapshotFacts,
+  type CheckoutStatusGit,
   type CheckoutDiffCompare,
   type CheckoutDiffResult,
   getCheckoutDiff,
@@ -109,6 +110,25 @@ function mergeSets<T>(
   return { merged, added };
 }
 
+function getStackParentDependencyRefs(
+  facts: Extract<CheckoutSnapshotFacts, { isGit: true }>,
+): string[] {
+  if (facts.stackParent?.state === "valid") {
+    return [facts.stackParent.ref];
+  }
+  if (facts.stackParent?.state !== "missing") {
+    return [];
+  }
+  const branch = branchNameFromRef(facts.stackParent.declaredRef);
+  return [
+    facts.stackParent.declaredRef,
+    branch,
+    `refs/heads/${branch}`,
+    `origin/${branch}`,
+    `refs/remotes/origin/${branch}`,
+  ];
+}
+
 export function getWorkspaceGitObservationReensurePhaseMs(cwd: string): number {
   return (
     createHash("sha256").update(cwd).digest().readUInt32BE(0) %
@@ -136,6 +156,7 @@ export interface WorkspaceGitRuntimeSnapshot {
     behindOfOrigin: number | null;
     hasRemote: boolean;
     diffStat: { additions: number; deletions: number } | null;
+    stackParent?: CheckoutStatusGit["stackParent"];
   };
   forge: {
     featuresEnabled: boolean;
@@ -2152,6 +2173,7 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
         facts.resolvedBaseRef,
         facts.comparisonBaseRef,
         facts.upstreamStatus?.ref,
+        ...getStackParentDependencyRefs(facts),
       ];
       const usesBranch = dependentRefs.some(
         (ref) => ref === branch || ref === `refs/heads/${branch}`,
@@ -2189,6 +2211,7 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
         facts.resolvedBaseRef,
         facts.comparisonBaseRef,
         facts.upstreamStatus?.ref,
+        ...getStackParentDependencyRefs(facts),
         configuredRemoteRef,
         shortstatRemoteRef,
       ];
@@ -2970,6 +2993,7 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
       behindOfOrigin: checkoutStatus.behindOfOrigin,
       hasRemote: checkoutStatus.hasRemote,
       diffStat,
+      stackParent: checkoutStatus.stackParent ?? null,
     };
     const loadedAtMs = this.deps.now().getTime();
     target.latestGitLoadedAtMs = loadedAtMs;

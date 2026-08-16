@@ -1738,6 +1738,19 @@ export class VoiceAssistantWebSocketServer {
         commitsList: true,
         // COMPAT(commitBaseClassification): added in v0.2.0, remove gate after 2027-01-23.
         commitBaseClassification: true,
+        // COMPAT(changesBaseSelector): added in Paseito v0.2.5-paseito.1, remove gate after 2027-02-04.
+        changesBaseSelector: true,
+        // COMPAT(changesStackParentBase): added in Paseito v0.4.0-paseito.33,
+        // remove gate after 2027-02-21.
+        changesStackParentBase: true,
+        // COMPAT(changesContextExpansion): added in Paseito v0.2.5-paseito.4, remove after 2027-02-05.
+        changesContextExpansion: true,
+        // COMPAT(checkoutDiffSearch): added in Paseito v0.4.0-paseito.22, remove after 2027-02-17.
+        checkoutDiffSearch: true,
+        // COMPAT(reviewSuggestionsV1): added in Paseito v0.2.5-paseito.4, remove after 2027-02-05.
+        reviewSuggestionsV1: true,
+        // COMPAT(fileReviewV1): added in Paseito v0.2.5-paseito.8, remove after 2027-02-07.
+        fileReviewV1: true,
         // COMPAT(providerRemoval): added in v0.1.105, drop the gate when floor >= v0.1.105.
         providerRemoval: true,
         // COMPAT(importSessionWorkspaceTarget): added in v0.1.110, remove gate after 2027-01-16.
