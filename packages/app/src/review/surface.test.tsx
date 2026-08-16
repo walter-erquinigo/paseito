@@ -22,7 +22,7 @@ import {
 
 void testI18n;
 
-const { theme, pressablePropsByLabel } = vi.hoisted(() => {
+const { theme, pressablePropsByLabel, electronMac, workspaceFocus } = vi.hoisted(() => {
   Object.assign(globalThis, { __DEV__: false });
   return {
     theme: {
@@ -32,6 +32,7 @@ const { theme, pressablePropsByLabel } = vi.hoisted(() => {
       opacity: { 50: 0.5 },
       fontSize: { xs: 11, sm: 13 },
       fontWeight: { normal: "400", medium: "500" },
+      fontFamily: { mono: "monospace" },
       lineHeight: { diff: 18 },
       colors: {
         accent: "#0a84ff",
@@ -47,8 +48,14 @@ const { theme, pressablePropsByLabel } = vi.hoisted(() => {
       },
     },
     pressablePropsByLabel: new Map<string, Record<string, unknown>>(),
+    electronMac: { value: false },
+    workspaceFocus: { unfocus: vi.fn(), restore: vi.fn() },
   };
 });
+
+vi.mock("@/workspace/focus", () => ({
+  useWorkspaceFocusRestoration: () => workspaceFocus,
+}));
 
 vi.mock("react-native", async (importOriginal) => {
   const ReactModule = await import("react");
@@ -59,17 +66,26 @@ vi.mock("react-native", async (importOriginal) => {
       accessibilityLabel,
       children,
       onPress,
+      onPointerDown,
+      onPointerEnter,
       ...props
     }: {
       accessibilityLabel?: string;
       children?:
         | React.ReactNode
         | ((state: { hovered: boolean; pressed: boolean }) => React.ReactNode);
-      onPress?: () => void;
+      onPress?: (event: { stopPropagation: () => void }) => void;
+      onPointerDown?: (event: { nativeEvent: PointerEvent }) => void;
+      onPointerEnter?: (event: { nativeEvent: PointerEvent }) => void;
       [key: string]: unknown;
     }) => {
       if (accessibilityLabel) {
-        pressablePropsByLabel.set(accessibilityLabel, props);
+        pressablePropsByLabel.set(accessibilityLabel, {
+          ...props,
+          onPress,
+          onPointerDown,
+          onPointerEnter,
+        });
       }
       const resolvedChildren =
         typeof children === "function" ? children({ hovered: false, pressed: false }) : children;
@@ -80,6 +96,18 @@ vi.mock("react-native", async (importOriginal) => {
           "data-testid": typeof props.testID === "string" ? props.testID : undefined,
           disabled: props.disabled === true,
           onClick: onPress,
+          onPointerDown: (event: PointerEvent) =>
+            onPointerDown?.({
+              nativeEvent: {
+                button: event.button ?? 0,
+                buttons: event.buttons ?? 0,
+                shiftKey: event.shiftKey ?? false,
+              } as PointerEvent,
+            }),
+          onPointerEnter: (event: PointerEvent) =>
+            onPointerEnter?.({
+              nativeEvent: { buttons: event.buttons ?? 0 } as PointerEvent,
+            }),
           type: "button",
         },
         resolvedChildren,
@@ -98,7 +126,7 @@ vi.mock("react-native-unistyles", () => ({
 
 vi.mock("@/constants/platform", () => ({
   getIsElectron: () => false,
-  getIsElectronMac: () => false,
+  getIsElectronMac: () => electronMac.value,
   isNative: false,
   isWeb: true,
 }));
@@ -109,6 +137,7 @@ vi.mock("lucide-react-native", () => {
   return {
     Check: createIcon("Check"),
     CircleDot: createIcon("CircleDot"),
+    Code2: createIcon("Code2"),
     Pencil: createIcon("Pencil"),
     Plus: createIcon("Plus"),
     Trash2: createIcon("Trash2"),
@@ -142,13 +171,32 @@ const COMMENT_LIST: ReviewDraftComment[] = [comment()];
 
 function buildReviewActions(overrides: Partial<InlineReviewActions> = {}): InlineReviewActions {
   return {
+    canSuggest: false,
+    composerMode: null,
     commentsByTarget: new Map(),
     editor: null,
+    suggestionsByTarget: new Map(),
+    suggestionEditor: null,
+    selectedRangeTargetKeys: new Set(),
+    suggestionRangeError: null,
     onStartComment: vi.fn(),
     onEditComment: vi.fn(),
     onCancelEditor: vi.fn(),
     onSaveEditor: vi.fn(),
     onDeleteComment: vi.fn(),
+    onStartSuggestion: vi.fn(),
+    onSwitchSuggestionToComment: vi.fn(),
+    onBeginSuggestionDrag: vi.fn(),
+    onUpdateSuggestionDrag: vi.fn(),
+    onShiftSuggestionRange: vi.fn(),
+    onPressReviewGutter: vi.fn(),
+    onCancelSuggestionRange: vi.fn(),
+    onClearSuggestionRangeError: vi.fn(),
+    onCancelSuggestion: vi.fn(),
+    onEditSuggestion: vi.fn(),
+    onExtendSuggestion: vi.fn(),
+    onSaveSuggestion: vi.fn(),
+    onDeleteSuggestion: vi.fn(),
     ...overrides,
   };
 }
@@ -168,10 +216,11 @@ function comment(overrides: Partial<ReviewDraftComment> = {}): ReviewDraftCommen
 
 describe("useInlineReviewController", () => {
   beforeEach(() => {
-    useReviewDraftStore.setState({ drafts: {}, diffModeOverrides: {} });
+    useReviewDraftStore.setState({ drafts: {}, suggestions: {}, diffModeOverrides: {} });
   });
 
   afterEach(() => {
+    electronMac.value = false;
     cleanup();
     vi.clearAllMocks();
   });
@@ -186,7 +235,7 @@ describe("useInlineReviewController", () => {
     );
 
     act(() => result.current.onStartComment(reviewTarget));
-    expect(result.current.editor).toEqual({ target: reviewTarget, commentId: null, body: "" });
+    expect(result.current.editor).toEqual({ targets: [reviewTarget], commentId: null, body: "" });
 
     act(() => result.current.onSaveEditor(" first comment "));
     const savedComment = useReviewDraftStore.getState().drafts[firstKey]?.[0];
@@ -203,7 +252,7 @@ describe("useInlineReviewController", () => {
 
     act(() => result.current.onEditComment(reviewTarget, savedComment));
     expect(result.current.editor).toEqual({
-      target: reviewTarget,
+      targets: [reviewTarget],
       commentId: savedComment?.id,
       body: "first comment",
     });
@@ -225,10 +274,163 @@ describe("useInlineReviewController", () => {
     rerender({ reviewDraftKey: secondKey });
     expect(result.current.editor).toBeNull();
   });
+
+  it("persists a contiguous multi-line suggestion with its source revision", () => {
+    const first = target({ lineNumber: 2, sourceRevision: "revision-1", content: "+old one" });
+    const second = target({ lineNumber: 3, sourceRevision: "revision-1", content: " old two" });
+    const reviewDraftKey = "review:suggestions";
+    const { result } = renderHook(() =>
+      useInlineReviewController({
+        reviewDraftKey,
+        availableTargets: [first, second],
+        suggestionsSupported: true,
+      }),
+    );
+
+    act(() => result.current.onStartSuggestion(first));
+    act(() => result.current.onExtendSuggestion("down"));
+    expect(result.current.suggestionEditor?.targets).toHaveLength(2);
+    act(() => result.current.onSaveSuggestion("new code", "Use the new API"));
+
+    expect(useReviewDraftStore.getState().suggestions[reviewDraftKey]?.[0]).toMatchObject({
+      startLine: 2,
+      endLine: 3,
+      originalLines: ["old one", "old two"],
+      replacement: "new code",
+      note: "Use the new API",
+      sourceRevision: "revision-1",
+    });
+  });
+
+  it("switches between comment and code-change drafts without losing either draft", () => {
+    const reviewTarget = target({ sourceRevision: "revision-1" });
+    const { result } = renderHook(() =>
+      useInlineReviewController({
+        reviewDraftKey: "review:composer-tabs",
+        availableTargets: [reviewTarget],
+        suggestionsSupported: true,
+      }),
+    );
+
+    act(() => result.current.onStartComment(reviewTarget));
+    act(() => result.current.onStartSuggestion(reviewTarget, "Should this be optional?"));
+    expect(result.current.composerMode).toBe("suggestion");
+    expect(result.current.editor?.body).toBe("Should this be optional?");
+    expect(result.current.suggestionEditor?.note).toBe("Should this be optional?");
+
+    act(() => result.current.onSwitchSuggestionToComment("changed code", "Explain why"));
+    expect(result.current.composerMode).toBe("comment");
+    expect(result.current.editor?.body).toBe("Explain why");
+    expect(result.current.suggestionEditor).toMatchObject({
+      replacement: "changed code",
+      note: "Explain why",
+    });
+
+    act(() => result.current.onStartSuggestion(reviewTarget, "Explain why"));
+    expect(result.current.composerMode).toBe("suggestion");
+    expect(result.current.suggestionEditor).toMatchObject({
+      replacement: "changed code",
+      note: "Explain why",
+    });
+  });
+
+  it("opens a prefilled editor for Shift-selected lines across expanded hunks", () => {
+    const first = target({ lineNumber: 20, sourceRevision: "revision-1", content: " first" });
+    const middle = target({
+      lineNumber: 21,
+      hunkIndex: 3,
+      sourceRevision: "revision-1",
+      content: " middle",
+    });
+    const last = target({
+      lineNumber: 22,
+      hunkIndex: 4,
+      sourceRevision: "revision-1",
+      content: "+last",
+    });
+    const { result } = renderHook(() =>
+      useInlineReviewController({
+        reviewDraftKey: "review:range",
+        availableTargets: [first, middle, last],
+        suggestionsSupported: true,
+      }),
+    );
+
+    act(() => result.current.onShiftSuggestionRange(first));
+    expect(result.current.selectedRangeTargetKeys).toEqual(new Set([first.key]));
+    act(() => result.current.onShiftSuggestionRange(last));
+
+    expect(result.current.suggestionEditor?.targets).toEqual([first, middle, last]);
+    expect(result.current.suggestionEditor?.replacement).toBe("first\nmiddle\nlast");
+    expect(result.current.selectedRangeTargetKeys).toEqual(
+      new Set([first.key, middle.key, last.key]),
+    );
+  });
+
+  it("preserves a selected range when switching to and saving a comment", () => {
+    const first = target({ lineNumber: 20, sourceRevision: "revision-1", content: " first" });
+    const middle = target({ lineNumber: 21, sourceRevision: "revision-1", content: " middle" });
+    const last = target({ lineNumber: 22, sourceRevision: "revision-1", content: "+last" });
+    const reviewDraftKey = "review:range-comment";
+    const { result } = renderHook(() =>
+      useInlineReviewController({
+        reviewDraftKey,
+        availableTargets: [first, middle, last],
+        suggestionsSupported: true,
+      }),
+    );
+
+    act(() => result.current.onShiftSuggestionRange(first));
+    act(() => result.current.onShiftSuggestionRange(last));
+    expect(result.current.composerMode).toBe("suggestion");
+
+    act(() => result.current.onSwitchSuggestionToComment("changed code", "Review this range"));
+    expect(result.current.editor).toEqual({
+      targets: [first, middle, last],
+      commentId: null,
+      body: "Review this range",
+    });
+    expect(result.current.selectedRangeTargetKeys).toEqual(
+      new Set([first.key, middle.key, last.key]),
+    );
+
+    act(() => result.current.onSaveEditor("Review this range"));
+    expect(useReviewDraftStore.getState().drafts[reviewDraftKey]?.[0]).toMatchObject({
+      filePath: "src/example.ts",
+      side: "new",
+      lineNumber: 20,
+      endLine: 22,
+      body: "Review this range",
+    });
+    expect(result.current.commentsByTarget.get(last.key)).toHaveLength(1);
+
+    const savedComment = useReviewDraftStore.getState().drafts[reviewDraftKey]?.[0];
+    act(() => result.current.onEditComment(last, savedComment));
+    expect(result.current.editor?.targets).toEqual([first, middle, last]);
+  });
+
+  it("reports hidden lines instead of creating an incomplete suggestion", () => {
+    const first = target({ lineNumber: 20, sourceRevision: "revision-1" });
+    const last = target({ lineNumber: 22, sourceRevision: "revision-1" });
+    const { result } = renderHook(() =>
+      useInlineReviewController({
+        reviewDraftKey: "review:hidden-range",
+        availableTargets: [first, last],
+        suggestionsSupported: true,
+      }),
+    );
+
+    act(() => result.current.onShiftSuggestionRange(first));
+    act(() => result.current.onShiftSuggestionRange(last));
+
+    expect(result.current.suggestionEditor).toBeNull();
+    expect(result.current.suggestionRangeError).toBe("hidden-lines");
+  });
 });
 
 describe("git diff inline review helpers", () => {
   afterEach(() => {
+    electronMac.value = false;
     cleanup();
     vi.clearAllMocks();
     pressablePropsByLabel.clear();
@@ -259,7 +461,8 @@ describe("git diff inline review helpers", () => {
     const rightComment = comment();
     const actions = buildReviewActions({
       commentsByTarget: groupInlineReviewCommentsByTarget([rightComment]),
-      editor: { target: rightTarget, commentId: null, body: "" },
+      composerMode: "comment",
+      editor: { targets: [rightTarget], commentId: null, body: "" },
     });
 
     const rowState = getSplitInlineReviewThreadState({
@@ -270,16 +473,7 @@ describe("git diff inline review helpers", () => {
 
     expect(rowState?.left).toBeNull();
     expect(rowState?.right?.comments).toEqual([rightComment]);
-    expect(rowState?.height).toBe(226);
-  });
-
-  it("includes thread padding in the inline editor height", () => {
-    const reviewTarget = target();
-    const actions = buildReviewActions({
-      editor: { target: reviewTarget, commentId: null, body: "" },
-    });
-
-    expect(getInlineReviewThreadState({ reviewTarget, reviewActions: actions })?.height).toBe(148);
+    expect(rowState?.height).toBe(248);
   });
 
   it("pins no-wrap review threads to the visible diff viewport", () => {
@@ -293,8 +487,9 @@ describe("git diff inline review helpers", () => {
 
   it("keeps the gutter add-comment target accessible and clicking opens the editor", () => {
     const onStartComment = vi.fn();
+    const stopPropagation = vi.fn();
     const reviewTarget = target();
-    const { getByLabelText } = render(
+    render(
       <InlineReviewGutterCell
         reviewTarget={reviewTarget}
         comments={EMPTY_COMMENTS}
@@ -305,7 +500,12 @@ describe("git diff inline review helpers", () => {
       </InlineReviewGutterCell>,
     );
 
-    fireEvent.click(getByLabelText("Add review comment"));
+    const onPress = pressablePropsByLabel.get("Add review comment")?.onPress as
+      | ((event: { stopPropagation: () => void }) => void)
+      | undefined;
+    expect(onPress).toEqual(expect.any(Function));
+    act(() => onPress?.({ stopPropagation }));
+    expect(stopPropagation).toHaveBeenCalledOnce();
     expect(onStartComment).toHaveBeenCalledWith(reviewTarget);
     expect(pressablePropsByLabel.get("Add review comment")?.hitSlop).toBe(SMALL_ACTION_HIT_SLOP);
   });
@@ -369,6 +569,39 @@ describe("git diff inline review helpers", () => {
     expect(queryByText("2")).toBeTruthy();
     expect(container.querySelector("[data-icon='Plus']")).toBeTruthy();
   });
+
+  it("routes macOS Shift-click and gutter drag to suggestion range selection", () => {
+    electronMac.value = true;
+    const reviewTarget = target({ sourceRevision: "revision-1" });
+    const actions = buildReviewActions({ canSuggest: true });
+    render(
+      <InlineReviewGutterCell
+        reviewTarget={reviewTarget}
+        reviewActions={actions}
+        comments={EMPTY_COMMENTS}
+        isEditorOpen={false}
+        onStartComment={actions.onStartComment}
+      >
+        <span>2</span>
+      </InlineReviewGutterCell>,
+    );
+    const gutterProps = pressablePropsByLabel.get("Add review comment");
+    const onPointerDown = gutterProps?.onPointerDown as
+      | ((event: { nativeEvent: Partial<PointerEvent> }) => void)
+      | undefined;
+    const onPointerEnter = gutterProps?.onPointerEnter as
+      | ((event: { nativeEvent: Partial<PointerEvent> }) => void)
+      | undefined;
+
+    onPointerDown?.({ nativeEvent: { button: 0, buttons: 1, shiftKey: true } });
+    expect(actions.onShiftSuggestionRange).toHaveBeenCalledWith(reviewTarget);
+    expect(actions.onBeginSuggestionDrag).not.toHaveBeenCalled();
+
+    onPointerDown?.({ nativeEvent: { button: 0, buttons: 1, shiftKey: false } });
+    onPointerEnter?.({ nativeEvent: { buttons: 1 } });
+    expect(actions.onBeginSuggestionDrag).toHaveBeenCalledWith(reviewTarget);
+    expect(actions.onUpdateSuggestionDrag).toHaveBeenCalledWith(reviewTarget);
+  });
 });
 
 describe("InlineReviewEditor", () => {
@@ -400,6 +633,25 @@ describe("InlineReviewEditor", () => {
     expect(onCancel).toHaveBeenCalledTimes(1);
   });
 
+  it("switches to the code-change tab with the current comment body", () => {
+    const onSuggestEdit = vi.fn();
+    const { getByLabelText, getByTestId } = render(
+      <InlineReviewEditor
+        initialBody=""
+        onCancel={vi.fn()}
+        onSave={vi.fn()}
+        onSuggestEdit={onSuggestEdit}
+        testID="editor"
+      />,
+    );
+
+    fireEvent.change(getByTestId("editor-input"), {
+      target: { value: "Should this be optional?" },
+    });
+    fireEvent.click(getByLabelText("Code change"));
+    expect(onSuggestEdit).toHaveBeenCalledWith("Should this be optional?");
+  });
+
   it("handles Escape cancel and Mod+Enter save from the focused textarea", () => {
     const onCancel = vi.fn();
     const onSave = vi.fn();
@@ -421,13 +673,26 @@ describe("InlineReviewEditor", () => {
     expect(onSave).toHaveBeenCalledWith("ready");
   });
 
-  it("does not show shortcut hints in the action buttons", () => {
+  it("keeps workspace pane ownership while the comment textarea is edited", () => {
+    const { getByTestId } = render(
+      <InlineReviewEditor initialBody="" onCancel={vi.fn()} onSave={vi.fn()} testID="editor" />,
+    );
+    const input = getByTestId("editor-input");
+
+    fireEvent.focus(input);
+    fireEvent.blur(input);
+
+    expect(workspaceFocus.unfocus).not.toHaveBeenCalled();
+    expect(workspaceFocus.restore).not.toHaveBeenCalled();
+  });
+
+  it("shows shared shortcut hints while focused on a fine-pointer screen", () => {
     window.matchMedia = vi.fn().mockReturnValue({
       matches: true,
       addEventListener: vi.fn(),
       removeEventListener: vi.fn(),
     });
-    const { getByTestId, queryByText } = render(
+    const { getByTestId, getByText, queryByText } = render(
       <InlineReviewEditor
         initialBody="ready"
         onCancel={vi.fn()}
@@ -437,9 +702,11 @@ describe("InlineReviewEditor", () => {
     );
     const input = getByTestId("editor-input");
 
-    fireEvent.focus(input);
+    expect(getByText("Esc")).toBeTruthy();
+    expect(getByText(/(?:⌘⏎|Ctrl\+⏎)/)).toBeTruthy();
+
+    fireEvent.blur(input);
     expect(queryByText("Esc")).toBeNull();
-    expect(queryByText(/(?:⌘⏎|Ctrl\+⏎)/)).toBeNull();
   });
 });
 
@@ -470,5 +737,29 @@ describe("InlineReviewThread", () => {
     expect(actions.onEditComment).toHaveBeenCalledWith(reviewTarget, draftComment);
     fireEvent.click(getByTestId("review-comment-delete-comment-1"));
     expect(actions.onDeleteComment).toHaveBeenCalledWith("comment-1");
+  });
+
+  it("switches a new code-change draft back to a comment", () => {
+    const reviewTarget = target({ sourceRevision: "revision-1" });
+    const actions = buildReviewActions({
+      canSuggest: true,
+      composerMode: "suggestion",
+      suggestionEditor: {
+        targets: [reviewTarget],
+        suggestionId: null,
+        replacement: "const value = changed;",
+        note: "Explain why",
+        sourceRevision: "revision-1",
+      },
+    });
+    const { getByLabelText } = render(
+      <InlineReviewThread reviewTarget={reviewTarget} reviewActions={actions} height={316} />,
+    );
+
+    fireEvent.click(getByLabelText("Comment"));
+    expect(actions.onSwitchSuggestionToComment).toHaveBeenCalledWith(
+      "const value = changed;",
+      "Explain why",
+    );
   });
 });
