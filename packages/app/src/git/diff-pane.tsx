@@ -85,6 +85,8 @@ import { isWeb } from "@/constants/platform";
 import { usePublishWorkingDiffAttachment, useWorkingDiff } from "@/git/use-working-diff";
 import { useChangesLsp } from "@/git/use-changes-lsp";
 import type { ChangesSearchMatch } from "@/git/changes-search";
+import type { FileReviewActions, ReviewableChangedLine } from "@/review";
+import type { WorkspaceFileOpenOptions } from "@/workspace/file-open";
 import type { CheckoutStatusPayload } from "@/git/use-status-query";
 import { DiffTooLargeState } from "@/git/diff-too-large-state";
 import { openDesktopTarget, useDesktopOpenTargets } from "@/workspace/desktop-open-targets";
@@ -94,6 +96,7 @@ import {
   getChangesStackParentBadgeKind,
 } from "@/git/changes-base-selection";
 import { retainSelectedChangesFile } from "@/git/changes-file-tree-navigation";
+import { collapseReviewedFiles, revealFileAncestorFolders } from "@/git/file-review-expansion";
 import {
   CHANGES_FILE_TREE_MIN_PANE_WIDTH,
   ChangesFileTreeNavigator,
@@ -310,7 +313,7 @@ interface ChangesSurfaceProps {
   focusColumn?: number;
   focusReveal?: "center-if-hidden";
   onActivate?: () => void;
-  onOpenFile?: (path: string) => void;
+  onOpenFile?: (path: string, options?: WorkspaceFileOpenOptions) => void;
   onAddToChat?: (path: string) => void;
   state?: ChangesState;
   onStateChange?: (state: ChangesState) => void;
@@ -478,6 +481,7 @@ interface ChangesToolbarProps {
   desktopTreeVisible: boolean;
   fileNavigatorAvailable: boolean;
   fileNavigatorCollapsed: boolean;
+  fileReviews: FileReviewActions;
   diffMode: "uncommitted" | "base";
   gitActions: GitActions;
   hasFiles: boolean;
@@ -496,6 +500,9 @@ interface ChangesToolbarProps {
   onRefresh: () => void;
   onCollapseAll: () => void;
   onExpandAll: () => void;
+  onMarkAllReviewed: () => void;
+  onMarkAllUnreviewed: () => void;
+  onOrganizeByReview: () => void;
   onSelectBase: () => void;
   onSelectComparisonBase: (baseRef: string | null) => Promise<void>;
   onSelectUncommitted: () => void;
@@ -520,6 +527,7 @@ function ChangesToolbar(props: ChangesToolbarProps) {
     desktopTreeVisible,
     fileNavigatorAvailable,
     fileNavigatorCollapsed,
+    fileReviews,
     diffMode,
     gitActions,
     hasFiles,
@@ -533,6 +541,9 @@ function ChangesToolbar(props: ChangesToolbarProps) {
     onSelectUncommitted,
     onToggleDesktopTree,
     onToggleFileNavigator,
+    onMarkAllReviewed,
+    onMarkAllUnreviewed,
+    onOrganizeByReview,
   } = props;
   return (
     <PaneContentToolbar style={styles.changesToolbar} testID="changes-header">
@@ -588,9 +599,96 @@ function ChangesToolbar(props: ChangesToolbarProps) {
           />
         ) : null}
         {isMobile ? <GitActionsSplitButton gitActions={gitActions} menuOnly /> : null}
+        {hasFiles ? (
+          <ReviewBulkMenu
+            fileReviews={fileReviews}
+            onMarkAllReviewed={onMarkAllReviewed}
+            onMarkAllUnreviewed={onMarkAllUnreviewed}
+            onOrganizeByReview={onOrganizeByReview}
+          />
+        ) : null}
         <ChangesOptionsMenu {...props} />
       </View>
     </PaneContentToolbar>
+  );
+}
+
+function ReviewBulkMenu({
+  fileReviews,
+  onMarkAllReviewed,
+  onMarkAllUnreviewed,
+  onOrganizeByReview,
+}: {
+  fileReviews: FileReviewActions;
+  onMarkAllReviewed: () => void;
+  onMarkAllUnreviewed: () => void;
+  onOrganizeByReview: () => void;
+}) {
+  const { t } = useTranslation();
+  const triggerStyle = useMemo(() => buildDiffModeTriggerStyle(), []);
+  const hasLineProgress = fileReviews.reviewableLineCount > 0;
+  const reviewed = hasLineProgress ? fileReviews.reviewedLineCount : fileReviews.reviewedCount;
+  const total = hasLineProgress ? fileReviews.reviewableLineCount : fileReviews.reviewableCount;
+  const disabled = !fileReviews.available || fileReviews.reviewableCount === 0;
+  const allReviewed =
+    fileReviews.reviewableCount > 0 && fileReviews.reviewedCount === fileReviews.reviewableCount;
+  const hasReviewedChanges = fileReviews.reviewedCount > 0 || fileReviews.reviewedLineCount > 0;
+  const triggerLabel = t("workspace.git.diff.reviewMenu", { reviewed, total });
+  let accessibilityLabel = t("workspace.git.diff.reviewProgress", {
+    reviewedLines: fileReviews.reviewedLineCount,
+    totalLines: fileReviews.reviewableLineCount,
+    reviewedFiles: fileReviews.reviewedCount,
+    totalFiles: fileReviews.reviewableCount,
+  });
+  if (!fileReviews.supported) {
+    accessibilityLabel = t("workspace.git.diff.reviewUpdateHost");
+  } else if (!fileReviews.available) {
+    accessibilityLabel = t("workspace.git.diff.reviewBranchRequired");
+  }
+  return (
+    <DropdownMenu>
+      <Tooltip delayDuration={300}>
+        <TooltipTrigger asChild>
+          <View>
+            <DropdownMenuTrigger
+              accessibilityRole="button"
+              accessibilityLabel={accessibilityLabel}
+              disabled={disabled}
+              testID="changes-review-menu"
+              style={triggerStyle}
+            >
+              <Text style={styles.diffStatusText} numberOfLines={1}>
+                {triggerLabel}
+              </Text>
+              <ThemedChevronDown size={12} uniProps={foregroundMutedIconColorMapping} />
+            </DropdownMenuTrigger>
+          </View>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">
+          <Text style={styles.tooltipText}>{accessibilityLabel}</Text>
+        </TooltipContent>
+      </Tooltip>
+      <DropdownMenuContent align="end" width={280} testID="changes-review-menu-content">
+        <DropdownMenuItem
+          disabled={allReviewed}
+          testID="changes-review-mark-all"
+          onSelect={onMarkAllReviewed}
+        >
+          {t("workspace.git.diff.markAllChangesReviewed")}
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          disabled={!hasReviewedChanges}
+          testID="changes-review-clear-all"
+          onSelect={onMarkAllUnreviewed}
+        >
+          {t("workspace.git.diff.markAllChangesUnreviewed")}
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem testID="changes-review-organize" onSelect={onOrganizeByReview}>
+          {t("workspace.git.diff.organizeByReview")}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -1409,6 +1507,9 @@ export function ChangesSurface({
   const fsEntryDuplicateEnabled = useSessionStore(
     (state) => state.sessions[serverId]?.serverInfo?.features?.fsEntryDuplicate === true,
   );
+  const fileEditingSupported = useSessionStore(
+    (state) => state.sessions[serverId]?.serverInfo?.features?.workspaceFileEditing === true,
+  );
   const runRefresh = useCheckoutGitActionsStore((s) => s.refresh);
   const isRefreshing =
     useCheckoutGitActionsStore((s) => s.getStatus({ serverId, cwd, actionId: "refresh" })) ===
@@ -1590,6 +1691,14 @@ export function ChangesSurface({
     },
     [onOpenFile],
   );
+  const handleEditLine = useCallback(
+    (line: ReviewableChangedLine) => {
+      const lineStart = line.target.editLineNumber;
+      if (!lineStart) return;
+      onOpenFile?.(line.target.filePath, { lineStart, openMode: "source" });
+    },
+    [onOpenFile],
+  );
   const loadChangesLspSource = contextExpansion.loadSource;
   const expandSearchLine = contextExpansion.expandLine;
   const searchChanges = contextExpansion.search;
@@ -1623,6 +1732,7 @@ export function ChangesSurface({
           onActivate,
           onFilePress: onChangesFilePress,
           onOpenFile,
+          onEditLine: onOpenFile && fileEditingSupported ? handleEditLine : undefined,
           onAddToChat,
           onCopyPath: handleCopyPath,
           onCopyRelativePath: handleCopyRelativePath,
@@ -1656,6 +1766,8 @@ export function ChangesSurface({
       serverId,
       workspaceId,
       onOpenFile,
+      fileEditingSupported,
+      handleEditLine,
       onAddToChat,
       handleCopyPath,
       handleCopyRelativePath,
@@ -1783,6 +1895,29 @@ export function ChangesSurface({
     () => updateCollapsedFilePaths([]),
     [updateCollapsedFilePaths],
   );
+  const handleMarkAllReviewed = useCallback(() => {
+    fileReviews.markAll();
+    updateCollapsedFilePaths(files.map((file) => file.path));
+  }, [fileReviews, files, updateCollapsedFilePaths]);
+  const handleMarkAllUnreviewed = useCallback(() => {
+    fileReviews.clearAll();
+  }, [fileReviews]);
+  const handleOrganizeByReview = useCallback(() => {
+    const filePaths = files.map((file) => file.path);
+    const incompletePaths = filePaths.filter((path) => !fileReviews.reviewedPaths.has(path));
+    updateState({
+      ...instanceState,
+      collapsedFilePaths: collapseReviewedFiles(filePaths, fileReviews.reviewedPaths),
+      collapsedFolderPaths: revealFileAncestorFolders(
+        instanceState.collapsedFolderPaths,
+        incompletePaths,
+      ),
+      fileNavigatorCollapsedFolders: revealFileAncestorFolders(
+        instanceState.fileNavigatorCollapsedFolders ?? [],
+        incompletePaths,
+      ),
+    });
+  }, [fileReviews.reviewedPaths, files, instanceState, updateState]);
   const diffErrorMessage = diffPayloadError?.message ?? null;
   const prErrorMessage = computePrErrorMessage(githubFeaturesEnabled, prPayloadError);
   const baseRefLabel = useMemo(
@@ -1879,6 +2014,7 @@ export function ChangesSurface({
           desktopTreeVisible={desktopTreeVisible}
           fileNavigatorAvailable={navigatorAvailable}
           fileNavigatorCollapsed={fileNavigatorCollapsed}
+          fileReviews={fileReviews}
           diffMode={diffMode}
           gitActions={gitActions}
           hasFiles={hasChanges}
@@ -1896,6 +2032,9 @@ export function ChangesSurface({
           wrapLines={wrapLines}
           onCollapseAll={handleCollapseAllFiles}
           onExpandAll={handleExpandAllFiles}
+          onMarkAllReviewed={handleMarkAllReviewed}
+          onMarkAllUnreviewed={handleMarkAllUnreviewed}
+          onOrganizeByReview={handleOrganizeByReview}
           onRefresh={handleRefresh}
           onSelectBase={handleSelectBase}
           onSelectComparisonBase={handleSelectComparisonBase}

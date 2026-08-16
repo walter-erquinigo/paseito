@@ -1,4 +1,4 @@
-import { memo, type ReactElement, useCallback, useMemo, useState } from "react";
+import { memo, type ReactElement, type ReactNode, useCallback, useMemo, useState } from "react";
 import { Text, View, type PressableStateCallbackType } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import { useWorkspaceFileDragSource } from "@/attachments/use-workspace-file-drag-source";
@@ -41,6 +41,7 @@ export interface FileHeaderProps {
   onDuplicate?: (path: string) => void;
   onRevert?: (path: string, oldPath?: string) => void;
   onHeaderHeightChange?: (path: string, height: number) => void;
+  trailingContent?: ReactNode;
   testID?: string;
 }
 
@@ -191,6 +192,7 @@ export const FileHeader = memo(function FileHeader({
   onActivate,
   onSelect,
   onHeaderHeightChange,
+  trailingContent,
   testID,
   ...actions
 }: FileHeaderProps) {
@@ -270,6 +272,7 @@ export const FileHeader = memo(function FileHeader({
           deletions={file.deletions}
           testID={testID ? `${testID}-stat` : undefined}
         />
+        {trailingContent}
         {treeChangeIcon}
       </View>
     </View>

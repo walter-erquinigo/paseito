@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useSyncExternalStore } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import { ListChevronsUpDown } from "lucide-react-native";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,8 @@ import { LspStatusMenu } from "@/file-pane/lsp-status-menu";
 import { lspLanguageForFile } from "@/file-pane/editor/lsp-preferences";
 import type { ChangesLspController } from "@/git/use-changes-lsp";
 import { buildDiffContextRegions } from "@/git/diff-context-expansion";
+import { ReviewCheckbox } from "./review-checkbox";
+import type { ReviewCheckboxState } from "./review-checkbox-model";
 
 interface DocumentFileHeaderProps {
   file: DiffFileSection;
@@ -74,6 +76,10 @@ function WorkingDocumentFileHeader({
     await onExpandFile?.(file.path);
     onFocusDocument?.();
   }, [file.path, onExpandFile, onFocusDocument]);
+  const reviewControl = useMemo(
+    () => <DocumentFileReviewControl file={file} mode={mode} onToggleFile={onToggleFile} />,
+    [file, mode, onToggleFile],
+  );
   return (
     <View style={styles.root}>
       <FileHeader
@@ -93,6 +99,7 @@ function WorkingDocumentFileHeader({
         onDownload={mode.onDownload}
         onDuplicate={mode.onDuplicate}
         onRevert={mode.onRevert}
+        trailingContent={reviewControl}
         testID={`diff-file-${file.fileIndex}`}
       />
       {onExpandFile && buildDiffContextRegions(file.file).length > 0 ? (
@@ -114,21 +121,8 @@ function WorkingDocumentFileHeader({
         </Tooltip>
       ) : null}
       {mode.lsp ? <DocumentFileLspStatus filePath={file.path} lsp={mode.lsp} /> : null}
-      <DocumentFileReviewControl file={file} mode={mode} onToggleFile={onToggleFile} />
     </View>
   );
-}
-
-function fileReviewIndicator(reviewed: boolean, partiallyReviewed: boolean): "✓" | "−" | "○" {
-  if (reviewed) return "✓";
-  if (partiallyReviewed) return "−";
-  return "○";
-}
-
-function fileReviewCheckedState(reviewed: boolean, partiallyReviewed: boolean) {
-  if (reviewed) return true;
-  if (partiallyReviewed) return "mixed" as const;
-  return false;
 }
 
 function DocumentFileReviewControl({
@@ -144,28 +138,29 @@ function DocumentFileReviewControl({
   const progress = reviews?.lineProgressByPath.get(file.path);
   const reviewed = reviews?.reviewedPaths.has(file.path) === true;
   const partiallyReviewed = Boolean(progress && progress.reviewed > 0);
-  const checked = fileReviewCheckedState(reviewed, partiallyReviewed);
-  const accessibilityState = useMemo(() => ({ checked }), [checked]);
+  let reviewState: ReviewCheckboxState = "unreviewed";
+  if (reviewed) reviewState = "reviewed";
+  else if (partiallyReviewed) reviewState = "mixed";
   const toggleReview = useCallback(
     (event: { stopPropagation?: () => void }) => {
       event.stopPropagation?.();
-      reviews?.toggle(file.path);
-      if (reviewed && file.isCollapsed) onToggleFile(file.path);
+      const nextReviewed = reviews?.toggle(file.path);
+      if (nextReviewed !== undefined && file.isCollapsed !== nextReviewed) {
+        onToggleFile(file.path);
+      }
     },
-    [file.isCollapsed, file.path, onToggleFile, reviewed, reviews],
+    [file.isCollapsed, file.path, onToggleFile, reviews],
   );
   if (!reviews?.available || !file.file.contentRevision) return null;
   return (
-    <Pressable
-      accessibilityRole="checkbox"
-      accessibilityState={accessibilityState}
+    <ReviewCheckbox
       accessibilityLabel={reviewed ? "Mark file unreviewed" : "Mark file reviewed"}
+      alwaysVisible
       onPress={toggleReview}
-      style={styles.reviewControl}
+      state={reviewState}
+      style={styles.headerControl}
       testID={`diff-file-review-${file.path}`}
-    >
-      <Text style={styles.reviewText}>{fileReviewIndicator(reviewed, partiallyReviewed)}</Text>
-    </Pressable>
+    />
   );
 }
 
@@ -203,15 +198,11 @@ function DocumentFileLspStatus({ filePath, lsp }: { filePath: string; lsp: Chang
 
 const styles = StyleSheet.create((theme) => ({
   root: { position: "relative" },
-  reviewControl: {
-    position: "absolute",
-    right: 8,
-    top: 4,
+  headerControl: {
     width: 22,
     height: 22,
     alignItems: "center",
     justifyContent: "center",
-    zIndex: 8,
   },
   expandFileControl: {
     position: "absolute",
@@ -222,7 +213,6 @@ const styles = StyleSheet.create((theme) => ({
     zIndex: 8,
   },
   tooltipText: { color: theme.colors.foreground, fontSize: theme.fontSize.sm },
-  reviewText: { color: theme.colors.foregroundMuted, fontSize: 14, lineHeight: 18 },
 }));
 
 function documentFileHeaderPropsEqual(

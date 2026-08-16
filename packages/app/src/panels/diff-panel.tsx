@@ -20,6 +20,7 @@ import { useWorkspaceDirectory } from "@/stores/session-store-hooks";
 import type { WorkspaceTabTarget } from "@/workspace-tabs/model";
 import { defaultChangesState, changesStateSchema } from "@/panels/changes/state";
 import { usePanelState } from "@/panels/use-panel-state";
+import type { WorkspaceFileOpenOptions } from "@/workspace/file-open";
 
 const ThemedFileDiff = withUnistyles(FileDiff);
 const ThemedGitCommitHorizontal = withUnistyles(GitCommitHorizontal);
@@ -85,7 +86,8 @@ function WorkingDiffPanel() {
   invariant(target.kind === "working_diff", "WorkingDiffPanel requires working_diff target");
 
   const handleOpenFile = useCallback(
-    (path: string) => openFileInWorkspace({ location: { path }, disposition: "side" }),
+    (path: string, options: WorkspaceFileOpenOptions = {}) =>
+      openFileInWorkspace({ location: { path, ...options }, disposition: "side" }),
     [openFileInWorkspace],
   );
 
