@@ -79,10 +79,11 @@ import { useSettings } from "@/hooks/use-settings";
 import { useKeyboardActionHandler } from "@/hooks/use-keyboard-action-handler";
 import { buildWorkspaceKeyboardHandlerId } from "@/keyboard/handler-id";
 import {
-  keyboardActionDispatcher,
   type KeyboardActionDefinition,
   type WorkspacePanelTarget,
 } from "@/keyboard/keyboard-action-dispatcher";
+import { useKeyboardActionDispatcher } from "@/keyboard/keyboard-action-dispatcher-context";
+import { resolveSideFileOpenPlacement } from "@/screens/workspace/workspace-pane-state";
 import { useCreateFlowStore } from "@/stores/create-flow-store";
 import { normalizeWorkspaceTabTarget, workspaceTabTargetsEqual } from "@/workspace-tabs/identity";
 import { useVisibleAgentIds } from "./visible-agent-ids";
@@ -1512,6 +1513,7 @@ function WorkspaceScreenContent({
   const { t } = useTranslation();
   const _insets = useSafeAreaInsets();
   const toast = useToast();
+  const keyboardActionDispatcher = useKeyboardActionDispatcher();
   const isMobile = useIsCompactFormFactor();
   const isFocusModeEnabled = usePanelStore((state) => state.desktop.focusModeEnabled);
   const toggleFocusMode = usePanelStore((state) => state.toggleFocusMode);
@@ -2044,7 +2046,7 @@ function WorkspaceScreenContent({
       keyboardActionDispatcher.dispatch({ id: "changes.focus", scope: "workspace" });
     });
     return true;
-  }, [activeTabId, navigateToTabId, tabs]);
+  }, [activeTabId, keyboardActionDispatcher, navigateToTabId, tabs]);
   useKeyboardActionHandler({
     handlerId: `workspace-focus-changes:${normalizedServerId}:${normalizedWorkspaceId}`,
     actions: ["changes.focus"],
@@ -2131,27 +2133,6 @@ function WorkspaceScreenContent({
     normalizedWorkspaceId,
   ]);
 
-  const handleOpenFileFromExplorer = useCallback(
-    function handleOpenFileFromExplorer(
-      filePath: string,
-      options?: { lineStart: number; openMode: "source" },
-    ) {
-      if (!persistenceKey) {
-        return;
-      }
-      const location = normalizeWorkspaceFileLocation({ path: filePath, ...options });
-      if (!location) {
-        return;
-      }
-      const tabId = openWorkspaceTabFocused(persistenceKey, createWorkspaceFileTabTarget(location));
-      if (tabId) {
-        requestFileNavigation(tabId);
-        navigateToTabId(tabId);
-      }
-    },
-    [navigateToTabId, openWorkspaceTabFocused, persistenceKey, requestFileNavigation],
-  );
-
   const handleOpenFileFromChat = useCallback(
     (location: WorkspaceFileLocation, parentTabId?: string | null) => {
       const normalizedLocation = normalizeWorkspaceFileLocation(location);
@@ -2220,7 +2201,7 @@ function WorkspaceScreenContent({
       }
 
       const tabId = input.parentTabId
-        ? openWorkspaceChildTabFocused(persistenceKey, target, input.parentTabId)
+        ? revealWorkspaceChildTab(persistenceKey, target, input.parentTabId)
         : openWorkspaceTabFocused(persistenceKey, target);
       if (tabId) {
         requestFileNavigation(tabId);
@@ -2230,10 +2211,15 @@ function WorkspaceScreenContent({
     [
       isMobile,
       navigateToTabId,
-      openInSidePanelByDefault,
+      focusWorkspacePane,
+      openWorkspaceTabFocused,
+      revealWorkspaceChildTab,
       persistenceKey,
       requestFileNavigation,
       showMobileAgent,
+      splitWorkspacePaneEmpty,
+      uiTabs,
+      workspaceLayout,
     ],
   );
 
@@ -2264,10 +2250,16 @@ function WorkspaceScreenContent({
           snapshot: getWorkingDiffNavigationSnapshot(persistenceKey),
         });
         if (navigation) {
-          retargetWorkspaceTab(persistenceKey, navigation.tabId, navigation.target);
-          focusWorkspaceTab(persistenceKey, navigation.tabId);
-          navigateToTabId(navigation.tabId);
-          return;
+          const replacementTabId = replaceWorkspaceTabTarget(
+            persistenceKey,
+            navigation.tabId,
+            navigation.target,
+          );
+          if (replacementTabId) {
+            focusWorkspaceTab(persistenceKey, replacementTabId);
+            navigateToTabId(replacementTabId);
+            return;
+          }
         }
         const inlineSnapshot = getInlineWorkingDiffNavigationSnapshot(persistenceKey);
         const inlineNavigation = resolveMarkdownInlineChangesNavigation({

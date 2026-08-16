@@ -20,6 +20,7 @@ export interface UseFileLinkResult {
   target: InlinePathTarget | null;
   onHoverIn: () => void;
   onPress: () => void;
+  onAuxPress: () => void;
   open: (source: AssistantFileLinkSource, disposition: OpenFileDisposition) => void;
 }
 
@@ -117,6 +118,9 @@ export function useFileLink(source: AssistantFileLinkSource): UseFileLinkResult 
   });
 
   const onPress = useStableEvent(() => {
+    open(stableSource, context.configRef.current.primaryDisposition ?? "main");
+  });
+  const onAuxPress = useStableEvent(() => {
     open(stableSource, "side");
   });
 
@@ -127,7 +131,10 @@ export function useFileLink(source: AssistantFileLinkSource): UseFileLinkResult 
     return query.data ?? null;
   }, [query.data, resolution]);
 
-  return useMemo(() => ({ target, onHoverIn, onPress, open }), [target, onHoverIn, onPress, open]);
+  return useMemo(
+    () => ({ target, onHoverIn, onPress, onAuxPress, open }),
+    [target, onHoverIn, onPress, onAuxPress, open],
+  );
 }
 
 export function useAssistantFileLinkActions(): AssistantFileLinkActions {

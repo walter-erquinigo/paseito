@@ -205,4 +205,55 @@ describe("workspace-pane-state", () => {
       }),
     ).toEqual({ kind: "split-side-pane", paneId: "main" });
   });
+
+  it("reuses the nearest left pane for a left-side file open", () => {
+    const layout: WorkspaceLayout = {
+      root: {
+        kind: "group",
+        group: {
+          id: "group-root",
+          direction: "horizontal",
+          sizes: [0.5, 0.5],
+          children: [
+            { kind: "pane", pane: { id: "left", tabIds: [], focusedTabId: null } },
+            {
+              kind: "pane",
+              pane: { id: "preview", tabIds: ["file_notes.md"], focusedTabId: "file_notes.md" },
+            },
+          ],
+        },
+      },
+      focusedPaneId: "preview",
+    };
+
+    expect(
+      resolveSideFileOpenPlacement({
+        layout,
+        sourcePaneId: "preview",
+        tabs: [createTab("file_notes.md", { kind: "file", path: "notes.md" })],
+        target: { kind: "file", path: "/repo/src/app.ts", lineStart: 10, column: 4 },
+        side: "left",
+      }),
+    ).toEqual({ kind: "focus-side-pane", paneId: "left" });
+  });
+
+  it("creates a split beside the preview when no left pane exists", () => {
+    const layout: WorkspaceLayout = {
+      root: {
+        kind: "pane",
+        pane: { id: "preview", tabIds: ["file_notes.md"], focusedTabId: "file_notes.md" },
+      },
+      focusedPaneId: "preview",
+    };
+
+    expect(
+      resolveSideFileOpenPlacement({
+        layout,
+        sourcePaneId: "preview",
+        tabs: [createTab("file_notes.md", { kind: "file", path: "notes.md" })],
+        target: { kind: "file", path: "/repo/src/app.ts" },
+        side: "left",
+      }),
+    ).toEqual({ kind: "split-side-pane", paneId: "preview" });
+  });
 });
