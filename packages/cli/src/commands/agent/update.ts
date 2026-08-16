@@ -166,7 +166,7 @@ function parseAgentChanges(options: AgentUpdateOptions): AgentChanges {
       code: "INVALID_THINKING_OPTION",
       message: "--thinking cannot be empty",
       details:
-        'Provide a thinking option ID. Use "paseo provider models <provider> --thinking" to list valid IDs.',
+        'Provide a thinking option ID. Use "paseito provider models <provider> --thinking" to list valid IDs.',
     } satisfies CommandError;
   }
 
@@ -210,7 +210,7 @@ export async function runUpdateCommand(
     const error: CommandError = {
       code: "MISSING_AGENT_ID",
       message: "Agent ID is required",
-      details: "Usage: paseo agent update <id> [--name <name>] [--label <key=value>]",
+      details: "Usage: paseito agent update <id> [--name <name>] [--label <key=value>]",
     };
     throw error;
   }
@@ -225,7 +225,7 @@ export async function runUpdateCommand(
     const error: CommandError = {
       code: "DAEMON_NOT_RUNNING",
       message: `Cannot connect to daemon at ${host}: ${message}`,
-      details: "Start the daemon with: paseo daemon start",
+      details: "Start the daemon with: paseito daemon start",
     };
     throw error;
   }
@@ -236,7 +236,7 @@ export async function runUpdateCommand(
       const error: CommandError = {
         code: "AGENT_NOT_FOUND",
         message: `Agent not found: ${agentIdArg}`,
-        details: 'Use "paseo ls" to list available agents',
+        details: 'Use "paseito ls" to list available agents',
       };
       throw error;
     }

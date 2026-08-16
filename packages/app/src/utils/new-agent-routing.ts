@@ -40,14 +40,9 @@ export function resolveSelectedAgentForNewAgent(input: {
 
 function inferMainRepoRootFromPaseoWorktreePath(cwd: string): string | null {
   const normalizedPath = cwd.replace(/\\/g, "/");
-  const marker = "/.paseo/worktrees";
-  const markerIndex = normalizedPath.indexOf(marker);
+  const match = normalizedPath.match(/\/\.pase(?:it)?o\/worktrees(?:\/|$)/);
+  const markerIndex = match?.index ?? -1;
   if (markerIndex <= 0) {
-    return null;
-  }
-  const markerEnd = markerIndex + marker.length;
-  const nextChar = normalizedPath[markerEnd];
-  if (nextChar && nextChar !== "/") {
     return null;
   }
   const inferred = cwd.slice(0, markerIndex).replace(/[\\/]+$/, "");

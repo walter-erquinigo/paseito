@@ -5,14 +5,15 @@
       "id": "independent-desktop-identity",
       "commitSubject": "feat: give Paseito an independent macOS identity",
       "preservationFixes": [
-        "Keep the desktop bundle, daemon, CLI, storage, URL scheme, updater and artwork independent from Paseo."
+        "Keep the desktop bundle, daemon, CLI, storage, URL scheme, updater and artwork independent from Paseo.",
+        "Follow the current upstream repository license while retaining Paseito's AGPL-era provenance in NOTICE-PASEITO.md."
       ],
       "permanent": true,
       "intent": "Keep Paseito independently installable beside Paseo with distinct app, daemon, CLI, storage, protocol and visual identities.",
       "invariants": [
         "The bundle id is dev.werquinigo.paseito and the product/executable is Paseito.",
         "Standalone Paseito uses ~/.paseito, port 6769, Paseito-specific app data and the paseito URL/update source; an explicitly registered in-place remote deployment may retain its existing Paseo home, port and server identity.",
-        "The original stepping-stone icon and AGPL attribution remain present."
+        "The original stepping-stone icon remains present, licensing follows the current upstream release, and NOTICE-PASEITO.md retains the fork's AGPL-era provenance."
       ],
       "contracts": [
         "npx vitest run packages/protocol/src/agent-deep-link.test.ts packages/desktop/src/agent-navigation.test.ts packages/cli/src/cli-surface.test.ts"

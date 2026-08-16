@@ -260,8 +260,10 @@ instead of editing the list by hand.
 
 - `independent-desktop-identity` — Keep Paseito independently installable beside Paseo with distinct app, daemon, CLI, storage, protocol and visual identities.
   - Fix: Keep the desktop bundle, daemon, CLI, storage, URL scheme, updater and artwork independent from Paseo.
+  - Fix: Follow the current upstream repository license while retaining Paseito's AGPL-era provenance in NOTICE-PASEITO.md.
 - `changes-base-selector` — Let the Changes tab select and remember a read-only comparison base without changing merge, update or pull-request targets.
   - Fix: Default ahead branches to their committed branch diff without hiding the explicit Uncommitted view.
+  - Fix: Use valid top-commit Stack-Parent branches as the default comparison base and keep invalid markers visible.
   - Fix: Sort every werquinigo/ branch first in literal name order on both current and legacy hosts.
   - Fix: Keep branch search focused while revealing and activating the selected branch, including when it is absent from the bounded suggestion response.
 - `changes-uncommitted-branch-badge` — Show the selected branch's uncommitted working-tree state beside the Changes branch switcher.
@@ -308,5 +310,12 @@ instead of editing the list by hand.
   - Fix: Keep exhaustive project-file search fast and preserve alternate navigation into the active Changes comparison.
   - Fix: Gate exhaustive search on daemon support, bypass redundant ignored-path enumeration, and reject truncated Git file corpora.
   - Fix: Route Command+Enter to the right Changes sidebar even when a full Changes tab exists.
+  - Fix: Keep absolute host-path autocomplete outside the Git index and preserve editable absolute file tabs.
+- `desktop-gitlab-mr-tracker` — Track GitLab merge requests in a read-only desktop sidebar surface without porting MR Tracker automations or personal configuration.
+  - Fix: Keep GitLab access tokens outside renderer-visible state and the repository, stored locally with owner-only permissions without Keychain, and preserve credentials across ordinary desktop upgrades.
+  - Fix: Keep the unconfigured tracker free of dead controls and provide direct, security-explained setup actions.
+  - Fix: Keep every local triage label understandable through concise desktop hover and keyboard-focus explanations.
+  - Fix: Keep MR triage left-anchored while summary navigation, detail expansion, and importance controls remain independent interactions.
+  - Fix: Keep MR triage binary as Important or Ignore, normalize legacy local choices to Ignore, and provide an accessible Important-only filter beside search.
 
 <!-- PASEITO-LOCAL-FEATURES:END -->
