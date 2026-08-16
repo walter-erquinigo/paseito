@@ -1,5 +1,6 @@
 import type { ParsedDiffFile } from "@getpaseo/protocol/messages";
 import type { InlineReviewActions } from "@/review";
+import type { DiffContextRegion } from "@/git/diff-context-expansion";
 import type { ReviewableDiffTarget } from "@/utils/diff-layout";
 
 interface DiffDocumentBaseProps {
@@ -15,6 +16,12 @@ interface DiffDocumentBaseProps {
 export interface WorkingDiffMode {
   kind: "working";
   reviewActions?: InlineReviewActions;
+  onExpandContext?: (
+    filePath: string,
+    region: DiffContextRegion,
+    direction: "up" | "down" | "all",
+  ) => void | Promise<void>;
+  onExpandFile?: (filePath: string) => void | Promise<void>;
   onFilePress?: (path: string) => void;
   focusPath?: string;
   focusRequestId?: number;
