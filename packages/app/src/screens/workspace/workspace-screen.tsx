@@ -81,10 +81,11 @@ import { useSettings } from "@/hooks/use-settings";
 import { useKeyboardActionHandler } from "@/hooks/use-keyboard-action-handler";
 import { buildWorkspaceKeyboardHandlerId } from "@/keyboard/handler-id";
 import {
-  keyboardActionDispatcher,
   type KeyboardActionDefinition,
   type WorkspacePanelTarget,
 } from "@/keyboard/keyboard-action-dispatcher";
+import { useKeyboardActionDispatcher } from "@/keyboard/keyboard-action-dispatcher-context";
+import { resolveSideFileOpenPlacement } from "@/screens/workspace/workspace-pane-state";
 import { useCreateFlowStore } from "@/stores/create-flow-store";
 import { normalizeWorkspaceTabTarget, workspaceTabTargetsEqual } from "@/workspace-tabs/identity";
 import { useVisibleAgentIds } from "./visible-agent-ids";
@@ -1549,6 +1550,7 @@ function WorkspaceScreenContent({
   const { t } = useTranslation();
   const _insets = useSafeAreaInsets();
   const toast = useToast();
+  const keyboardActionDispatcher = useKeyboardActionDispatcher();
   const isMobile = useIsCompactFormFactor();
   const hasMacTrafficLights = useHasWindowChromeObstruction("top-left");
   const explorerToggleOwner = resolveWorkspaceExplorerToggleOwner({
@@ -2098,7 +2100,7 @@ function WorkspaceScreenContent({
       keyboardActionDispatcher.dispatch({ id: "changes.focus", scope: "workspace" });
     });
     return true;
-  }, [activeTabId, navigateToTabId, tabs]);
+  }, [activeTabId, keyboardActionDispatcher, navigateToTabId, tabs]);
   useKeyboardActionHandler({
     handlerId: `workspace-focus-changes:${normalizedServerId}:${normalizedWorkspaceId}`,
     actions: ["changes.focus"],
@@ -2185,27 +2187,6 @@ function WorkspaceScreenContent({
     normalizedWorkspaceId,
   ]);
 
-  const handleOpenFileFromExplorer = useCallback(
-    function handleOpenFileFromExplorer(
-      filePath: string,
-      options?: { lineStart: number; openMode: "source" },
-    ) {
-      if (!persistenceKey) {
-        return;
-      }
-      const location = normalizeWorkspaceFileLocation({ path: filePath, ...options });
-      if (!location) {
-        return;
-      }
-      const tabId = openWorkspaceTabFocused(persistenceKey, createWorkspaceFileTabTarget(location));
-      if (tabId) {
-        requestFileNavigation(tabId);
-        navigateToTabId(tabId);
-      }
-    },
-    [navigateToTabId, openWorkspaceTabFocused, persistenceKey, requestFileNavigation],
-  );
-
   const handleOpenFileFromChat = useCallback(
     (location: WorkspaceFileLocation, parentTabId?: string | null) => {
       const normalizedLocation = normalizeWorkspaceFileLocation(location);
@@ -2274,6 +2255,60 @@ function WorkspaceScreenContent({
     ],
   );
 
+  const handleOpenAssistantFileInSidePanel = useCallback(
+    (input: {
+      location: WorkspaceFileLocation;
+      sourcePaneId?: string;
+      parentTabId?: string | null;
+      side?: "left" | "right";
+    }) => {
+      const location = normalizeWorkspaceFileLocation(input.location);
+      if (!location) return;
+      if (isMobile) showMobileAgent();
+      if (!persistenceKey) return;
+
+      const target: WorkspaceTabTarget = createWorkspaceFileTabTarget(location);
+      const placement = resolveSideFileOpenPlacement({
+        layout: workspaceLayout,
+        sourcePaneId: input.sourcePaneId,
+        explorerSidebarPaneId,
+        tabs: uiTabs,
+        target,
+        side: input.side,
+      });
+      if (placement.kind === "focus-side-pane") {
+        focusWorkspacePane(persistenceKey, placement.paneId);
+      } else if (placement.kind === "split-side-pane") {
+        splitWorkspacePaneEmpty(persistenceKey, {
+          targetPaneId: placement.paneId,
+          position: input.side ?? "right",
+        });
+      }
+
+      const tabId = input.parentTabId
+        ? revealWorkspaceChildTab(persistenceKey, target, input.parentTabId)
+        : openWorkspaceTabFocused(persistenceKey, target);
+      if (tabId) {
+        requestFileNavigation(tabId);
+        navigateToTabId(tabId);
+      }
+    },
+    [
+      focusWorkspacePane,
+      explorerSidebarPaneId,
+      isMobile,
+      navigateToTabId,
+      openWorkspaceTabFocused,
+      persistenceKey,
+      requestFileNavigation,
+      revealWorkspaceChildTab,
+      showMobileAgent,
+      splitWorkspacePaneEmpty,
+      uiTabs,
+      workspaceLayout,
+    ],
+  );
+
   const handleOpenWorkspaceFileFromPane = useStableEvent(function handleOpenWorkspaceFileFromPane({
     request,
     paneId,
@@ -2301,10 +2336,16 @@ function WorkspaceScreenContent({
           snapshot: getWorkingDiffNavigationSnapshot(persistenceKey),
         });
         if (navigation) {
-          retargetWorkspaceTab(persistenceKey, navigation.tabId, navigation.target);
-          focusWorkspaceTab(persistenceKey, navigation.tabId);
-          navigateToTabId(navigation.tabId);
-          return;
+          const replacementTabId = replaceWorkspaceTabTarget(
+            persistenceKey,
+            navigation.tabId,
+            navigation.target,
+          );
+          if (replacementTabId) {
+            focusWorkspaceTab(persistenceKey, replacementTabId);
+            navigateToTabId(replacementTabId);
+            return;
+          }
         }
         const inlineSnapshot = getInlineWorkingDiffNavigationSnapshot(persistenceKey);
         const inlineNavigation = resolveMarkdownInlineChangesNavigation({
@@ -2317,24 +2358,20 @@ function WorkspaceScreenContent({
           return;
         }
       }
-      handleOpenPreferredAssistantFile({
+      handleOpenAssistantFileInSidePanel({
         location,
+        sourcePaneId: paneId ?? undefined,
         parentTabId,
+        side: "left",
       });
       return;
     }
     if (request.disposition === "side") {
-      const location = normalizeWorkspaceFileLocation(request.location);
-      if (!location || !persistenceKey) return;
-      const tabId = openWorkspaceTargetBeside({
-        workspaceKey: persistenceKey,
-        target: createWorkspaceFileTabTarget(location),
+      handleOpenAssistantFileInSidePanel({
+        location: request.location,
         parentTabId,
+        side: request.side,
       });
-      if (tabId) {
-        requestFileNavigation(tabId);
-        navigateToTabId(tabId);
-      }
       return;
     }
     if (request.disposition === "preferred") {
