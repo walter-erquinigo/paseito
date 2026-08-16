@@ -248,7 +248,6 @@ function selectedSidebarItemStyle({ hovered }: PressableStateCallbackType & { ho
 
 function getSendBehaviorOptions(t: TFunction) {
   return [
-    { value: "interrupt" as const, label: t("settings.general.defaultSend.options.interrupt") },
     { value: "steer" as const, label: t("settings.general.defaultSend.options.steer") },
     { value: "queue" as const, label: t("settings.general.defaultSend.options.queue") },
   ];

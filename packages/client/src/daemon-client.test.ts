@@ -618,14 +618,14 @@ test("sendAgentMessage forwards explicit steering behavior", async () => {
 
   const sendPromise = client.sendAgentMessage("agent-1", "change direction", {
     messageId: "message-1",
-    activeRunBehavior: "steer",
+    activeTurnBehavior: "steer",
   });
   const request = parseSentFrame(mock.sent[0]);
   expect(request).toMatchObject({
     type: "send_agent_message_request",
     agentId: "agent-1",
     text: "change direction",
-    activeRunBehavior: "steer",
+    activeTurnBehavior: "steer",
   });
   mock.triggerMessage(
     wrapSessionMessage({
