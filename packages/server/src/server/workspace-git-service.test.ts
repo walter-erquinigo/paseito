@@ -46,10 +46,12 @@ function createSnapshot(
       isDirty: false,
       baseRef: "main",
       aheadBehind: { ahead: 0, behind: 0 },
+      upstreamRef: undefined,
       aheadOfOrigin: 0,
       behindOfOrigin: 0,
       hasRemote: true,
       diffStat: { additions: 1, deletions: 0 },
+      stackParent: null,
     },
     forge: {
       featuresEnabled: true,

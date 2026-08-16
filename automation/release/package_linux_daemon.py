@@ -73,6 +73,7 @@ def validate_local_workspace_resolution(stage: Path) -> None:
     feature_text = feature_source.read_text(encoding="utf-8") if feature_source.is_file() else ""
     required_features = (
         "changesBaseSelector",
+        "changesStackParentBase",
         "changesContextExpansion",
         "reviewSuggestionsV1",
         "fileReviewV1",
@@ -167,6 +168,7 @@ def manifest(
         "feature": "changesBaseSelector",
         "features": [
             "changesBaseSelector",
+            "changesStackParentBase",
             "changesContextExpansion",
             "reviewSuggestionsV1",
             "fileReviewV1",
