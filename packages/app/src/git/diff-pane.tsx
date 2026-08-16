@@ -110,6 +110,9 @@ import { useOverlayFlatListScrollbar } from "@/components/ui/overlay-scrollbar/u
 import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
 import { usePanelStore } from "@/stores/panel-store";
 import { useKeyboardActionHandler } from "@/hooks/use-keyboard-action-handler";
+import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
+import { formatShortcut } from "@/utils/format-shortcut";
+import { getShortcutOs } from "@/utils/shortcut-platform";
 import { collectAllTabs, useWorkspaceLayoutStore } from "@/stores/workspace-layout-store";
 import {
   buildWorkspaceTabPersistenceKey,
@@ -3083,6 +3086,10 @@ function resolveSharedDiffMode(
 
 export function SharedDiffView({ files, displayPreferences, mode }: SharedDiffViewProps) {
   const { t } = useTranslation();
+  const focusChangesKeys = useShortcutKeys("focus-changes");
+  const focusChangesShortcut = focusChangesKeys?.[0]
+    ? formatShortcut(focusChangesKeys[0], getShortcutOs())
+    : null;
   const toast = useToast();
   const isCompact = useIsCompactFormFactor();
   const { layout, wrapLines, codeFontSize, monoFontFamily } = displayPreferences;
@@ -4460,11 +4467,15 @@ export function SharedDiffView({ files, displayPreferences, mode }: SharedDiffVi
       ) : null}
       {selectedLine && !reviewActions?.editor && !reviewActions?.suggestionEditor ? (
         <View
+          testID="line-review-shortcut-hint"
           style={styles.lineReviewShortcutHint}
           accessibilityLiveRegion="polite"
           pointerEvents="none"
         >
           <Text style={styles.lineReviewShortcutHintText}>
+            {focusChangesShortcut
+              ? `${t("workspace.git.diff.focusChangesShortcut", { shortcut: focusChangesShortcut })} · `
+              : null}
             {t("workspace.git.diff.lineReviewShortcuts")}
           </Text>
         </View>
