@@ -1,6 +1,10 @@
 import type { ParsedDiffFile } from "@getpaseo/protocol/messages";
 import type { InlineReviewActions } from "@/review";
+import type { FileReviewActions, ReviewableChangedLine } from "@/review";
+import type { DiffContextRegion } from "@/git/diff-context-expansion";
 import type { ReviewableDiffTarget } from "@/utils/diff-layout";
+import type { ChangesSearchMatch, ChangesSearchResult } from "@/git/changes-search";
+import type { ChangesLspController } from "@/git/use-changes-lsp";
 
 interface DiffDocumentBaseProps {
   files: ParsedDiffFile[];
@@ -15,9 +19,22 @@ interface DiffDocumentBaseProps {
 export interface WorkingDiffMode {
   kind: "working";
   reviewActions?: InlineReviewActions;
+  /** Capability-gated orchestration stays at ChangesSurface; the document only renders it. */
+  fileReviews?: FileReviewActions;
+  onExpandContext?: (
+    filePath: string,
+    region: DiffContextRegion,
+    direction: "up" | "down" | "all",
+  ) => void | Promise<void>;
+  onExpandFile?: (filePath: string) => void | Promise<void>;
+  onActivate?: () => void;
   onFilePress?: (path: string) => void;
   focusPath?: string;
   focusRequestId?: number;
+  focusLineStart?: number;
+  focusLineEnd?: number;
+  focusColumn?: number;
+  focusReveal?: "center-if-hidden";
   workspaceFileDragScope?: { serverId: string; workspaceId: string };
   onOpenFile?: (path: string) => void;
   onOpenToSide?: (path: string) => void;
@@ -29,6 +46,23 @@ export interface WorkingDiffMode {
   onDownload?: (path: string) => void;
   onDuplicate?: (path: string) => void;
   onRevert?: (path: string, oldPath?: string) => void;
+  /** Search stays daemon-owned: the document receives matches, never a source corpus. */
+  onSearch?: (query: string) => Promise<ChangesSearchResult>;
+  searchSupported?: boolean;
+  /** Loads a bounded hidden region before the canvas centers a text match. */
+  onRevealSearchMatch?: (match: ChangesSearchMatch) => void | Promise<void>;
+  /** The shared editor session controller. Only current-side canvas cells become targets. */
+  lsp?: ChangesLspController;
+}
+
+export interface DiffReviewPresentation {
+  selectedLineId: string | null;
+  shortcutHint: string | null;
+  onSelectLine: (line: ReviewableChangedLine) => void;
+  onToggleLine: (line: ReviewableChangedLine) => void;
+  onToggleFile: (path: string) => void;
+  onExpandContext?: WorkingDiffMode["onExpandContext"];
+  focusRequest: number;
 }
 
 export type DiffDocumentProps = DiffDocumentBaseProps &
@@ -210,4 +244,5 @@ export type DiffSurfaceProps = DiffDocumentProps & {
   onToggleFile: (path: string) => void;
   selectedPath: string | null;
   onSelectPath: (path: string) => void;
+  reviewPresentation?: DiffReviewPresentation;
 };
