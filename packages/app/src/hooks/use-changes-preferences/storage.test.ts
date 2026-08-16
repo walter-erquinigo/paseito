@@ -32,6 +32,7 @@ describe("loadChangesPreferencesFromStorage", () => {
       wrapLines: true,
       hideWhitespace: false,
       commitsCollapsed: true,
+      fileTreeCollapsed: false,
     });
     expect(storage.entries.get(CHANGES_PREFERENCES_STORAGE_KEY)).toBe(JSON.stringify(result));
   });
@@ -55,6 +56,7 @@ describe("loadChangesPreferencesFromStorage", () => {
       hideWhitespace: true,
       wrapLines: false,
       commitsCollapsed: true,
+      fileTreeCollapsed: false,
     });
     expect(storage.entries.get(CHANGES_PREFERENCES_STORAGE_KEY)).toBe(persisted);
     expect(storage.entries.size).toBe(1);
@@ -84,6 +86,55 @@ describe("changes preferences commitsCollapsed", () => {
     const prefs = await loadChangesPreferencesFromStorage(storage);
 
     expect(prefs.commitsCollapsed).toBe(true);
+  });
+});
+
+describe("changes preferences fileTreeCollapsed", () => {
+  it("opens the file navigator by default", () => {
+    expect(DEFAULT_CHANGES_PREFERENCES.fileTreeCollapsed).toBe(false);
+  });
+
+  it("round-trips a collapsed file navigator", async () => {
+    const storage = createInMemoryKeyValueStorage({
+      [CHANGES_PREFERENCES_STORAGE_KEY]: JSON.stringify({ fileTreeCollapsed: true }),
+    });
+
+    const preferences = await loadChangesPreferencesFromStorage(storage);
+
+    expect(preferences.fileTreeCollapsed).toBe(true);
+  });
+
+  it("defaults a legacy partial record to an open file navigator", async () => {
+    const storage = createInMemoryKeyValueStorage({
+      [CHANGES_PREFERENCES_STORAGE_KEY]: JSON.stringify({ layout: "split" }),
+    });
+
+    const preferences = await loadChangesPreferencesFromStorage(storage);
+
+    expect(preferences.fileTreeCollapsed).toBe(false);
+  });
+
+  it("ignores a malformed persisted file navigator value", async () => {
+    const storage = createInMemoryKeyValueStorage({
+      [CHANGES_PREFERENCES_STORAGE_KEY]: JSON.stringify({ fileTreeCollapsed: "collapsed" }),
+    });
+
+    const preferences = await loadChangesPreferencesFromStorage(storage);
+
+    expect(preferences.fileTreeCollapsed).toBe(false);
+  });
+
+  it("replaces malformed JSON with default-open preferences", async () => {
+    const storage = createInMemoryKeyValueStorage({
+      [CHANGES_PREFERENCES_STORAGE_KEY]: "{not-json",
+    });
+
+    const preferences = await loadChangesPreferencesFromStorage(storage);
+
+    expect(preferences).toEqual(DEFAULT_CHANGES_PREFERENCES);
+    expect(storage.entries.get(CHANGES_PREFERENCES_STORAGE_KEY)).toBe(
+      JSON.stringify(DEFAULT_CHANGES_PREFERENCES),
+    );
   });
 });
 
