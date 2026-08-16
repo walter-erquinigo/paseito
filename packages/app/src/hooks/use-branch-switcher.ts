@@ -28,6 +28,16 @@ interface UseBranchSwitcherResult {
   invalidateStashAndCheckout: () => Promise<void>;
 }
 
+export function orderBranchSwitcherBranches(branches: readonly string[]): string[] {
+  return [...branches].sort((a, b) => {
+    const aPreferredOwner = a.startsWith("werquinigo/");
+    const bPreferredOwner = b.startsWith("werquinigo/");
+    if (aPreferredOwner !== bPreferredOwner) return aPreferredOwner ? -1 : 1;
+    if (!aPreferredOwner || a === b) return 0;
+    return a < b ? -1 : 1;
+  });
+}
+
 export function useBranchSwitcher({
   client,
   normalizedServerId,
@@ -71,7 +81,7 @@ export function useBranchSwitcher({
 
   const branchOptions = useMemo<ComboboxOption[]>(() => {
     const branches = branchSuggestionsQuery.data ?? [];
-    return branches.map((name) => ({ id: name, label: name }));
+    return orderBranchSwitcherBranches(branches).map((name) => ({ id: name, label: name }));
   }, [branchSuggestionsQuery.data]);
 
   const stashListQueryKey = useMemo(
