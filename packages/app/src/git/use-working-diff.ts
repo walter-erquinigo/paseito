@@ -196,6 +196,9 @@ export function useWorkingDiff({
   const contextExpansionSupported = useSessionStore(
     (state) => state.sessions[serverId]?.serverInfo?.features?.changesContextExpansion === true,
   );
+  const diffSearchSupported = useSessionStore(
+    (state) => state.sessions[serverId]?.serverInfo?.features?.checkoutDiffSearch === true,
+  );
   const suggestionsSupported = useSessionStore(
     (state) => state.sessions[serverId]?.serverInfo?.features?.reviewSuggestionsV1 === true,
   );
@@ -212,6 +215,7 @@ export function useWorkingDiff({
     },
     files: sourceFiles,
     supported: contextExpansionSupported,
+    searchSupported: diffSearchSupported,
     requestedLines: requestedContextLines,
   });
   const files = contextExpansion.files;
@@ -246,6 +250,7 @@ export function useWorkingDiff({
     comparisonBaseRef,
     baseSelection,
     currentBranchName,
+    hasUncommittedChanges,
     diffMode,
     selectUncommitted,
     selectBase,
@@ -259,6 +264,7 @@ export function useWorkingDiff({
     reviewDraftKey,
     contextExpansion,
     contextExpansionSupported,
+    diffSearchSupported,
     suggestionsSupported,
     fileReviews,
   };
