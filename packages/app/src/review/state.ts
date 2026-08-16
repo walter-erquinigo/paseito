@@ -57,6 +57,7 @@ export const ReviewDraftCommentSchema: z.ZodType<ReviewDraftComment> = z.strictO
   filePath: z.string(),
   side: z.enum(["old", "new"]),
   lineNumber: z.number().int().positive(),
+  endLine: z.number().int().positive().optional(),
   body: z.string(),
   createdAt: IsoDateTimeSchema,
   updatedAt: IsoDateTimeSchema,
@@ -78,7 +79,7 @@ export const ReviewDraftSuggestionSchema: z.ZodType<ReviewDraftSuggestion> = z.s
 export const SerializedReviewDraftStateSchema: z.ZodType<SerializedReviewDraftState> =
   z.strictObject({
     drafts: z.record(z.string(), z.array(ReviewDraftCommentSchema)),
-    suggestions: z.record(z.string(), z.array(ReviewDraftSuggestionSchema)),
+    suggestions: z.record(z.string(), z.array(ReviewDraftSuggestionSchema)).optional().default({}),
     // COMPAT(reviewDraftModes): v1 persisted this field; v2 discards it during migration.
     activeModesByScope: z.record(z.string(), z.enum(["uncommitted", "base"])).optional(),
   });
@@ -232,6 +233,9 @@ export function normalizePersistedState(state: unknown): ReviewDraftStoreState {
   for (const [key, value] of Object.entries(drafts)) {
     if (!Array.isArray(value)) {
       continue;
+    }
+    if (value.some((comment) => !ReviewDraftCommentSchema.safeParse(comment).success)) {
+      return { drafts: {}, suggestions: {}, diffModeOverrides: {} };
     }
     normalized[key] = value.filter((comment): comment is ReviewDraftComment =>
       isReviewDraftComment(comment),

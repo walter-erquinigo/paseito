@@ -959,7 +959,7 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
     when: { mac: true, commandCenter: false },
     help: {
       id: "focus-changes",
-      section: "navigation",
+      section: "tabs-panes",
       label: "Focus Changes",
     },
   },
