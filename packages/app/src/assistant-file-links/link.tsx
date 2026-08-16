@@ -35,6 +35,7 @@ export function AssistantMarkdownLink({
   const { target, onHoverIn, onPress, onAuxPress } = useFileLink(source);
   const { configRef } = useAssistantFileLinkResolverContext();
   const workspaceRoot = configRef.current.workspaceRoot;
+  const primaryDisposition = configRef.current.primaryDisposition ?? "main";
   const tooltipPath = useMemo(
     () => (target ? formatInlinePathTargetForTooltip(target, workspaceRoot) : null),
     [target, workspaceRoot],
@@ -78,7 +79,7 @@ export function AssistantMarkdownLink({
       </MarkdownTextSpan>
     );
     return (
-      <FileLinkHoverTooltip filePath={tooltipPath}>
+      <FileLinkHoverTooltip filePath={tooltipPath} showSidePaneHint={primaryDisposition === "main"}>
         {Platform.OS === "ios" ? (
           <AssistantLinkPressProvider value={linkPress}>{span}</AssistantLinkPressProvider>
         ) : (
@@ -108,7 +109,11 @@ export function AssistantMarkdownLink({
     </a>
   );
 
-  return <FileLinkHoverTooltip filePath={tooltipPath}>{anchor}</FileLinkHoverTooltip>;
+  return (
+    <FileLinkHoverTooltip filePath={tooltipPath} showSidePaneHint={primaryDisposition === "main"}>
+      {anchor}
+    </FileLinkHoverTooltip>
+  );
 }
 
 interface AssistantMarkdownCodeLinkProps {
@@ -138,13 +143,15 @@ export function AssistantMarkdownCodeLink({
 }
 
 function formatInlinePathTargetForTooltip(
-  target: { path: string; lineStart?: number; lineEnd?: number },
+  target: { path: string; lineStart?: number; lineEnd?: number; column?: number },
   workspaceRoot: string | undefined,
 ): string {
   let result = relativizePathToWorkspace(target.path, workspaceRoot);
   if (target.lineStart) {
     result += `:${target.lineStart}`;
-    if (target.lineEnd && target.lineEnd !== target.lineStart) {
+    if (target.column) {
+      result += `:${target.column}`;
+    } else if (target.lineEnd && target.lineEnd !== target.lineStart) {
       result += `-${target.lineEnd}`;
     }
   }
@@ -213,9 +220,11 @@ const FILE_LINK_TOOLTIP_MOD_KEYS = ["mod"];
 
 function FileLinkHoverTooltip({
   filePath,
+  showSidePaneHint,
   children,
 }: {
   filePath: string | null;
+  showSidePaneHint: boolean;
   children: ReactNode;
 }) {
   if (!isWeb) {
@@ -232,12 +241,14 @@ function FileLinkHoverTooltip({
             <Text selectable={false} style={styles.tooltipPath}>
               {filePath}
             </Text>
-            <View style={styles.tooltipHintRow}>
-              <Shortcut keys={FILE_LINK_TOOLTIP_MOD_KEYS} />
-              <Text selectable={false} style={styles.tooltipHintText}>
-                click for side pane
-              </Text>
-            </View>
+            {showSidePaneHint ? (
+              <View style={styles.tooltipHintRow}>
+                <Shortcut keys={FILE_LINK_TOOLTIP_MOD_KEYS} />
+                <Text selectable={false} style={styles.tooltipHintText}>
+                  click for side pane
+                </Text>
+              </View>
+            ) : null}
           </View>
         </TooltipContent>
       ) : null}

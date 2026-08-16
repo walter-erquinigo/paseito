@@ -119,7 +119,13 @@ function secondaryWorkspaceTabTargetsEqual(
     return workspaceFileLocationsEqual(left, right);
   }
   if (left.kind === "working_diff" && right.kind === "working_diff") {
-    return left.focusPath === right.focusPath && left.focusRequestId === right.focusRequestId;
+    return (
+      left.focusPath === right.focusPath &&
+      left.focusRequestId === right.focusRequestId &&
+      left.focusLineStart === right.focusLineStart &&
+      left.focusLineEnd === right.focusLineEnd &&
+      left.focusColumn === right.focusColumn
+    );
   }
   if (left.kind === "setup" && right.kind === "setup") {
     return left.workspaceId === right.workspaceId;
@@ -211,10 +217,16 @@ function normalizeWorkingDiffTabTarget(
 ): WorkspaceTabTarget | null {
   const focusPath = trimNonEmpty(value.focusPath)?.replace(/\\/g, "/") ?? null;
   const focusRequestId = normalizePositiveInteger(value.focusRequestId);
+  const focusLineStart = normalizePositiveInteger(value.focusLineStart);
+  const focusLineEnd = normalizePositiveInteger(value.focusLineEnd);
+  const focusColumn = normalizePositiveInteger(value.focusColumn);
   return {
     kind: "working_diff" as const,
     ...(focusPath ? { focusPath } : {}),
     ...(focusRequestId ? { focusRequestId } : {}),
+    ...(focusLineStart ? { focusLineStart } : {}),
+    ...(focusLineStart && focusLineEnd && focusLineEnd >= focusLineStart ? { focusLineEnd } : {}),
+    ...(focusLineStart && focusColumn ? { focusColumn } : {}),
   };
 }
 

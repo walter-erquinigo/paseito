@@ -1,6 +1,7 @@
 import {
   classifyAssistantFileLink,
   isFileLookingAssistantToken,
+  parseMarkdownPreviewFileLink,
   type AssistantFileLinkClassification,
   type InlinePathTarget,
 } from "./parse";
@@ -12,7 +13,7 @@ export interface AssistantFileLinkSource {
   title?: string;
   markup?: string;
   sourceInfo?: string;
-  sourceType?: "inline-code";
+  sourceType?: "inline-code" | "file-preview";
 }
 
 export interface AssistantFileLinkContext {
@@ -113,6 +114,15 @@ export function classifyForResolution(
     return { kind: "resolved", value: { kind: "ignored" } };
   }
 
+  if (source.sourceType === "file-preview") {
+    const target = parseMarkdownPreviewFileLink(token, {
+      workspaceRoot: context.workspaceRoot,
+    });
+    if (target) {
+      return { kind: "resolved", value: { kind: "file", target } };
+    }
+  }
+
   const classification = classifyAssistantFileLink(token, {
     workspaceRoot: context.workspaceRoot,
   });
@@ -148,6 +158,9 @@ export function classifyForResolution(
 }
 
 export function getAssistantFileLinkToken(source: AssistantFileLinkSource): string {
+  if (source.sourceType === "file-preview") {
+    return source.href;
+  }
   if (isLinkifiedSource(source) || source.sourceType === "inline-code") {
     const text = source.text?.trim();
     if (text && isFileLookingAssistantToken(text)) {
