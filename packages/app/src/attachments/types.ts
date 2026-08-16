@@ -130,6 +130,7 @@ export type WorkspaceComposerAttachment =
       attachment: Extract<AgentAttachment, { type: "review" }>;
       reviewDraftKey: string;
       commentCount: number;
+      blockingReason?: string;
     };
 
 export type ComposerAttachment = UserComposerAttachment | WorkspaceComposerAttachment;

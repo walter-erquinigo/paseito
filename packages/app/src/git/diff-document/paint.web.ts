@@ -30,6 +30,7 @@ export interface PaintWebViewportInput {
   viewportHeight: number;
   horizontalOffsets: ReadonlyMap<string, number>;
   selection: DiffSelection | null;
+  navigationHighlight?: { filePath: string; lineStart: number; lineEnd: number };
   devicePixelRatio: number;
   paintTop?: number;
   paintHeight?: number;
@@ -100,6 +101,15 @@ function paintLine(
     const x = cellIndex * columnWidth;
     input.context.fillStyle = cellBackground(cell, input.palette);
     input.context.fillRect(x, input.y, columnWidth, input.row.height);
+    if (isNavigationHighlighted(input, cell)) {
+      input.context.save();
+      input.context.globalAlpha = 0.16;
+      input.context.fillStyle = input.palette.selection;
+      input.context.fillRect(x, input.y, columnWidth, input.row.height - input.row.reviewHeight);
+      input.context.restore();
+      input.context.fillStyle = input.palette.selection;
+      input.context.fillRect(x, input.y, 2, input.row.height - input.row.reviewHeight);
+    }
     if (input.row.reviewHeight > 0) {
       input.context.fillStyle = reviewBackgroundPaint(input.palette.surface);
       input.context.fillRect(
@@ -133,6 +143,21 @@ function paintLine(
     paintCellText({ ...input, cell, x: x + file.gutterWidth + CODE_LEFT_PADDING });
     input.context.restore();
   });
+}
+
+function isNavigationHighlighted(
+  input: PaintWebViewportInput & { row: DiffLineRow },
+  cell: DiffCell | null,
+): boolean {
+  const navigation = input.navigationHighlight;
+  return Boolean(
+    navigation &&
+    input.model.files[input.row.fileIndex]?.path === navigation.filePath &&
+    cell?.sourceIdentity.side === "new" &&
+    cell.lineNumber !== null &&
+    cell.lineNumber >= navigation.lineStart &&
+    cell.lineNumber <= navigation.lineEnd,
+  );
 }
 
 function paintCellText(
