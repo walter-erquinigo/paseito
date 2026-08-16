@@ -12,6 +12,7 @@ const changesPreferencesSchema = z.strictObject({
   wrapLines: z.boolean().optional(),
   hideWhitespace: z.boolean().optional(),
   commitsCollapsed: z.boolean().optional(),
+  fileTreeCollapsed: z.boolean().optional(),
 });
 
 export interface ChangesPreferences {
@@ -20,6 +21,7 @@ export interface ChangesPreferences {
   wrapLines: boolean;
   hideWhitespace: boolean;
   commitsCollapsed: boolean;
+  fileTreeCollapsed: boolean;
 }
 
 export const DEFAULT_CHANGES_PREFERENCES: ChangesPreferences = {
@@ -28,6 +30,7 @@ export const DEFAULT_CHANGES_PREFERENCES: ChangesPreferences = {
   wrapLines: false,
   hideWhitespace: false,
   commitsCollapsed: true,
+  fileTreeCollapsed: false,
 };
 
 export interface KeyValueStorage {
