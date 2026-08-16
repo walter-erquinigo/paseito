@@ -3,7 +3,6 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { useTranslation } from "react-i18next";
 import {
   ScrollView,
-  Pressable,
   Text,
   StyleSheet,
   View,
@@ -31,6 +30,12 @@ import {
   diffMaterializationWindow,
   resolveVisibleFileSections,
 } from "./header-layout";
+import { DiffContextControl } from "./context-control";
+import {
+  LINE_REVIEW_DOT_GUTTER_WIDTH,
+  lineReviewDotGutterWidth,
+  ReviewCheckbox,
+} from "./review-checkbox";
 import { hitTestDiffBodyPoint } from "./native-hit-testing";
 import { retainDiffViewport } from "./viewport";
 import { HorizontalScroll } from "./horizontal-scroll.native";
@@ -111,6 +116,7 @@ export function DiffSurface(props: DiffSurfaceProps) {
     [family, typography.size],
   );
   const reviewActions = props.mode.kind === "working" ? props.mode.reviewActions : undefined;
+  const reviewIndicatorWidth = lineReviewDotGutterWidth(props.reviewPresentation !== undefined);
   const model = useMemo(() => {
     const dependencies = [
       props.displayPreferences.layout,
@@ -119,6 +125,7 @@ export function DiffSurface(props: DiffSurfaceProps) {
       typography,
       measurement,
       props.palette,
+      reviewIndicatorWidth,
       t,
     ] as const;
     const previous = reusableModelRef.current;
@@ -136,6 +143,7 @@ export function DiffSurface(props: DiffSurfaceProps) {
       measureText: measurement,
       palette: props.palette,
       reviewActions,
+      reviewIndicatorWidth,
       labels: {
         binary: t("workspace.git.diff.binaryFile"),
         tooLarge: t("workspace.git.diff.tooLarge"),
@@ -157,6 +165,7 @@ export function DiffSurface(props: DiffSurfaceProps) {
     props.files,
     props.palette,
     reviewActions,
+    reviewIndicatorWidth,
     t,
     typography,
     viewport.width,
@@ -311,7 +320,11 @@ export function DiffSurface(props: DiffSurfaceProps) {
             horizontalOffsets={horizontalOffsets}
           />
         ))}
-        <NativeReviewOverlays model={model} mode={props.mode} />
+        <NativeReviewOverlays
+          model={model}
+          mode={props.mode}
+          presentation={props.reviewPresentation}
+        />
         <Animated.View pointerEvents="none" style={keyboardSpacerStyle} />
       </AnimatedScrollView>
     </View>
@@ -507,9 +520,11 @@ function NativeFileBody({
 function NativeReviewOverlays({
   model,
   mode,
+  presentation,
 }: {
   model: DiffDocumentModel;
   mode: DiffSurfaceProps["mode"];
+  presentation: DiffSurfaceProps["reviewPresentation"];
 }) {
   if (mode.kind !== "working") return null;
   const reviewActions = mode.reviewActions;
@@ -538,8 +553,26 @@ function NativeReviewOverlays({
         reviewTarget: cell.reviewTarget,
         reviewActions,
       });
-      if (!thread || !reviewActions) return [];
+      const changed = mode.fileReviews?.lineByTargetKey.get(cell.reviewTarget.key);
+      const controls =
+        changed && presentation
+          ? [
+              <NativeLineReviewControl
+                key={`${cell.reviewTarget.key}:line-review`}
+                targetKey={cell.reviewTarget.key}
+                changedLine={changed}
+                presentation={presentation}
+                reviewed={mode.fileReviews?.reviewedLineIds.has(changed.id) === true}
+                selected={presentation.selectedLineId === changed.id}
+                top={row.top}
+                left={index * columnWidth}
+                height={model.lineHeight}
+              />,
+            ]
+          : [];
+      if (!thread || !reviewActions) return controls;
       return [
+        ...controls,
         <View
           key={cell.reviewTarget.key}
           style={inlineUnistylesStyle<ViewStyle>({
@@ -564,6 +597,58 @@ function NativeReviewOverlays({
   });
 }
 
+function NativeLineReviewControl({
+  targetKey,
+  changedLine,
+  presentation,
+  reviewed,
+  selected,
+  top,
+  left,
+  height,
+}: {
+  targetKey: string;
+  changedLine: import("@/review").ReviewableChangedLine;
+  presentation: NonNullable<DiffSurfaceProps["reviewPresentation"]>;
+  reviewed: boolean;
+  selected: boolean;
+  top: number;
+  left: number;
+  height: number;
+}) {
+  const onPress = useCallback(() => {
+    presentation.onSelectLine(changedLine);
+    presentation.onToggleLine(changedLine);
+  }, [changedLine, presentation]);
+  const style = useMemo<ViewStyle>(
+    () => ({
+      position: "absolute",
+      top,
+      left,
+      width: LINE_REVIEW_DOT_GUTTER_WIDTH,
+      height,
+      zIndex: 7,
+      borderLeftWidth: selected ? 2 : 0,
+      borderLeftColor: "#0a84ff",
+      alignItems: "center",
+      justifyContent: "center",
+    }),
+    [height, left, selected, top],
+  );
+  return (
+    <ReviewCheckbox
+      appearance="dot"
+      accessibilityLabel={reviewed ? "Mark line unreviewed" : "Mark line reviewed"}
+      alwaysVisible
+      testID={`diff-line-review-${targetKey}`}
+      onPress={onPress}
+      selected={selected}
+      state={reviewed ? "reviewed" : "unreviewed"}
+      style={style}
+    />
+  );
+}
+
 function NativeContextControl({
   filePath,
   region,
@@ -577,41 +662,20 @@ function NativeContextControl({
   height: number;
   onExpand: NonNullable<Extract<DiffSurfaceProps["mode"], { kind: "working" }>["onExpandContext"]>;
 }) {
-  const expandUp = useCallback(
-    () => void onExpand(filePath, region, "up"),
-    [filePath, onExpand, region],
-  );
-  const expandDown = useCallback(
-    () => void onExpand(filePath, region, "down"),
-    [filePath, onExpand, region],
-  );
-  const expandAll = useCallback(
-    () => void onExpand(filePath, region, "all"),
-    [filePath, onExpand, region],
-  );
   return (
-    <View
+    <DiffContextControl
+      filePath={filePath}
+      region={region}
+      onExpand={onExpand}
       style={inlineUnistylesStyle<ViewStyle>({
         position: "absolute",
         top,
-        left: 22,
+        left: 0,
+        right: 0,
         height,
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 8,
         zIndex: 8,
       })}
-    >
-      <Pressable onPress={expandUp}>
-        <Text>↑ 20</Text>
-      </Pressable>
-      <Pressable onPress={expandDown}>
-        <Text>↓ 20</Text>
-      </Pressable>
-      <Pressable onPress={expandAll}>
-        <Text>Expand {Math.min(region.lineCount, 5000)}</Text>
-      </Pressable>
-    </View>
+    />
   );
 }
 

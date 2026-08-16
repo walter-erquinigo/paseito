@@ -86,6 +86,7 @@ import type {
   KeyboardActionDefinition,
   WorkspacePanelTarget,
 } from "@/keyboard/keyboard-action-dispatcher";
+import { useKeyboardActionDispatcher } from "@/keyboard/keyboard-action-dispatcher-context";
 import { useCreateFlowStore } from "@/stores/create-flow-store";
 import { normalizeWorkspaceTabTarget, workspaceTabTargetsEqual } from "@/workspace-tabs/identity";
 import { useVisibleAgentIds } from "./visible-agent-ids";
@@ -1539,6 +1540,7 @@ function WorkspaceScreenContent({
   const { t } = useTranslation();
   const _insets = useSafeAreaInsets();
   const toast = useToast();
+  const keyboardActionDispatcher = useKeyboardActionDispatcher();
   const isMobile = useIsCompactFormFactor();
   const hasMacTrafficLights = useHasWindowChromeObstruction("top-left");
   const explorerToggleOwner = resolveWorkspaceExplorerToggleOwner({
@@ -2105,6 +2107,23 @@ function WorkspaceScreenContent({
   // A "Show all" import can land in another workspace entirely; that
   // agent has no tab here, so it opens its own workspace instead.
   const navigateToImportedAgent = useNavigateToImportedAgent(normalizedServerId);
+  const handleFocusChangesTab = useCallback((): boolean => {
+    const changesTab = tabs.find((tab) => tab.target.kind === "working_diff");
+    if (!changesTab) return false;
+    if (changesTab.tabId === activeTabId) return false;
+    navigateToTabId(changesTab.tabId);
+    requestAnimationFrame(() => {
+      keyboardActionDispatcher.dispatch({ id: "changes.focus", scope: "workspace" });
+    });
+    return true;
+  }, [activeTabId, keyboardActionDispatcher, navigateToTabId, tabs]);
+  useKeyboardActionHandler({
+    handlerId: `workspace-focus-changes:${normalizedServerId}:${normalizedWorkspaceId}`,
+    actions: ["changes.focus"],
+    enabled: isRouteFocused,
+    priority: 150,
+    handle: handleFocusChangesTab,
+  });
   const handleImportedAgent = useCallback(
     (agentId: string) => {
       if (!persistenceKey) {

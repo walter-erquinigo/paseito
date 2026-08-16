@@ -6,6 +6,7 @@ import {
 import {
   buildReviewDraftKey,
   useInlineReviewController,
+  useFileReviews,
   useReviewAttachmentSnapshot,
   useReviewDraftComments,
   useReviewDraftSuggestions,
@@ -65,6 +66,11 @@ function getStatusErrorMessage(input: {
 function getCurrentBranchName(gitStatus: ReturnType<typeof getGitStatus>): string | null {
   const branch = gitStatus?.currentBranch;
   return branch && branch !== "HEAD" ? branch : null;
+}
+
+function getFileReviewRepositoryRoot(gitStatus: ReturnType<typeof getGitStatus>): string | null {
+  if (!gitStatus) return null;
+  return gitStatus.mainRepoRoot ?? gitStatus.repoRoot;
 }
 
 function hasCommittedBranchChanges(
@@ -169,6 +175,9 @@ export function useWorkingDiff({
   const suggestionsSupported = useSessionStore(
     (state) => state.sessions[serverId]?.serverInfo?.features?.reviewSuggestionsV1 === true,
   );
+  const fileReviewSupported = useSessionStore(
+    (state) => state.sessions[serverId]?.serverInfo?.features?.fileReviewV1 === true,
+  );
   const contextExpansion = useDiffContextExpansion({
     serverId,
     cwd,
@@ -182,6 +191,13 @@ export function useWorkingDiff({
     requestedLines: requestedContextLines,
   });
   const files = contextExpansion.files;
+  const fileReviews = useFileReviews({
+    serverId,
+    repositoryRoot: getFileReviewRepositoryRoot(gitStatus),
+    branch: currentBranchName,
+    files,
+    supported: fileReviewSupported,
+  });
   const availableTargets = useMemo(() => collectCurrentSideReviewTargets(files), [files]);
   const reviewActions = useInlineReviewController({
     reviewDraftKey,
@@ -221,6 +237,7 @@ export function useWorkingDiff({
     contextExpansion,
     contextExpansionSupported,
     suggestionsSupported,
+    fileReviews,
   };
 }
 

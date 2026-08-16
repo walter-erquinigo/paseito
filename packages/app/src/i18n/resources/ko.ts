@@ -2236,6 +2236,7 @@ export const ko: TranslationResources = {
         agentInput: "에이전트 입력",
       },
       help: {
+        ...en.settings.shortcuts.help,
         openProject: "프로젝트 열기",
         newWorkspace: "새 워크스페이스",
         newWorktree: "새 워크트리",

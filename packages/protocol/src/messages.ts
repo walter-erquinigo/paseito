@@ -2718,6 +2718,9 @@ const ParsedDiffFileSchema = z.object({
   oldLineCount: z.number().int().nonnegative().optional(),
   newLineCount: z.number().int().nonnegative().optional(),
   revision: z.string().optional(),
+  // COMPAT(branchFileReviewState): added in Paseito v0.5.2-paseito.6,
+  // keep optional until every supported daemon reports the reviewed-side revision.
+  contentRevision: z.string().optional(),
 });
 
 const FileExplorerEntrySchema = z.object({
@@ -3706,6 +3709,9 @@ export const ServerInfoStatusPayloadSchema = z
         // COMPAT(reviewSuggestionsV1): added in Paseito v0.2.5-paseito.4,
         // remove gate after 2027-02-05.
         reviewSuggestionsV1: z.boolean().optional(),
+        // COMPAT(fileReviewV1): added in Paseito v0.2.5-paseito.8,
+        // remove gate after 2027-02-07.
+        fileReviewV1: z.boolean().optional(),
         // COMPAT(providerRemoval): added in v0.1.105, drop the gate when floor >= v0.1.105.
         providerRemoval: z.boolean().optional(),
         // COMPAT(importSessionWorkspaceTarget): added in v0.1.110, remove gate after 2027-01-16.

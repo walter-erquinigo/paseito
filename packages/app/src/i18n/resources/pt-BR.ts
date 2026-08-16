@@ -2261,6 +2261,7 @@ export const ptBR: TranslationResources = {
         agentInput: "Entrada do agente",
       },
       help: {
+        ...en.settings.shortcuts.help,
         openProject: "Abrir projeto",
         newWorkspace: "Novo workspace",
         newWorktree: "Novo worktree",

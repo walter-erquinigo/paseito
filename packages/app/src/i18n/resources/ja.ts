@@ -2246,6 +2246,7 @@ export const ja: TranslationResources = {
         agentInput: "エージェント入力",
       },
       help: {
+        ...en.settings.shortcuts.help,
         openProject: "プロジェクトを開く",
         newWorkspace: "新しいワークスペース",
         newWorktree: "新しいワークツリー",

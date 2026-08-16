@@ -47,6 +47,7 @@ import {
 import { ToolbarButton } from "@/components/ui/pane-content-toolbar";
 import { mutedIconColorMapping } from "@/components/ui/icon-button-chrome";
 import { useWorkspaceLayoutStore } from "@/stores/workspace-layout-store";
+import type { WorkspaceFileOpenOptions } from "@/workspace/file-open";
 
 const ThemedX = withUnistyles(X);
 
@@ -57,7 +58,7 @@ interface ExplorerSidebarProps {
   workspaceId?: string | null;
   workspaceRoot: string;
   isGit: boolean;
-  onOpenFile?: (filePath: string) => void;
+  onOpenFile?: (filePath: string, options?: WorkspaceFileOpenOptions) => void;
 }
 
 interface ExplorerSidebarSharedState {
@@ -312,7 +313,7 @@ interface SidebarContentProps {
   workspaceRoot: string;
   isGit: boolean;
   isOpen: boolean;
-  onOpenFile?: (filePath: string) => void;
+  onOpenFile?: (filePath: string, options?: WorkspaceFileOpenOptions) => void;
 }
 
 function ExplorerSidebarContent({

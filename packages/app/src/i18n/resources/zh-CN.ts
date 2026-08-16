@@ -2200,6 +2200,7 @@ export const zhCN: TranslationResources = {
         agentInput: "Agent 输入",
       },
       help: {
+        ...en.settings.shortcuts.help,
         openProject: "打开项目",
         newWorkspace: "新建 workspace",
         newWorktree: "新建 worktree",

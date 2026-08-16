@@ -185,6 +185,7 @@ class RemoteDeploymentTests(unittest.TestCase):
         self.assertNotIn("journalctl --user-unit", REMOTE_INSTALL)
         self.assertIn("changesBaseSelector", REMOTE_INSTALL)
         self.assertIn("changesStackParentBase", REMOTE_INSTALL)
+        self.assertIn("fileReviewV1", REMOTE_INSTALL)
         self.assertIn("remote-drift:", REMOTE_INSTALL)
         self.assertIn("runtime-integrity.json", REMOTE_INSTALL)
         self.assertIn('chmod -R a-w "$release"', REMOTE_INSTALL)

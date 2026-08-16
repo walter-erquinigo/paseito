@@ -33,3 +33,20 @@ export {
   SMALL_ACTION_HIT_SLOP,
   useInlineReviewController,
 } from "./surface";
+
+export {
+  buildFileReviewScopeKey,
+  useFileReviews,
+  type FileReviewActions,
+  type FileReviewRecord,
+  type FileReviewSnapshot,
+  type FileLineReviewProgress,
+} from "./file-review";
+
+export {
+  buildChangedLineFingerprint,
+  buildReviewableChangedFile,
+  buildReviewableChangedFiles,
+  type ReviewableChangedFile,
+  type ReviewableChangedLine,
+} from "./line-review";

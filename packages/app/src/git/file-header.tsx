@@ -1,4 +1,4 @@
-import { memo, type ReactElement, useCallback, useMemo, useState } from "react";
+import { memo, type ReactElement, type ReactNode, useCallback, useMemo, useState } from "react";
 import {
   Text,
   View,
@@ -53,6 +53,7 @@ export interface FileHeaderProps {
   onDuplicate?: (path: string) => void;
   onRevert?: (path: string, oldPath?: string) => void;
   onHeaderHeightChange?: (path: string, height: number) => void;
+  trailingContent?: ReactNode;
   testID?: string;
   canvasRendered?: boolean;
   onActiveChange?: (active: boolean) => void;
@@ -134,6 +135,28 @@ function fileChange(file: ParsedDiffFile): "added" | "deleted" | "modified" {
   return diffFileChangeKind(file);
 }
 
+function FileHeaderRightContent({
+  file,
+  trailingContent,
+  testID,
+}: Pick<FileHeaderProps, "file" | "trailingContent" | "testID">) {
+  return (
+    <View style={styles.right}>
+      <DiffStat
+        additions={file.additions}
+        deletions={file.deletions}
+        testID={testID ? `${testID}-stat` : undefined}
+      />
+      {trailingContent}
+      <FileChangeIcon change={fileChange(file)} />
+    </View>
+  );
+}
+
+function canvasRightRailActiveStyle(isHovered: boolean, isSelected: boolean) {
+  return [isHovered, isSelected].includes(true) ? styles.canvasRightRailActive : null;
+}
+
 function FileHeaderMenu({
   file,
   onOpenFile,
@@ -194,6 +217,7 @@ export const FileHeader = memo(function FileHeader({
   onActivate,
   onSelect,
   onHeaderHeightChange,
+  trailingContent,
   testID,
   canvasRendered = false,
   onActiveChange,
@@ -249,7 +273,9 @@ export const FileHeader = memo(function FileHeader({
   );
   const fileName = fileNameForPath(file.path);
   const nameStyle = fileHeaderNameStyle(showsBodyState, hover.isHovered);
-  const changeIcon = <FileChangeIcon change={fileChange(file)} />;
+  const rightContent = (
+    <FileHeaderRightContent file={file} trailingContent={trailingContent} testID={testID} />
+  );
   const content = (
     <View
       style={[styles.content, showsBodyState && styles.documentContent]}
@@ -272,18 +298,17 @@ export const FileHeader = memo(function FileHeader({
           <View style={styles.directorySpacer} />
         )}
       </View>
-      <View style={styles.right}>
-        <DiffStat
-          additions={file.additions}
-          deletions={file.deletions}
-          testID={testID ? `${testID}-stat` : undefined}
-        />
-        {changeIcon}
-      </View>
+      {rightContent}
     </View>
   );
   const renderedContent = canvasRendered ? (
-    <View ref={dragSourceRef} style={styles.canvasInteractionContent} />
+    <View ref={dragSourceRef} style={styles.canvasInteractionContent}>
+      <View
+        style={[styles.canvasRightRail, canvasRightRailActiveStyle(hover.isHovered, isSelected)]}
+      >
+        {rightContent}
+      </View>
+    </View>
   ) : (
     content
   );
@@ -406,7 +431,21 @@ const styles = StyleSheet.create((theme) => ({
     elevation: 0,
     shadowOpacity: 0,
   },
-  canvasInteractionContent: { flex: 1, minWidth: 0 },
+  canvasInteractionContent: { flex: 1, minWidth: 0, position: "relative" },
+  canvasRightRail: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    paddingLeft: theme.spacing[2],
+    paddingRight: theme.spacing[2],
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: theme.colors.surface0,
+  },
+  canvasRightRailActive: {
+    backgroundColor: theme.colors.surface1,
+  },
   left: {
     flexDirection: "row",
     alignItems: "center",

@@ -35,4 +35,9 @@ if (typeof window === "undefined") {
     configurable: true,
     writable: true,
   });
+} else if (typeof window.localStorage?.setItem !== "function") {
+  Object.defineProperty(window, "localStorage", {
+    value: new MemoryLocalStorage(),
+    configurable: true,
+  });
 }

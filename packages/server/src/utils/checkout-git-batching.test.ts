@@ -2,8 +2,47 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync, realpathSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { beforeEach, afterEach, describe, expect, it } from "vitest";
+import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import { startGitCommandMetrics, stopGitCommandMetrics } from "@server/utils/run-git-command.js";
+
+const spawnCounters = vi.hoisted(() => ({
+  contentRevisionHashCalls: 0,
+  trackedTextDiffCalls: 0,
+}));
+
+vi.mock("child_process", async () => {
+  const actual = await vi.importActual<typeof import("child_process")>("child_process");
+  return {
+    ...actual,
+    spawn: (...args: Parameters<typeof actual.spawn>) => {
+      const [command, commandArgs] = args;
+      if (command === "git" && Array.isArray(commandArgs)) {
+        const normalizedArgs = commandArgs.map((arg) => String(arg));
+        // `runGitCommand` always prepends its two config overrides; skip them
+        // to find the actual git subcommand.
+        const subcommandIndex =
+          normalizedArgs[0] === "-c" && normalizedArgs[1] === "core.quotepath=false" ? 4 : 0;
+        const isTrackedTextDiff =
+          normalizedArgs[subcommandIndex] === "diff" &&
+          normalizedArgs.includes("HEAD") &&
+          !normalizedArgs.includes("--numstat") &&
+          !normalizedArgs.includes("--no-index") &&
+          !normalizedArgs.includes("--shortstat") &&
+          !normalizedArgs.includes("--name-status");
+        if (isTrackedTextDiff) {
+          spawnCounters.trackedTextDiffCalls += 1;
+        }
+        if (
+          normalizedArgs[subcommandIndex] === "hash-object" &&
+          normalizedArgs.includes("--stdin-paths")
+        ) {
+          spawnCounters.contentRevisionHashCalls += 1;
+        }
+      }
+      return actual.spawn(...args);
+    },
+  };
+});
 
 import { getCheckoutDiff } from "./checkout-git.js";
 
@@ -39,6 +78,8 @@ describe("checkout git diff batching", () => {
     const setup = initRepoWithTrackedChanges(20);
     tempDir = setup.tempDir;
     repoDir = setup.repoDir;
+    spawnCounters.contentRevisionHashCalls = 0;
+    spawnCounters.trackedTextDiffCalls = 0;
   });
 
   afterEach(() => {
@@ -93,5 +134,16 @@ describe("checkout git diff batching", () => {
     expect(result.structured?.filter((file) => file.status === "ok")).toHaveLength(19);
     expect(result.diff).toContain("+after-19");
     expect(result.diff).not.toContain("x".repeat(1_000));
+  });
+
+  it("hashes working-tree content revisions in one Git process", async () => {
+    const result = await getCheckoutDiff(repoDir, {
+      mode: "uncommitted",
+      includeStructured: true,
+    });
+
+    expect(result.structured).toHaveLength(20);
+    expect(result.structured?.every((file) => Boolean(file.contentRevision))).toBe(true);
+    expect(spawnCounters.contentRevisionHashCalls).toBe(1);
   });
 });

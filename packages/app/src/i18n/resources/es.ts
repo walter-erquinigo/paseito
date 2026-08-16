@@ -2280,6 +2280,7 @@ export const es: TranslationResources = {
         agentInput: "EntradaAgent",
       },
       help: {
+        ...en.settings.shortcuts.help,
         openProject: "Abrir proyecto",
         newWorkspace: "Nuevo espacio de trabajo",
         newWorktree: "Nuevo árbol de trabajo",

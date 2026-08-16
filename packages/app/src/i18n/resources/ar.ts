@@ -2226,6 +2226,7 @@ export const ar: TranslationResources = {
         agentInput: "إدخال Agent",
       },
       help: {
+        ...en.settings.shortcuts.help,
         openProject: "مشروع مفتوح",
         newWorkspace: "مساحة عمل جديدة",
         newWorktree: "شجرة عمل جديدة",

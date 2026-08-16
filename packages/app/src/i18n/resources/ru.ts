@@ -2266,6 +2266,7 @@ export const ru: TranslationResources = {
         agentInput: "Ввод для агента",
       },
       help: {
+        ...en.settings.shortcuts.help,
         openProject: "Открыть проект",
         newWorkspace: "Новое рабочее пространство",
         newWorktree: "Новый worktree",

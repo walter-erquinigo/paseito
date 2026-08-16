@@ -194,6 +194,15 @@ describe("diff document model", () => {
     expect(advancedCharacters).toBe(0);
   });
 
+  it("reserves a fixed indicator inset without reducing line-number space", () => {
+    const base = buildDiffDocumentModel(input());
+    const withIndicator = buildDiffDocumentModel(
+      input({ reviewIndicatorWidth: 14 } as Partial<BuildDiffDocumentModelInput>),
+    );
+
+    expect(withIndicator.files[0]!.gutterWidth).toBe(base.files[0]!.gutterWidth + 14);
+  });
+
   it("does not imperatively scroll for a no-op relayout", () => {
     expect(shouldApplyRelayoutScroll(320, 320)).toBe(false);
     expect(shouldApplyRelayoutScroll(320, 320.4)).toBe(false);
@@ -416,7 +425,7 @@ describe("diff document model", () => {
         row.cells[0]?.reviewTarget?.side === "old" || row.cells[1]?.reviewTarget?.side === "old"
       );
     });
-    expect(reviewRow?.kind === "line" ? reviewRow.reviewHeight : 0).toBe(148);
+    expect(reviewRow?.kind === "line" ? reviewRow.reviewHeight : 0).toBe(168);
   });
 
   it("reflows review geometry without remeasuring unchanged text", () => {
@@ -449,9 +458,9 @@ describe("diff document model", () => {
     const editorRow = rowForReviewTarget(withEditor, reviewCell.reviewTarget.key);
 
     expect(measurementCount).toBe(initialMeasurementCount);
-    expect(editorRow.reviewHeight).toBe(148);
+    expect(editorRow.reviewHeight).toBe(168);
     expect(editorRow.cells).toBe(baseReviewRow.cells);
-    expect(withEditor.files[1]!.top).toBe(baseSecondFileTop + 148);
+    expect(withEditor.files[1]!.top).toBe(baseSecondFileTop + 168);
 
     const withoutEditor = buildDiffDocumentModel(
       input({

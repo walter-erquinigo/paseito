@@ -76,6 +76,7 @@ def validate_local_workspace_resolution(stage: Path) -> None:
         "changesStackParentBase",
         "changesContextExpansion",
         "reviewSuggestionsV1",
+        "fileReviewV1",
     )
     missing_features = [feature for feature in required_features if feature not in feature_text]
     if missing_features:
@@ -165,6 +166,7 @@ def manifest(
             "changesStackParentBase",
             "changesContextExpansion",
             "reviewSuggestionsV1",
+            "fileReviewV1",
         ],
     }
 

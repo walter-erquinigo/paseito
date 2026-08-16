@@ -78,7 +78,8 @@ function equalFileMetadata(left: ParsedDiffFile, right: ParsedDiffFile): boolean
     left.deletions === right.deletions &&
     left.oldLineCount === right.oldLineCount &&
     left.newLineCount === right.newLineCount &&
-    left.revision === right.revision
+    left.revision === right.revision &&
+    left.contentRevision === right.contentRevision
   );
 }
 
