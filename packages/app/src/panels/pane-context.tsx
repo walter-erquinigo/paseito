@@ -17,6 +17,7 @@ export interface PaneContextValue {
   closeCurrentTab: () => void;
   retargetCurrentTab: (target: WorkspaceTabTarget) => void;
   setCurrentTabState: (state: JsonValue) => void;
+  focusCurrentTab?: () => void;
   openFileInWorkspace: (request: WorkspaceFileOpenRequest) => void;
   openImportSheet: () => void;
 }
