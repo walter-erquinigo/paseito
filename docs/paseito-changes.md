@@ -13,6 +13,9 @@ When the current branch has commits ahead of its base, Changes opens on the comm
 even if the working tree is dirty. The **Uncommitted** option remains available and an explicit
 selection is honored for as long as the checkout's dirty state does not change.
 
+A muted **Uncommitted** badge beside the branch switcher reports the selected branch's live
+working-tree state. It remains visible while Changes displays the **Committed** comparison.
+
 ## Hidden context
 
 Omitted regions between diff hunks can load 20 lines from either edge or request the whole remaining

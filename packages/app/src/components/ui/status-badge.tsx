@@ -7,9 +7,10 @@ type StatusBadgeVariant = "success" | "error" | "muted";
 interface StatusBadgeProps {
   label: string;
   variant?: StatusBadgeVariant;
+  testID?: string;
 }
 
-export function StatusBadge({ label, variant = "muted" }: StatusBadgeProps) {
+export function StatusBadge({ label, variant = "muted", testID }: StatusBadgeProps) {
   const pillStyle = useMemo(
     () => [
       styles.pill,
@@ -28,7 +29,7 @@ export function StatusBadge({ label, variant = "muted" }: StatusBadgeProps) {
   );
 
   return (
-    <View style={pillStyle}>
+    <View style={pillStyle} testID={testID}>
       <Text style={textStyle}>{label}</Text>
     </View>
   );

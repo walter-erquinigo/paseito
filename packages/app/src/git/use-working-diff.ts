@@ -246,6 +246,7 @@ export function useWorkingDiff({
     comparisonBaseRef,
     baseSelection,
     currentBranchName,
+    hasUncommittedChanges,
     diffMode,
     selectUncommitted,
     selectBase,

@@ -210,6 +210,8 @@ instead of editing the list by hand.
 - `changes-base-selector` — Let the Changes tab select and remember a read-only comparison base without changing merge, update or pull-request targets.
   - Fix: Default ahead branches to their committed branch diff without hiding the explicit Uncommitted view.
   - Fix: Sort every werquinigo/ branch first in literal name order on both current and legacy hosts.
+- `changes-uncommitted-branch-badge` — Show the selected branch's uncommitted working-tree state beside the Changes branch switcher.
+  - Fix: Keep the branch badge tied to live checkout dirtiness while Changes displays either comparison mode.
 - `changes-context-expansion` — Load and review omitted source context on demand from the Changes diff without transferring entire files by default.
   - Fix: Keep context expansion bounded, revision-validated and available to comments and suggestions.
 - `review-suggestions-v1` — Let a reviewer send persisted, structured one- or multi-line replacement suggestions to the destination agent from Changes.

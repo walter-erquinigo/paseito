@@ -110,6 +110,7 @@ import { useToast } from "@/contexts/toast-context";
 import { useSessionStore } from "@/stores/session-store";
 import { confirmDialog } from "@/utils/confirm-dialog";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { useOverlayFlatListScrollbar } from "@/components/ui/overlay-scrollbar/use-overlay-flat-list-scrollbar";
 import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
 import { usePanelStore } from "@/stores/panel-store";
@@ -4925,6 +4926,26 @@ function ChangesBaseSelectorPlacement({
   );
 }
 
+function ChangesUncommittedBadge({
+  currentBranchName,
+  hasUncommittedChanges,
+}: {
+  currentBranchName: string | null;
+  hasUncommittedChanges: boolean;
+}) {
+  const { t } = useTranslation();
+  if (!currentBranchName || !hasUncommittedChanges) {
+    return null;
+  }
+  return (
+    <StatusBadge
+      label={t("workspace.git.diff.uncommitted")}
+      variant="muted"
+      testID="changes-uncommitted-badge"
+    />
+  );
+}
+
 export function GitDiffPane({
   serverId,
   workspaceId,
@@ -5030,6 +5051,7 @@ export function GitDiffPane({
     comparisonBaseRef,
     baseSelection,
     currentBranchName,
+    hasUncommittedChanges,
     diffMode,
     selectUncommitted: handleSelectUncommitted,
     selectBase: handleSelectBase,
@@ -5398,6 +5420,10 @@ export function GitDiffPane({
               workspaceDirectory={cwd}
               isGitCheckout={isGit}
               testID="changes-branch-switcher"
+            />
+            <ChangesUncommittedBadge
+              currentBranchName={currentBranchName}
+              hasUncommittedChanges={hasUncommittedChanges}
             />
             <ChangesBaseSelectorPlacement
               visible={!isMobile}

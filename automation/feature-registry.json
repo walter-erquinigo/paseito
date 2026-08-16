@@ -51,6 +51,30 @@
       ]
     },
     {
+      "id": "changes-uncommitted-branch-badge",
+      "commitSubject": "feat(changes): show uncommitted branch status",
+      "preservationFixes": [
+        "Keep the branch badge tied to live checkout dirtiness while Changes displays either comparison mode."
+      ],
+      "permanent": false,
+      "intent": "Show the selected branch's uncommitted working-tree state beside the Changes branch switcher.",
+      "invariants": [
+        "A muted Uncommitted badge appears immediately after the Changes branch switcher only when a named Git branch has a dirty working tree.",
+        "The badge follows live checkout-status updates and remains visible while Changes displays the Committed comparison.",
+        "Clean, loading, unavailable, non-Git and detached checkouts do not show the badge, and the branch switcher interaction remains unchanged."
+      ],
+      "contracts": [
+        "npm run test:e2e --workspace=@getpaseo/app -- e2e/browser/paseito-changes-uncommitted-branch-badge.spec.ts"
+      ],
+      "paths": [
+        "packages/app/src/components/ui/status-badge.tsx",
+        "packages/app/src/git/diff-pane.tsx",
+        "packages/app/src/git/use-working-diff.ts",
+        "packages/app/e2e/browser/paseito-changes-uncommitted-branch-badge.spec.ts",
+        "docs/paseito-changes.md"
+      ]
+    },
+    {
       "id": "changes-context-expansion",
       "commitSubject": "feat(changes): expand omitted diff context",
       "preservationFixes": [
