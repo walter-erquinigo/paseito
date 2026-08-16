@@ -144,6 +144,7 @@
       "preservationFixes": [
         "Keep multi-line comment editors focused without viewport jumps.",
         "Keep comment threads aligned with fixed diff-gutter rows.",
+        "Keep local review comments and suggestions aligned after the diff gutter without changing their reserved interstitial geometry.",
         "Keep review attachment contracts intact after upstream reconciliation."
       ],
       "permanent": false,

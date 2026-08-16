@@ -273,6 +273,7 @@ instead of editing the list by hand.
 - `review-suggestions-v1` — Let a reviewer send persisted, structured one- or multi-line replacement suggestions to the destination agent from Changes.
   - Fix: Keep multi-line comment editors focused without viewport jumps.
   - Fix: Keep comment threads aligned with fixed diff-gutter rows.
+  - Fix: Keep local review comments and suggestions aligned after the diff gutter without changing their reserved interstitial geometry.
   - Fix: Keep review attachment contracts intact after upstream reconciliation.
 - `branch-file-review-state` — Let reviewers mark branch files or individual edited lines reviewed while preserving checks only for identical branch-side content.
   - Fix: Expand a file when it is marked unreviewed.

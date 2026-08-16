@@ -3,6 +3,8 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { useTranslation } from "react-i18next";
 import {
   ScrollView,
+  Pressable,
+  Text,
   StyleSheet,
   View,
   type GestureResponderEvent,
@@ -19,10 +21,11 @@ import Animated, {
   type SharedValue,
 } from "react-native-reanimated";
 import { scheduleOnRN } from "react-native-worklets";
-import { InlineReviewThread } from "@/review";
+import { getInlineReviewThreadState, InlineReviewThread } from "@/review";
 import { useKeyboardShift } from "@/hooks/keyboard-shift-context";
 import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
 import { DocumentFileHeader } from "./document-file-header";
+import { parseDiffContextMarker } from "@/git/diff-context-expansion";
 import { hitTestDiffBodyPoint } from "./native-hit-testing";
 import { retainDiffViewport } from "./viewport";
 import { HorizontalScroll } from "./horizontal-scroll.native";
@@ -33,6 +36,7 @@ import {
 } from "./horizontal-offsets";
 import {
   buildDiffDocumentModel,
+  FILE_HEADER_HEIGHT,
   resolveRelayoutScrollTop,
   retainReusableModels,
   shouldApplyRelayoutScroll,
@@ -75,6 +79,7 @@ export function DiffSurface(props: DiffSurfaceProps) {
     models: ReturnType<typeof buildDiffDocumentModel>[];
   } | null>(null);
   const consumedFocusRef = useRef<string | null>(null);
+  const consumedReviewFocusRef = useRef<string | null>(null);
   const scrollTop = useSharedValue(0);
   const { shift: keyboardShift } = useKeyboardShift();
   const keyboardSpacerStyle = useAnimatedStyle(
@@ -192,7 +197,7 @@ export function DiffSurface(props: DiffSurfaceProps) {
   const collapsedFilePaths = props.collapsedFilePaths;
   const onToggleFile = props.onToggleFile;
   useEffect(() => {
-    if (mode.kind !== "working") return;
+    if (mode.kind !== "working" || mode.focusLineStart) return;
     const focusPath = mode.focusPath;
     if (!focusPath) return;
     const requestKey = `${mode.focusRequestId ?? "initial"}:${focusPath}`;
@@ -205,6 +210,56 @@ export function DiffSurface(props: DiffSurfaceProps) {
       consumedFocusRef.current = requestKey;
     }
   }, [collapsedFilePaths, mode, model.files, onToggleFile, scrollTop]);
+  useEffect(() => {
+    if (mode.kind !== "working" || !mode.focusPath || !mode.focusLineStart) return;
+    const requestKey = `${mode.focusRequestId ?? "initial"}:${mode.focusPath}:${mode.focusLineStart}:${mode.focusLineEnd ?? mode.focusLineStart}`;
+    if (consumedFocusRef.current === requestKey) return;
+    if (collapsedFilePaths.has(mode.focusPath)) {
+      onToggleFile(mode.focusPath);
+      return;
+    }
+    const row = model.rows.find(
+      (candidate) =>
+        candidate.kind === "line" &&
+        candidate.path === mode.focusPath &&
+        candidate.cells.some(
+          (cell) =>
+            cell?.lineNumber !== null &&
+            cell?.lineNumber !== undefined &&
+            cell.lineNumber >= mode.focusLineStart! &&
+            cell.lineNumber <= (mode.focusLineEnd ?? mode.focusLineStart!),
+        ),
+    );
+    if (row) {
+      const offset = Math.max(0, row.top - FILE_HEADER_HEIGHT);
+      scrollTop.value = offset;
+      scrollRef.current?.scrollTo({ y: offset, animated: false });
+      consumedFocusRef.current = requestKey;
+    }
+  }, [collapsedFilePaths, mode, model.rows, onToggleFile, scrollTop]);
+  useEffect(() => {
+    const presentation = props.reviewPresentation;
+    const selectedLineId = presentation?.selectedLineId;
+    if (!selectedLineId || mode.kind !== "working" || !mode.fileReviews) return;
+    const requestKey = `${presentation.focusRequest}:${selectedLineId}`;
+    if (consumedReviewFocusRef.current === requestKey) return;
+    const row = model.rows.find(
+      (candidate) =>
+        candidate.kind === "line" &&
+        candidate.cells.some((cell) => {
+          const targetKey = cell?.reviewTarget?.key;
+          return (
+            targetKey !== undefined &&
+            mode.fileReviews?.lineByTargetKey.get(targetKey)?.id === selectedLineId
+          );
+        }),
+    );
+    if (row?.kind !== "line") return;
+    const offset = Math.max(0, row.top - (viewport.height - row.height) / 2);
+    scrollTop.value = offset;
+    scrollRef.current?.scrollTo({ y: offset, animated: false });
+    consumedReviewFocusRef.current = requestKey;
+  }, [mode, model.rows, props.reviewPresentation, scrollTop, viewport.height]);
   const contentStyle = useMemo(
     () => ({ minHeight: viewport.height, backgroundColor: "transparent" }),
     [viewport.height],
@@ -248,11 +303,26 @@ export function DiffSurface(props: DiffSurfaceProps) {
             model={model}
             mode={props.mode}
             horizontalOffsets={horizontalOffsets}
+            presentation={props.reviewPresentation}
           />,
         ])}
-        <NativeReviewOverlays model={model} mode={props.mode} />
+        <NativeReviewOverlays
+          model={model}
+          mode={props.mode}
+          presentation={props.reviewPresentation}
+        />
         <Animated.View pointerEvents="none" style={keyboardSpacerStyle} />
       </AnimatedScrollView>
+      {props.reviewPresentation?.shortcutHint ? (
+        <View
+          accessibilityLiveRegion="polite"
+          pointerEvents="none"
+          style={styles.shortcutHint}
+          testID="line-review-shortcut-hint"
+        >
+          <Text style={styles.shortcutHintText}>{props.reviewPresentation.shortcutHint}</Text>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -337,11 +407,13 @@ function NativeFileBody({
   model,
   mode,
   horizontalOffsets,
+  presentation,
 }: {
   file: DiffFileSection;
   model: DiffDocumentModel;
   mode: DiffSurfaceProps["mode"];
   horizontalOffsets: SharedValue<DiffHorizontalOffsets>;
+  presentation: DiffSurfaceProps["reviewPresentation"];
 }) {
   const touchRef = useRef<{ x: number; y: number; startedAt: number; moved: boolean } | null>(null);
   const reviewActions = mode.kind === "working" ? mode.reviewActions : undefined;
@@ -374,9 +446,16 @@ function NativeFileBody({
         locationY: event.nativeEvent.locationY,
         horizontalOffset: horizontalOffsetForPath(horizontalOffsets.value, file.path),
       });
-      if (hit?.kind === "cell" && hit.target) reviewActions.onStartComment(hit.target);
+      if (hit?.kind === "cell" && hit.target) {
+        const line =
+          mode.kind === "working"
+            ? mode.fileReviews?.lineByTargetKey.get(hit.target.key)
+            : undefined;
+        if (line) presentation?.onSelectLine(line);
+        reviewActions.onStartComment(hit.target);
+      }
     },
-    [file, horizontalOffsets, model, reviewActions],
+    [file, horizontalOffsets, mode, model, presentation, reviewActions],
   );
   return (
     <View
@@ -400,25 +479,59 @@ function NativeFileBody({
 function NativeReviewOverlays({
   model,
   mode,
+  presentation,
 }: {
   model: DiffDocumentModel;
   mode: DiffSurfaceProps["mode"];
+  presentation: DiffSurfaceProps["reviewPresentation"];
 }) {
-  if (mode.kind !== "working" || !mode.reviewActions) return null;
+  if (mode.kind !== "working") return null;
   const reviewActions = mode.reviewActions;
   return model.rows.flatMap((row) => {
-    if (row.kind !== "line" || row.reviewHeight === 0) return [];
+    if (row.kind !== "line") return [];
     const columnWidth = model.viewportWidth / row.cells.length;
     return row.cells.flatMap((cell, index) => {
+      const marker = cell && parseDiffContextMarker(cell.content);
+      if (marker && presentation?.onExpandContext && index === row.cells.length - 1) {
+        const file = model.files[row.fileIndex];
+        return file
+          ? [
+              <NativeContextControl
+                key={`${file.path}:${row.index}`}
+                filePath={file.path}
+                region={marker}
+                top={row.top}
+                height={row.height}
+                onExpand={presentation.onExpandContext}
+              />,
+            ]
+          : [];
+      }
       if (!cell?.reviewTarget) return [];
-      const comments = reviewActions.commentsByTarget.get(cell.reviewTarget.key) ?? [];
-      const editor = reviewActions.editor;
-      const hasEditor =
-        editor?.target.filePath === cell.reviewTarget.filePath &&
-        editor.target.side === cell.reviewTarget.side &&
-        editor.target.lineNumber === cell.reviewTarget.lineNumber;
-      if (comments.length === 0 && !hasEditor) return [];
+      const thread = getInlineReviewThreadState({
+        reviewTarget: cell.reviewTarget,
+        reviewActions,
+      });
+      const changed = mode.fileReviews?.lineByTargetKey.get(cell.reviewTarget.key);
+      const controls =
+        changed && presentation
+          ? [
+              <NativeLineReviewControl
+                key={`${cell.reviewTarget.key}:line-review`}
+                targetKey={cell.reviewTarget.key}
+                changedLine={changed}
+                presentation={presentation}
+                reviewed={mode.fileReviews?.reviewedLineIds.has(changed.id) === true}
+                selected={presentation.selectedLineId === changed.id}
+                top={row.top}
+                left={index * columnWidth + model.files[row.fileIndex]!.gutterWidth - 22}
+                height={model.lineHeight}
+              />,
+            ]
+          : [];
+      if (!thread || !reviewActions) return controls;
       return [
+        ...controls,
         <View
           key={cell.reviewTarget.key}
           style={inlineUnistylesStyle<ViewStyle>({
@@ -441,6 +554,110 @@ function NativeReviewOverlays({
       ];
     });
   });
+}
+
+function NativeLineReviewControl({
+  targetKey,
+  changedLine,
+  presentation,
+  reviewed,
+  selected,
+  top,
+  left,
+  height,
+}: {
+  targetKey: string;
+  changedLine: import("@/review").ReviewableChangedLine;
+  presentation: NonNullable<DiffSurfaceProps["reviewPresentation"]>;
+  reviewed: boolean;
+  selected: boolean;
+  top: number;
+  left: number;
+  height: number;
+}) {
+  const accessibilityState = useMemo(() => ({ checked: reviewed }), [reviewed]);
+  const onPress = useCallback(() => {
+    presentation.onSelectLine(changedLine);
+    presentation.onToggleLine(changedLine);
+  }, [changedLine, presentation]);
+  const style = useMemo<ViewStyle>(
+    () => ({
+      position: "absolute",
+      top,
+      left,
+      width: 22,
+      height,
+      zIndex: 7,
+      borderLeftWidth: selected ? 2 : 0,
+      borderLeftColor: "#0a84ff",
+      alignItems: "center",
+      justifyContent: "center",
+    }),
+    [height, left, selected, top],
+  );
+  return (
+    <Pressable
+      accessibilityRole="checkbox"
+      accessibilityState={accessibilityState}
+      accessibilityLabel={reviewed ? "Mark line unreviewed" : "Mark line reviewed"}
+      testID={`diff-line-review-${targetKey}`}
+      onPress={onPress}
+      style={style}
+    >
+      <Text>✓</Text>
+    </Pressable>
+  );
+}
+
+function NativeContextControl({
+  filePath,
+  region,
+  top,
+  height,
+  onExpand,
+}: {
+  filePath: string;
+  region: import("@/git/diff-context-expansion").DiffContextRegion;
+  top: number;
+  height: number;
+  onExpand: NonNullable<Extract<DiffSurfaceProps["mode"], { kind: "working" }>["onExpandContext"]>;
+}) {
+  const expandUp = useCallback(
+    () => void onExpand(filePath, region, "up"),
+    [filePath, onExpand, region],
+  );
+  const expandDown = useCallback(
+    () => void onExpand(filePath, region, "down"),
+    [filePath, onExpand, region],
+  );
+  const expandAll = useCallback(
+    () => void onExpand(filePath, region, "all"),
+    [filePath, onExpand, region],
+  );
+  return (
+    <View
+      style={inlineUnistylesStyle<ViewStyle>({
+        position: "absolute",
+        top,
+        left: 22,
+        height,
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 8,
+        zIndex: 8,
+      })}
+    >
+      <Pressable onPress={expandUp}>
+        <Text>↑ 20</Text>
+      </Pressable>
+      <Pressable onPress={expandDown}>
+        <Text>↓ 20</Text>
+      </Pressable>
+      <Pressable onPress={expandAll}>
+        <Text>Expand {Math.min(region.lineCount, 5000)}</Text>
+      </Pressable>
+    </View>
+  );
 }
 
 function NativeCanvasSlabView({
@@ -580,4 +797,16 @@ const styles = StyleSheet.create({
   root: { flex: 1, minHeight: 0, position: "relative", overflow: "hidden" },
   scroll: { backgroundColor: "transparent" },
   header: { zIndex: 5 },
+  shortcutHint: {
+    position: "absolute",
+    zIndex: 30,
+    right: 12,
+    bottom: 12,
+    maxWidth: "95%",
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 6,
+    backgroundColor: "rgba(20,20,24,0.9)",
+  },
+  shortcutHintText: { color: "#ddd", fontSize: 12 },
 });

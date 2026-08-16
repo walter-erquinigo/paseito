@@ -90,24 +90,47 @@ export function renderPromptAttachmentAsText(attachment: AgentAttachment): strin
         lines.push(`Base: ${attachment.baseRef}`);
       }
       attachment.comments.forEach((comment, index) => {
+        const endLine = comment.endLine ?? comment.lineNumber;
         lines.push(
           "",
-          `Comment ${index + 1}: ${comment.filePath}:${comment.side}:${comment.lineNumber}`,
+          `Comment ${index + 1}: ${comment.filePath}:${comment.side}:${comment.lineNumber}${
+            endLine !== comment.lineNumber ? `-${endLine}` : ""
+          }`,
           comment.body,
           comment.context.hunkHeader,
         );
         const target = comment.context.targetLine;
         for (const line of comment.context.lines) {
+          const sideLineNumber = comment.side === "old" ? line.oldLineNumber : line.newLineNumber;
           const isTarget =
-            line.oldLineNumber === target.oldLineNumber &&
-            line.newLineNumber === target.newLineNumber &&
-            line.type === target.type &&
-            line.content === target.content;
+            comment.endLine !== undefined
+              ? sideLineNumber !== null &&
+                sideLineNumber >= comment.lineNumber &&
+                sideLineNumber <= comment.endLine
+              : line.oldLineNumber === target.oldLineNumber &&
+                line.newLineNumber === target.newLineNumber &&
+                line.type === target.type &&
+                line.content === target.content;
           const prefix = isTarget ? "> " : "  ";
           const oldLn = padLineNumber(line.oldLineNumber);
           const newLn = padLineNumber(line.newLineNumber);
           lines.push(`${prefix}${oldLn} ${newLn} ${REVIEW_LINE_MARKERS[line.type]}${line.content}`);
         }
+      });
+      attachment.suggestions?.forEach((suggestion, index) => {
+        lines.push(
+          "",
+          `Suggested edit ${index + 1}: ${suggestion.filePath}:${suggestion.startLine}-${suggestion.endLine}`,
+          "Replace:",
+          "```",
+          ...suggestion.originalLines,
+          "```",
+          "With:",
+          "```suggestion",
+          suggestion.replacement,
+          "```",
+        );
+        if (suggestion.note) lines.push(`Note: ${suggestion.note}`);
       });
       return lines.join("\n");
     }

@@ -877,6 +877,27 @@ test("canvas diff creates, edits, and deletes an inline review without DOM code 
   await expect(page.locator('[data-testid^="diff-code-row-"]')).toHaveCount(0);
 });
 
+test("saved suggestions align after the diff gutter", async ({ page }, testInfo) => {
+  const workspace = await createWorkspaceWithMountedTabDiff();
+  await useUnwrappedDiffLines(page);
+  await openWorkspaceChanges(page, workspace);
+
+  await startReviewOnFirstChangedLine(page);
+  await page.getByRole("tab", { name: "Code change" }).click();
+  await page.getByLabel("Suggested replacement").fill("const mountedTabValue = 2;");
+  await page.getByRole("button", { name: "Add suggestion" }).click();
+
+  const [body, gutter, rail] = await Promise.all([
+    page.getByTestId("diff-file-0-body").boundingBox(),
+    page.locator('[data-testid^="diff-review-gutter-"]').first().boundingBox(),
+    page.getByTestId("inline-review-content-rail").boundingBox(),
+  ]);
+  if (!body || !gutter || !rail) throw new Error("Suggestion rail geometry is unavailable");
+  expect(rail.x).toBeGreaterThanOrEqual(body.x + gutter.width);
+  expect(rail.x + rail.width).toBeLessThanOrEqual(body.x + body.width);
+  await page.screenshot({ path: testInfo.outputPath("suggestion-content-rail.png") });
+});
+
 test("autofocusing an inline review keeps the Changes tab focused", async ({ page }) => {
   const workspace = await createWorkspaceWithMountedTabDiff();
   await useUnwrappedDiffLines(page);

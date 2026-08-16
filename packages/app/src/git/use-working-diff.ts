@@ -7,13 +7,19 @@ import {
   buildReviewDraftKey,
   buildReviewDraftScopeKey,
   useInlineReviewController,
+  useFileReviews,
   useResolvedDiffMode,
   useReviewAttachmentSnapshot,
+  useReviewDraftComments,
+  useReviewDraftSuggestions,
   useSetDiffModeOverride,
 } from "@/review";
 import { useCheckoutDiffQuery } from "@/git/use-diff-query";
-import { useChangesBaseSelection } from "@/git/use-changes-base-selection";
 import { useCheckoutStatusQuery } from "@/git/use-status-query";
+import { useChangesBaseSelection } from "@/git/use-changes-base-selection";
+import { useSessionStore } from "@/stores/session-store";
+import { useDiffContextExpansion } from "@/git/use-diff-context-expansion";
+import { buildNumberedDiffHunks } from "@/utils/diff-layout";
 
 interface UseWorkingDiffOptions {
   serverId: string;
@@ -22,7 +28,58 @@ interface UseWorkingDiffOptions {
   ignoreWhitespace: boolean;
   enabled: boolean;
   queryScope?: string;
-  modeScope: string;
+  requestedNavigationLine?: { filePath: string; lineNumber: number };
+}
+
+function collectCurrentSideReviewTargets(files: ReturnType<typeof useCheckoutDiffQuery>["files"]) {
+  return files.flatMap((file) =>
+    buildNumberedDiffHunks(file).flatMap((hunk) =>
+      hunk.lines.map((line) => line.newCell).filter((cell) => cell !== null),
+    ),
+  );
+}
+
+function resolveSelectedComparisonBaseRef(
+  selection: ReturnType<typeof useChangesBaseSelection>,
+): string | undefined {
+  return selection.supported && selection.source !== "recorded" && selection.effectiveBaseRef
+    ? selection.effectiveBaseRef
+    : undefined;
+}
+
+function hasCommittedBranchChanges(
+  status: { aheadBehind?: { ahead: number } | null } | null,
+): boolean {
+  return (status?.aheadBehind?.ahead ?? 0) > 0;
+}
+
+function getGitStatus(status: ReturnType<typeof useCheckoutStatusQuery>["status"]) {
+  return status?.isGit === true ? status : null;
+}
+
+function isNotGitStatus(status: ReturnType<typeof useCheckoutStatusQuery>["status"]): boolean {
+  return status?.isGit === false && !status.error;
+}
+
+function getStatusErrorMessage(input: {
+  status: ReturnType<typeof useCheckoutStatusQuery>["status"];
+  isStatusError: boolean;
+  statusError: unknown;
+}): string | null {
+  if (input.status?.error?.message) return input.status.error.message;
+  return input.isStatusError && input.statusError instanceof Error
+    ? input.statusError.message
+    : null;
+}
+
+function getCurrentBranchName(gitStatus: ReturnType<typeof getGitStatus>): string | null {
+  const branch = gitStatus?.currentBranch;
+  return branch && branch !== "HEAD" ? branch : null;
+}
+
+function getFileReviewRepositoryRoot(gitStatus: ReturnType<typeof getGitStatus>): string | null {
+  if (!gitStatus) return null;
+  return gitStatus.mainRepoRoot ?? gitStatus.repoRoot;
 }
 
 export function useWorkingDiff({
@@ -32,7 +89,7 @@ export function useWorkingDiff({
   ignoreWhitespace,
   enabled,
   queryScope,
-  modeScope,
+  requestedNavigationLine,
 }: UseWorkingDiffOptions) {
   const {
     status,
@@ -40,16 +97,13 @@ export function useWorkingDiff({
     isError: isStatusError,
     error: statusError,
   } = useCheckoutStatusQuery({ serverId, cwd });
-  const gitStatus = status && status.isGit ? status : null;
+  const gitStatus = getGitStatus(status);
   const isGit = Boolean(gitStatus);
-  const notGit = status !== null && !status.isGit && !status.error;
-  const statusErrorMessage =
-    status?.error?.message ??
-    (isStatusError && statusError instanceof Error ? statusError.message : null);
+  const notGit = isNotGitStatus(status);
+  const statusErrorMessage = getStatusErrorMessage({ status, isStatusError, statusError });
   const recordedBaseRef = gitStatus?.baseRef ?? undefined;
   const hasUncommittedChanges = Boolean(gitStatus?.isDirty);
-  const currentBranchName =
-    gitStatus?.currentBranch && gitStatus.currentBranch !== "HEAD" ? gitStatus.currentBranch : null;
+  const currentBranchName = getCurrentBranchName(gitStatus);
   const baseSelection = useChangesBaseSelection({
     serverId,
     cwd,
@@ -58,7 +112,10 @@ export function useWorkingDiff({
     recordedBaseRef,
     stackParent: gitStatus?.stackParent,
   });
+  const hasCommittedChanges =
+    hasCommittedBranchChanges(gitStatus) || baseSelection.source === "stack-parent";
   const baseRef = baseSelection.effectiveBaseRef;
+  const comparisonBaseRef = resolveSelectedComparisonBaseRef(baseSelection);
 
   const reviewDraftScopeKey = useMemo(
     () =>
@@ -71,43 +128,23 @@ export function useWorkingDiff({
       }),
     [baseRef, cwd, ignoreWhitespace, serverId, workspaceId],
   );
-  const modeScopeKey = `${reviewDraftScopeKey}:surface=${encodeURIComponent(modeScope)}`;
   const diffMode = useResolvedDiffMode({
-    scopeKey: modeScopeKey,
+    scopeKey: reviewDraftScopeKey,
     hasUncommittedChanges,
+    hasCommittedChanges,
   });
   const setDiffModeOverride = useSetDiffModeOverride();
   const selectDiffMode = useCallback(
-    (nextMode: "uncommitted" | "base") => {
+    (mode: "uncommitted" | "base") => {
       setDiffModeOverride({
-        scopeKey: modeScopeKey,
-        override: {
-          serverId,
-          cwd,
-          mode: nextMode,
-          isDirtyAtSelection: hasUncommittedChanges,
-        },
+        scopeKey: reviewDraftScopeKey,
+        override: { serverId, cwd, mode, isDirtyAtSelection: hasUncommittedChanges },
       });
     },
-    [cwd, hasUncommittedChanges, modeScopeKey, serverId, setDiffModeOverride],
+    [cwd, hasUncommittedChanges, reviewDraftScopeKey, serverId, setDiffModeOverride],
   );
   const selectUncommitted = useCallback(() => selectDiffMode("uncommitted"), [selectDiffMode]);
   const selectBase = useCallback(() => selectDiffMode("base"), [selectDiffMode]);
-
-  const {
-    files,
-    payloadError: diffPayloadError,
-    diffTooLarge,
-    isLoading: isDiffLoading,
-  } = useCheckoutDiffQuery({
-    serverId,
-    cwd,
-    mode: diffMode,
-    baseRef,
-    ignoreWhitespace,
-    enabled: enabled && isGit,
-    queryScope,
-  });
   const reviewDraftKey = useMemo(
     () =>
       buildReviewDraftKey({
@@ -120,7 +157,77 @@ export function useWorkingDiff({
       }),
     [baseRef, cwd, diffMode, ignoreWhitespace, serverId, workspaceId],
   );
-  const reviewActions = useInlineReviewController({ reviewDraftKey });
+  const persistedComments = useReviewDraftComments(reviewDraftKey);
+  const persistedSuggestions = useReviewDraftSuggestions(reviewDraftKey);
+  const requestedContextLines = useMemo(
+    () => [
+      ...persistedComments
+        .filter((comment) => comment.side === "new")
+        .flatMap((comment) => {
+          const endLine = comment.endLine ?? comment.lineNumber;
+          return Array.from({ length: endLine - comment.lineNumber + 1 }, (_, offset) => ({
+            filePath: comment.filePath,
+            lineNumber: comment.lineNumber + offset,
+          }));
+        }),
+      ...persistedSuggestions.map((suggestion) => ({
+        filePath: suggestion.filePath,
+        lineNumber: suggestion.startLine,
+      })),
+      ...(requestedNavigationLine ? [requestedNavigationLine] : []),
+    ],
+    [persistedComments, persistedSuggestions, requestedNavigationLine],
+  );
+
+  const {
+    files: sourceFiles,
+    payloadError: diffPayloadError,
+    diffTooLarge,
+    isLoading: isDiffLoading,
+  } = useCheckoutDiffQuery({
+    serverId,
+    cwd,
+    mode: diffMode,
+    baseRef: comparisonBaseRef,
+    ignoreWhitespace,
+    enabled: enabled && isGit,
+    queryScope,
+  });
+  const contextExpansionSupported = useSessionStore(
+    (state) => state.sessions[serverId]?.serverInfo?.features?.changesContextExpansion === true,
+  );
+  const suggestionsSupported = useSessionStore(
+    (state) => state.sessions[serverId]?.serverInfo?.features?.reviewSuggestionsV1 === true,
+  );
+  const fileReviewSupported = useSessionStore(
+    (state) => state.sessions[serverId]?.serverInfo?.features?.fileReviewV1 === true,
+  );
+  const contextExpansion = useDiffContextExpansion({
+    serverId,
+    cwd,
+    compare: {
+      mode: diffMode,
+      ...(diffMode === "base" && comparisonBaseRef ? { baseRef: comparisonBaseRef } : {}),
+      ignoreWhitespace,
+    },
+    files: sourceFiles,
+    supported: contextExpansionSupported,
+    requestedLines: requestedContextLines,
+  });
+  const files = contextExpansion.files;
+  const fileReviews = useFileReviews({
+    serverId,
+    repositoryRoot: getFileReviewRepositoryRoot(gitStatus),
+    branch: currentBranchName,
+    files,
+    supported: fileReviewSupported,
+  });
+  const availableTargets = useMemo(() => collectCurrentSideReviewTargets(files), [files]);
+  const reviewActions = useInlineReviewController({
+    reviewDraftKey,
+    availableTargets,
+    suggestionsSupported,
+  });
   const reviewAttachment = useReviewAttachmentSnapshot({
     key: reviewDraftKey,
     diffFiles: files,
@@ -136,18 +243,24 @@ export function useWorkingDiff({
     notGit,
     statusErrorMessage,
     baseRef,
-    currentBranchName,
+    comparisonBaseRef,
     baseSelection,
-    hasUncommittedChanges,
+    currentBranchName,
     diffMode,
     selectUncommitted,
     selectBase,
     files,
+    sourceFiles,
     diffPayloadError,
     diffTooLarge,
     isDiffLoading,
     reviewActions,
     reviewAttachment,
+    reviewDraftKey,
+    contextExpansion,
+    contextExpansionSupported,
+    suggestionsSupported,
+    fileReviews,
   };
 }
 
