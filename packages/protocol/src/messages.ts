@@ -397,6 +397,8 @@ const AgentCapabilityFlagsSchema: z.ZodType<AgentCapabilityFlags> = z
     supportsRewindFiles: z.boolean().optional().default(false),
     // COMPAT(rewind): added in v0.1.X, drop when floor >= v0.1.X.
     supportsRewindBoth: z.boolean().optional().default(false),
+    // COMPAT(steering): optional until every supported daemon advertises it.
+    supportsSteering: z.boolean().optional().default(false),
   })
   .catchall(z.boolean());
 
@@ -1129,12 +1131,24 @@ export const ReviewAttachmentCommentSchema = z.object({
   filePath: z.string(),
   side: z.enum(["old", "new"]),
   lineNumber: z.number().int().positive(),
+  // COMPAT(reviewCommentRanges): added in v0.3.1-paseito.1, remove after 2027-02-14 once daemon floor >= v0.3.1.
+  endLine: z.number().int().positive().optional(),
   body: z.string(),
   context: z.object({
     hunkHeader: z.string(),
     targetLine: ReviewAttachmentContextLineSchema,
     lines: z.array(ReviewAttachmentContextLineSchema),
   }),
+});
+
+export const ReviewAttachmentSuggestionSchema = z.object({
+  filePath: z.string(),
+  startLine: z.number().int().positive(),
+  endLine: z.number().int().positive(),
+  originalLines: z.array(z.string()).min(1).max(200),
+  replacement: z.string().max(65_536),
+  note: z.string().optional(),
+  sourceRevision: z.string(),
 });
 
 export const ReviewAttachmentSchema = z.object({
@@ -1144,6 +1158,8 @@ export const ReviewAttachmentSchema = z.object({
   mode: z.enum(["uncommitted", "base"]),
   baseRef: z.string().nullable().optional(),
   comments: z.array(ReviewAttachmentCommentSchema),
+  // COMPAT(reviewSuggestionsV1): added in Paseito v0.2.5-paseito.4.
+  suggestions: z.array(ReviewAttachmentSuggestionSchema).optional(),
 });
 
 export const UploadedFileAttachmentSchema = z.object({
@@ -1355,6 +1371,7 @@ export const SendAgentMessageRequestSchema = z.object({
   text: z.string(),
   messageId: z.string().optional(), // Client-provided ID for deduplication
   activeTurnBehavior: ActiveTurnBehaviorSchema.optional(),
+  activeRunBehavior: z.enum(["replace", "steer"]).optional(),
   images: z.array(ImageAttachmentSchema).optional(),
   attachments: AgentAttachmentsSchema,
 });
@@ -2018,6 +2035,12 @@ const CheckoutDiffCompareSchema = z.object({
   ignoreWhitespace: z.boolean().optional(),
 });
 
+const CheckoutDiffContextRegionSchema = z.object({
+  oldStart: z.number().int().positive(),
+  newStart: z.number().int().positive(),
+  lineCount: z.number().int().positive(),
+});
+
 export const CheckoutStatusRequestSchema = z.object({
   type: z.literal("checkout_status_request"),
   cwd: z.string(),
@@ -2035,6 +2058,18 @@ export const SubscribeCheckoutDiffRequestSchema = z.object({
 export const UnsubscribeCheckoutDiffRequestSchema = z.object({
   type: z.literal("unsubscribe_checkout_diff_request"),
   subscriptionId: z.string(),
+});
+
+export const CheckoutDiffGetContextRequestSchema = z.object({
+  type: z.literal("checkout.diff.get_context.request"),
+  cwd: z.string(),
+  compare: CheckoutDiffCompareSchema,
+  filePath: z.string(),
+  expectedRevision: z.string().optional(),
+  region: CheckoutDiffContextRegionSchema,
+  offset: z.number().int().nonnegative(),
+  limit: z.number().int().positive().max(5000),
+  requestId: z.string(),
 });
 
 export const CheckoutCommitRequestSchema = z.object({
@@ -2143,6 +2178,8 @@ const CheckoutCommitSchema = z.object({
 export const CheckoutCommitsListRequestSchema = z.object({
   type: z.literal("checkout.commits.list.request"),
   cwd: z.string(),
+  // COMPAT(changesBaseSelector): added in Paseito v0.2.5-paseito.1, remove after 2027-02-04.
+  baseRef: z.string().optional(),
   requestId: z.string(),
 });
 
@@ -2522,6 +2559,13 @@ const ParsedDiffFileSchema = z.object({
   deletions: z.number(),
   hunks: z.array(DiffHunkSchema),
   status: z.enum(["ok", "too_large", "binary"]).optional(),
+  // COMPAT(changesContextExpansion): added in Paseito v0.2.5-paseito.4,
+  // keep optional until every supported daemon reports file bounds and revisions.
+  oldLineCount: z.number().int().nonnegative().optional(),
+  newLineCount: z.number().int().nonnegative().optional(),
+  revision: z.string().optional(),
+  // COMPAT(fileReviewV1): added in Paseito v0.2.5-paseito.8, remove after 2027-02-07.
+  contentRevision: z.string().optional(),
 });
 
 const FileExplorerEntrySchema = z.object({
@@ -2632,6 +2676,93 @@ export const FileEntryDeleteRequestSchema = z.object({
   type: z.literal("fs.entry.delete.request"),
   cwd: z.string(),
   path: z.string(),
+  requestId: z.string(),
+});
+
+export const WorkspaceLspPositionSchema = z.object({
+  line: z.number().int().nonnegative(),
+  character: z.number().int().nonnegative(),
+});
+
+export const WorkspaceLspRangeSchema = z.object({
+  start: WorkspaceLspPositionSchema,
+  end: WorkspaceLspPositionSchema,
+});
+
+export const WorkspaceLspTextEditSchema = z.object({
+  range: WorkspaceLspRangeSchema,
+  newText: z.string(),
+});
+
+export const WorkspaceLspDiagnosticSchema = z.object({
+  severity: z.number().int().min(1).max(4),
+  message: z.string(),
+  range: WorkspaceLspRangeSchema,
+  code: z.union([z.string(), z.number()]).optional(),
+  source: z.string().optional(),
+});
+
+export const WorkspaceLspCompletionItemSchema = z.object({
+  label: z.string(),
+  kind: z.number().int().optional(),
+  detail: z.string().optional(),
+  documentation: z
+    .union([z.string(), z.object({ kind: z.string(), value: z.string() })])
+    .optional(),
+  sortText: z.string().optional(),
+  filterText: z.string().optional(),
+  insertText: z.string().optional(),
+  insertTextFormat: z.union([z.literal(1), z.literal(2)]).optional(),
+  textEdit: WorkspaceLspTextEditSchema.optional(),
+  additionalTextEdits: z.array(WorkspaceLspTextEditSchema).optional(),
+});
+
+export const WorkspaceLspLocationSchema = z.object({
+  uri: z.string(),
+  range: WorkspaceLspRangeSchema,
+});
+
+export const WorkspaceLspHoverSchema = z.object({
+  contents: z.union([
+    z.string(),
+    z.object({ kind: z.string(), value: z.string() }),
+    z.array(
+      z.union([
+        z.string(),
+        z.object({ language: z.string(), value: z.string() }),
+        z.object({ kind: z.string(), value: z.string() }),
+      ]),
+    ),
+  ]),
+  range: WorkspaceLspRangeSchema.optional(),
+});
+
+export const WorkspaceLspOperationSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("open"), content: z.string() }),
+  z.object({ kind: z.literal("change"), content: z.string() }),
+  z.object({ kind: z.literal("close") }),
+  z.object({ kind: z.literal("diagnostics") }),
+  z.object({ kind: z.literal("completion"), position: WorkspaceLspPositionSchema }),
+  z.object({ kind: z.literal("hover"), position: WorkspaceLspPositionSchema }),
+  z.object({ kind: z.literal("definition"), position: WorkspaceLspPositionSchema }),
+  z.object({
+    kind: z.literal("formatting"),
+    options: z.object({
+      tabSize: z.number().int().positive(),
+      insertSpaces: z.boolean(),
+      trimTrailingWhitespace: z.boolean().optional(),
+      insertFinalNewline: z.boolean().optional(),
+      trimFinalNewlines: z.boolean().optional(),
+    }),
+  }),
+]);
+
+export const WorkspaceLspRequestSchema = z.object({
+  type: z.literal("workspace.lsp.request"),
+  cwd: z.string(),
+  path: z.string(),
+  documentVersion: z.number().int().nonnegative(),
+  operation: WorkspaceLspOperationSchema,
   requestId: z.string(),
 });
 
@@ -3034,6 +3165,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   CheckoutStatusRequestSchema,
   SubscribeCheckoutDiffRequestSchema,
   UnsubscribeCheckoutDiffRequestSchema,
+  CheckoutDiffGetContextRequestSchema,
   CheckoutCommitRequestSchema,
   CheckoutMergeRequestSchema,
   CheckoutMergeFromBaseRequestSchema,
@@ -3083,6 +3215,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   FileEntryRenameRequestSchema,
   FileEntryDuplicateRequestSchema,
   FileEntryDeleteRequestSchema,
+  WorkspaceLspRequestSchema,
   ProjectIconRequestSchema,
   ProjectIconGetRequestSchema,
   FileDownloadTokenRequestSchema,
@@ -3357,6 +3490,8 @@ export const ServerInfoStatusPayloadSchema = z
         workspaceRecovery: z.boolean().optional(),
         // COMPAT(workspaceFileEditing): added in v0.2.0, remove after 2027-01-18 once daemon floor >= v0.2.0.
         workspaceFileEditing: z.boolean().optional(),
+        // COMPAT(workspaceLsp): added in Paseito v0.2.5-paseito.11, remove after 2027-02-08.
+        workspaceLsp: z.boolean().optional(),
         // COMPAT(providerUsageList): added in v0.1.98, drop the gate when daemon floor >= v0.1.98.
         providerUsageList: z.boolean().optional(),
         // COMPAT(agentDetach): added in v0.1.98, remove gate after 2026-12-19 once daemon floor >= v0.1.98.
@@ -3397,9 +3532,6 @@ export const ServerInfoStatusPayloadSchema = z
         // COMPAT(changesContextExpansion): added in Paseito v0.2.5-paseito.4,
         // remove gate after 2027-02-05.
         changesContextExpansion: z.boolean().optional(),
-        // COMPAT(checkoutDiffSearch): added in Paseito v0.4.0-paseito.22,
-        // remove gate after 2027-02-17.
-        checkoutDiffSearch: z.boolean().optional(),
         // COMPAT(reviewSuggestionsV1): added in Paseito v0.2.5-paseito.4,
         // remove gate after 2027-02-05.
         reviewSuggestionsV1: z.boolean().optional(),
@@ -4969,6 +5101,29 @@ export const CheckoutDiffUpdateSchema = z.object({
   payload: CheckoutDiffSubscriptionPayloadSchema,
 });
 
+export const CheckoutDiffGetContextResponseSchema = z.object({
+  type: z.literal("checkout.diff.get_context.response"),
+  payload: z.object({
+    cwd: z.string(),
+    filePath: z.string(),
+    revision: z.string(),
+    region: CheckoutDiffContextRegionSchema,
+    offset: z.number().int().nonnegative(),
+    lines: z.array(
+      z.object({
+        oldLineNumber: z.number().int().positive(),
+        newLineNumber: z.number().int().positive(),
+        content: z.string(),
+        tokens: z.array(HighlightTokenSchema).optional(),
+      }),
+    ),
+    hasMore: z.boolean(),
+    truncated: z.boolean().optional(),
+    error: CheckoutErrorSchema.nullable(),
+    requestId: z.string(),
+  }),
+});
+
 export const CheckoutCommitResponseSchema = z.object({
   type: z.literal("checkout_commit_response"),
   payload: z.object({
@@ -5408,6 +5563,8 @@ export const BranchSuggestionsResponseSchema = z.object({
           hasRemote: z.boolean().optional(),
           localAhead: z.number().int().nonnegative().optional(),
           localBehind: z.number().int().nonnegative().optional(),
+          // COMPAT(branchStackOrdering): added in Paseito v0.2.5-paseito.4.
+          stackOrder: z.number().int().nonnegative().optional(),
         }),
       )
       .optional(),
@@ -5590,6 +5747,29 @@ export const FileEntryDeleteResponseSchema = z.object({
     cwd: z.string(),
     path: z.string(),
     success: z.boolean(),
+    error: z.string().nullable(),
+    requestId: z.string(),
+  }),
+});
+
+export const WorkspaceLspResultSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("ack") }),
+  z.object({ kind: z.literal("diagnostics"), items: z.array(WorkspaceLspDiagnosticSchema) }),
+  z.object({
+    kind: z.literal("completion"),
+    isIncomplete: z.boolean(),
+    items: z.array(WorkspaceLspCompletionItemSchema),
+  }),
+  z.object({ kind: z.literal("hover"), hover: WorkspaceLspHoverSchema.nullable() }),
+  z.object({ kind: z.literal("definition"), locations: z.array(WorkspaceLspLocationSchema) }),
+  z.object({ kind: z.literal("formatting"), edits: z.array(WorkspaceLspTextEditSchema) }),
+]);
+
+export const WorkspaceLspResponseSchema = z.object({
+  type: z.literal("workspace.lsp.response"),
+  payload: z.object({
+    documentVersion: z.number().int().nonnegative(),
+    result: WorkspaceLspResultSchema.nullable(),
     error: z.string().nullable(),
     requestId: z.string(),
   }),
@@ -6314,6 +6494,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   CheckoutStatusUpdateSchema,
   SubscribeCheckoutDiffResponseSchema,
   CheckoutDiffUpdateSchema,
+  CheckoutDiffGetContextResponseSchema,
   CheckoutCommitResponseSchema,
   CheckoutMergeResponseSchema,
   CheckoutMergeFromBaseResponseSchema,
@@ -6352,6 +6533,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   FileEntryRenameResponseSchema,
   FileEntryDuplicateResponseSchema,
   FileEntryDeleteResponseSchema,
+  WorkspaceLspResponseSchema,
   FileUpdateSchema,
   ProjectIconResponseSchema,
   ProjectIconGetResponseSchema,
@@ -6664,6 +6846,8 @@ export type SubscribeCheckoutDiffRequest = z.infer<typeof SubscribeCheckoutDiffR
 export type UnsubscribeCheckoutDiffRequest = z.infer<typeof UnsubscribeCheckoutDiffRequestSchema>;
 export type SubscribeCheckoutDiffResponse = z.infer<typeof SubscribeCheckoutDiffResponseSchema>;
 export type CheckoutDiffUpdate = z.infer<typeof CheckoutDiffUpdateSchema>;
+export type CheckoutDiffGetContextRequest = z.infer<typeof CheckoutDiffGetContextRequestSchema>;
+export type CheckoutDiffGetContextResponse = z.infer<typeof CheckoutDiffGetContextResponseSchema>;
 export type CheckoutCommitRequest = z.infer<typeof CheckoutCommitRequestSchema>;
 export type CheckoutCommitResponse = z.infer<typeof CheckoutCommitResponseSchema>;
 export type CheckoutMergeRequest = z.infer<typeof CheckoutMergeRequestSchema>;
@@ -6790,6 +6974,14 @@ export type FileEntryDuplicateResponse = z.infer<typeof FileEntryDuplicateRespon
 export type FileEntryDeleteRequest = z.infer<typeof FileEntryDeleteRequestSchema>;
 export type FileEntryDeleteResponse = z.infer<typeof FileEntryDeleteResponseSchema>;
 export type FileWriteResult = z.infer<typeof FileWriteResultSchema>;
+export type WorkspaceLspRequest = z.infer<typeof WorkspaceLspRequestSchema>;
+export type WorkspaceLspResponse = z.infer<typeof WorkspaceLspResponseSchema>;
+export type WorkspaceLspResult = z.infer<typeof WorkspaceLspResultSchema>;
+export type WorkspaceLspDiagnostic = z.infer<typeof WorkspaceLspDiagnosticSchema>;
+export type WorkspaceLspCompletionItem = z.infer<typeof WorkspaceLspCompletionItemSchema>;
+export type WorkspaceLspLocation = z.infer<typeof WorkspaceLspLocationSchema>;
+export type WorkspaceLspHover = z.infer<typeof WorkspaceLspHoverSchema>;
+export type WorkspaceLspTextEdit = z.infer<typeof WorkspaceLspTextEditSchema>;
 export type FileUpdate = z.infer<typeof FileUpdateSchema>;
 export type ProjectIconRequest = z.infer<typeof ProjectIconRequestSchema>;
 export type ProjectIconResponse = z.infer<typeof ProjectIconResponseSchema>;
