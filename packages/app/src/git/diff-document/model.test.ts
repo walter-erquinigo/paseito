@@ -11,6 +11,7 @@ import {
   shouldApplyRelayoutScroll,
 } from "./model";
 import type { BuildDiffDocumentModelInput, TextMeasurer } from "./types";
+import type { InlineReviewActions } from "@/review/inline-review";
 import { encodeDiffContextMarker } from "@/git/diff-context-expansion";
 import { DIFF_CONTEXT_CONTROL_HEIGHT } from "./context-control-model";
 
@@ -687,7 +688,7 @@ function rowForReviewTarget(model: ReturnType<typeof buildDiffDocumentModel>, ke
 
 function reviewActionsWithEditor(
   target: NonNullable<ReturnType<typeof addedCell>["reviewTarget"]> | null,
-): NonNullable<BuildDiffDocumentModelInput["reviewActions"]> {
+): InlineReviewActions {
   return {
     canSuggest: true,
     composerMode: target ? "comment" : null,

@@ -36,6 +36,7 @@ export interface BuildWorkspacePaneContentModelInput {
   onCloseCurrentTab: () => void;
   onRetargetCurrentTab: (target: WorkspaceTabDescriptor["target"]) => void;
   onSetCurrentTabState: (state: WorkspaceTabDescriptor["state"]) => void;
+  onFocusCurrentTab?: () => void;
   onOpenWorkspaceFile: (request: WorkspaceFileOpenRequest) => void;
   onOpenImportSheet: () => void;
 }
@@ -52,6 +53,7 @@ export function buildWorkspacePaneContentModel({
   onCloseCurrentTab,
   onRetargetCurrentTab,
   onSetCurrentTabState,
+  onFocusCurrentTab,
   onOpenWorkspaceFile,
   onOpenImportSheet,
 }: BuildWorkspacePaneContentModelInput): WorkspacePaneContentModel {
@@ -75,6 +77,7 @@ export function buildWorkspacePaneContentModel({
       closeCurrentTab: onCloseCurrentTab,
       retargetCurrentTab: onRetargetCurrentTab,
       setCurrentTabState: onSetCurrentTabState,
+      focusCurrentTab: onFocusCurrentTab,
       openFileInWorkspace: onOpenWorkspaceFile,
       openImportSheet: onOpenImportSheet,
     },
@@ -101,6 +104,7 @@ export function WorkspacePaneContent({
   const closeCurrentTab = useStableEvent(paneContextValue.closeCurrentTab);
   const retargetCurrentTab = useStableEvent(paneContextValue.retargetCurrentTab);
   const setCurrentTabState = useStableEvent(paneContextValue.setCurrentTabState);
+  const focusCurrentTab = useStableEvent(paneContextValue.focusCurrentTab ?? (() => undefined));
   const openFileInWorkspace = useStableEvent(paneContextValue.openFileInWorkspace);
   const openImportSheet = useStableEvent(paneContextValue.openImportSheet);
   const stablePaneContextValue = useMemo(
@@ -118,6 +122,7 @@ export function WorkspacePaneContent({
       closeCurrentTab,
       retargetCurrentTab,
       setCurrentTabState,
+      focusCurrentTab,
       openFileInWorkspace,
       openImportSheet,
     }),
@@ -138,6 +143,7 @@ export function WorkspacePaneContent({
       paneContextValue.openTargetToSide,
       retargetCurrentTab,
       setCurrentTabState,
+      focusCurrentTab,
     ],
   );
   const paneFocusValue = useMemo(
