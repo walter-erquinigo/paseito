@@ -220,6 +220,7 @@ const CODEX_APP_SERVER_CAPABILITIES: AgentCapabilityFlags = {
   supportsRewindConversation: true,
   supportsRewindFiles: false,
   supportsRewindBoth: false,
+  supportsSteering: true,
 };
 
 const CODEX_MODES: AgentMode[] = [
@@ -4046,6 +4047,13 @@ export class CodexAppServerAgentSession implements AgentSession {
     );
   }
 
+  private async buildEffectivePromptInput(prompt: AgentPromptInput): Promise<CodexPromptInput> {
+    const slashCommand = await this.resolveSlashCommandInvocation(prompt);
+    return slashCommand
+      ? await this.buildCommandPromptInput(slashCommand.commandName, slashCommand.args)
+      : prompt;
+  }
+
   async run(prompt: AgentPromptInput, options?: AgentRunOptions): Promise<AgentRunResult> {
     let currentAssistantMessageId: string | null = null;
     let currentAssistantMessageHasBoundary = false;
@@ -4115,11 +4123,7 @@ export class CodexAppServerAgentSession implements AgentSession {
       if (!this.client) {
         throw new Error("Codex client not initialized");
       }
-
-      const slashCommand = await this.resolveSlashCommandInvocation(prompt);
-      const effectivePrompt = slashCommand
-        ? await this.buildCommandPromptInput(slashCommand.commandName, slashCommand.args)
-        : prompt;
+      const effectivePrompt = await this.buildEffectivePromptInput(prompt);
 
       if (this.currentThreadId) {
         await this.ensureThreadLoaded();
