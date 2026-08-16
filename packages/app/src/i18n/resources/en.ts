@@ -1,3 +1,9 @@
+import {
+  mrTrackerSectionTranslations,
+  mrTrackerSettingsTranslations,
+  mrTrackerTranslations,
+} from "./mr-tracker";
+
 export const en = {
   common: {
     back: "Back",
@@ -55,6 +61,9 @@ export const en = {
       placeholder: "Search commands, files, workspaces, and agents...",
       filePlaceholder: "Search files...",
       searchingFiles: "Searching files...",
+      fileNotPresentInChanges: "This file is not present in Changes.",
+      fileSearchRequiresHostUpdate: "Update this host to search all workspace files.",
+      absoluteFileSearchRequiresHostUpdate: "Update this host to search absolute file paths.",
       noMatches: "No matches",
       actions: "Actions",
       files: "Files",
@@ -101,6 +110,12 @@ export const en = {
       sendMessage: "Send message",
       queue: "Queue",
       send: "Send",
+    },
+    queue: {
+      steer: "Steer",
+      steeringConversation: "Steering active work",
+      steerHint: "Send this now as guidance for the active run",
+      replaceFallbackHint: "This provider will restart the active run with this message",
     },
     cancel: {
       cancelingAgent: "Canceling agent",
@@ -820,7 +835,7 @@ export const en = {
             "Update isn't available because this branch is already up to date with {{baseRef}}",
           mergePrNoGithub: "Merge PR isn't available right now because GitHub isn't connected",
           archiveNotWorktree:
-            "Archive isn't available here because this workspace was not created as a Paseo worktree",
+            "Archive isn't available here because this workspace was not created as a Paseito worktree",
           mergePrNoForge:
             "Merge {{noun}} isn't available right now because {{brand}} isn't connected",
           mergePrMissing: "Merge PR isn't available because there isn't a pull request yet",
@@ -863,6 +878,16 @@ export const en = {
       diff: {
         openChangesTab: "Open Changes tab",
         closeChangesTab: "Close Changes tab",
+        fileNavigator: "Files",
+        showFileNavigator: "Show file navigator",
+        hideFileNavigator: "Hide file navigator",
+        showFlatView: "Show flat file list",
+        showTreeView: "Show folder tree",
+        fileStatus: {
+          added: "Added",
+          deleted: "Deleted",
+          modified: "Modified",
+        },
         binaryFile: "Binary file",
         tooLarge: "Diff too large to display",
         previewTooLargeTitle: "This diff is too large to preview",
@@ -876,6 +901,11 @@ export const en = {
         showWhitespace: "Show whitespace",
         scrollLongLines: "Scroll long lines",
         wrapLongLines: "Wrap long lines",
+        lsp: "Language intelligence",
+        lspUpdateHost: "Update the host for language intelligence",
+        collapseAll: "Collapse all files",
+        expandAll: "Expand all files",
+        expandUnreviewed: "Expand unreviewed files and collapse reviewed files",
         collapseAllFolders: "Collapse all folders",
         expandAllFolders: "Expand all folders",
         collapseAllFiles: "Collapse all files",
@@ -893,7 +923,51 @@ export const en = {
         notRepository: "Not a git repository",
         diffMode: "Diff mode",
         uncommitted: "Uncommitted",
+        amend: "Amend",
+        amending: "Amending…",
+        amendSuccess: "Commit amended",
+        failedAmend: "Failed to amend commit",
+        amendUpdateHost: "Update the host to amend changes",
         committed: "Committed",
+        baseSelectorLabel: "Compare committed changes against {{baseRef}}",
+        baseSelectorTitle: "Compare against branch",
+        baseSelectorSearch: "Search branches",
+        baseSelectorEmpty: "No matching branches",
+        baseSelectorMissing: "Branch {{baseRef}} no longer exists",
+        baseSelectorError: "Failed to change comparison branch",
+        baseSelectorUpdateHost: "Update the host to select a base branch",
+        stackParentMalformed: "Malformed Stack-Parent",
+        stackParentMissing: "Stack parent not found",
+        markReviewed: "Mark reviewed",
+        markUnreviewed: "Mark unreviewed",
+        markFileReviewed: "Mark {{file}} reviewed",
+        markFileUnreviewed: "Mark {{file}} unreviewed",
+        markAllReviewed: "Mark all files reviewed",
+        clearAllReviewed: "Clear all reviewed files",
+        reviewUpdateHost: "Update the host to mark files reviewed",
+        reviewBranchRequired: "Check out a branch to mark files reviewed",
+        markLineReviewed: "Mark line {{line}} reviewed",
+        markLineUnreviewed: "Mark line {{line}} unreviewed",
+        editLineUnavailable: "This line cannot be opened in the built-in editor",
+        noUncheckedLines: "No unchecked lines remain in that direction",
+        focusChangesShortcut: "{{shortcut}} focus Changes",
+        lineReviewShortcuts:
+          "m / , approve and move · Shift+M / Shift+. reveal context · Space toggle · E edit · U undo · Esc clear",
+        context: {
+          hiddenLines: "{{count}} hidden lines",
+          expandUp: "Show 20 lines above",
+          expandDown: "Show 20 lines below",
+          expandAll: "Show all hidden lines",
+          expandFile: "Expand the complete file",
+          failedToExpand: "Failed to load hidden lines",
+        },
+        search: {
+          placeholder: "Search changed files",
+          loading: "Searching…",
+          noMatches: "No matches",
+          submit: "Enter search · n/N navigate · Esc close",
+          failed: "Search failed",
+        },
         branchUnknown: "Unknown",
         base: "base",
         newFile: "New",
@@ -1089,7 +1163,7 @@ export const en = {
       discord: "Discord",
       github: "Create GitHub issue",
       whatsNew: "What's new",
-      appName: "Paseo",
+      appName: "Paseito",
     },
     sections: {
       sessions: "History",
@@ -1221,7 +1295,7 @@ export const en = {
   },
   desktop: {
     quitting: {
-      title: "Quitting Paseo...",
+      title: "Quitting Paseito...",
       detail: "Stopping the local daemon.",
     },
     daemon: {
@@ -1235,20 +1309,20 @@ export const en = {
       },
       management: {
         title: "Manage built-in daemon",
-        hint: "Let Paseo start and stop the built-in daemon",
+        hint: "Let Paseito start and stop the built-in daemon",
         pauseTitle: "Pause built-in daemon",
         pauseMessage:
           "This will stop the built-in daemon immediately. Running agents and terminals connected to the built-in daemon will be stopped.",
         pauseAndStop: "Pause and stop",
         registrationFailed:
-          "Built-in daemon started, but Paseo could not save the localhost connection. Toggle daemon management off and on again, or add localhost manually.",
+          "Built-in daemon started, but Paseito could not save the localhost connection. Toggle daemon management off and on again, or add localhost manually.",
         pausedStopFailed:
-          "Built-in daemon management was paused, but Paseo could not stop the daemon.",
+          "Built-in daemon management was paused, but Paseito could not stop the daemon.",
         updateFailed: "Unable to update built-in daemon management.",
       },
       keepRunning: {
         title: "Keep daemon running after quit",
-        hint: "Daemon keeps running when you quit Paseo",
+        hint: "Daemon keeps running when you quit Paseito",
       },
       logs: {
         title: "Log file",
@@ -1263,7 +1337,7 @@ export const en = {
       fullStatus: {
         title: "Full status",
         modalTitle: "Daemon status",
-        hint: "Runs `paseo daemon status` and shows the output",
+        hint: "Runs `paseito daemon status` and shows the output",
         view: "View status",
         copied: "Status copied to clipboard.",
         fetchFailed: "Failed to fetch daemon status: {{message}}",
@@ -1315,7 +1389,7 @@ export const en = {
     },
     rosetta: {
       title: "Download the Apple Silicon build",
-      runningIntel: "You're running the Intel build of Paseo under Rosetta on Apple Silicon.",
+      runningIntel: "You're running the Intel build of Paseito under Rosetta on Apple Silicon.",
       highCpu: "This causes high CPU usage. Download the Apple Silicon build to fix it.",
       download: "Download",
     },
@@ -1357,7 +1431,7 @@ export const en = {
         microphone: "Microphone status has not been checked yet.",
       },
       testNotification: {
-        title: "Paseo notification test",
+        title: "Paseito notification test",
         body: "If you can see this, desktop notifications work.",
         notDelivered: "Notification was not delivered. Check System Settings > Notifications.",
         failed: "Failed to send notification.",
@@ -1366,12 +1440,19 @@ export const en = {
     integrations: {
       cli: {
         statusFailed: "Unable to check CLI install status.",
-        installFailed: "Unable to install the Paseo CLI.",
+        installFailed: "Unable to install the Paseito CLI.",
+      },
+      skills: {
+        statusFailed: "Unable to check orchestration skills status.",
+        installFailed: "Unable to install orchestration skills.",
+        updateFailed: "Unable to update orchestration skills.",
+        uninstallFailed: "Unable to uninstall orchestration skills.",
+        saveSelectionFailed: "Unable to save the orchestration skills selection.",
       },
     },
   },
   rootError: {
-    title: "Paseo ran into a problem.",
+    title: "Paseito ran into a problem.",
     body: "Try again to reload the app. If this keeps happening, include the details below when you report it.",
     details: "Details",
   },
@@ -1466,7 +1547,7 @@ export const en = {
     },
   },
   onboarding: {
-    title: "Welcome to Paseo",
+    title: "Welcome to Paseito",
     subtitle: "Connect your computer to get started",
     actions: {
       settings: "Settings",
@@ -1550,7 +1631,7 @@ export const en = {
     },
     direct: {
       title: "Direct connection",
-      helper: "Enter the address of a Paseo server.",
+      helper: "Enter the address of a Paseito server.",
       fields: {
         host: "Host",
         port: "Port",
@@ -1639,7 +1720,7 @@ export const en = {
         "Without relay, connect directly over TCP, Tailscale, or another VPN. No QR code is created.",
       updateRequired: "Update the host to enable relay from Paseo Desktop.",
       unavailable: "Pairing offer unavailable.",
-      hint: "Scan this QR code with Paseo on your phone, or copy the link below.",
+      hint: "Scan this QR code with Paseito on your phone, or copy the link below.",
       securityWarning:
         "Treat this pairing link like a password. Anyone with it can access this daemon.",
       qrUnavailable: "QR code unavailable.",
@@ -1674,7 +1755,7 @@ export const en = {
   serviceUrl: {
     title: "Open service URL",
     message: "Open {{url}}?",
-    inPaseo: "In Paseo",
+    inPaseo: "In Paseito",
     externalBrowser: "External browser",
     dontAskAgain: "Don't ask again",
   },
@@ -1793,8 +1874,8 @@ export const en = {
       other: "used {{count}} other tools",
     },
     paseoCalls: {
-      one: "called Paseo {{count}} time",
-      other: "called Paseo {{count}} times",
+      one: "called Paseito {{count}} time",
+      other: "called Paseito {{count}} times",
     },
     and: "and",
   },
@@ -1813,6 +1894,10 @@ export const en = {
     accessibility: "Context window {{percentage}}% used",
   },
   review: {
+    composer: {
+      comment: "Comment",
+      codeChange: "Code change",
+    },
     comment: {
       add: "Add review comment",
       edit: "Edit review comment",
@@ -1824,7 +1909,25 @@ export const en = {
       save: "Comment",
       saveAccessibility: "Save review comment",
     },
+    suggestion: {
+      start: "Suggest edit",
+      edit: "Edit suggestion",
+      delete: "Delete suggestion",
+      save: "Add suggestion",
+      replacement: "Suggested replacement",
+      deleteLines: "Delete selected lines",
+      note: "Suggestion note",
+      notePlaceholder: "Optional explanation",
+      addLineAbove: "Add line above",
+      addLineBelow: "Add line below",
+      lines: "Lines {{start}}–{{end}}",
+      stale: "Stale suggestion — update before sending",
+      rangeInvalid: "Select current-side lines from the same file and revision",
+      rangeHidden: "Expand hidden lines before selecting this range",
+      rangeTooLarge: "Suggestions can include at most 200 lines",
+    },
   },
+  mrTracker: mrTrackerTranslations,
   settings: {
     title: "Settings",
     loading: "Loading settings...",
@@ -1846,6 +1949,7 @@ export const en = {
     },
     groupInfo: "About {{title}}",
     sections: {
+      ...mrTrackerSectionTranslations,
       general: "General",
       appearance: "Appearance",
       editor: "Editor",
@@ -1856,6 +1960,7 @@ export const en = {
       diagnostics: "Diagnostics",
       about: "About",
     },
+    mrTracker: mrTrackerSettingsTranslations,
     editor: {
       title: "Editor",
       vimKeybindings: "Vim keybindings",
@@ -1963,7 +2068,7 @@ export const en = {
       browserData: {
         title: "Browser data",
         siteData: "Cookies and site data",
-        description: "Browser tabs share sign-ins and site data across Paseo.",
+        description: "Browser tabs share sign-ins and site data across Paseito.",
         clear: "Clear browser data",
         clearing: "Clearing...",
         confirmTitle: "Clear browser data?",
@@ -1990,7 +2095,7 @@ export const en = {
         description: "Where to open URLs from running scripts",
         options: {
           ask: "Ask",
-          inApp: "In Paseo",
+          inApp: "In Paseito",
           external: "External browser",
         },
       },
@@ -2079,7 +2184,7 @@ export const en = {
         label: "App updates",
         readyToInstall: "Ready to install: {{version}}",
         installTitle: "Install desktop update",
-        installMessage: "This updates Paseo on this computer",
+        installMessage: "This updates Paseito on this computer",
         installConfirm: "Install update",
         update: "Update",
         updateTo: "Update to {{version}}",
@@ -2165,6 +2270,7 @@ export const en = {
         agentInput: "Agent Input",
       },
       help: {
+        focusChanges: "Focus Changes",
         openProject: "Open project",
         newWorkspace: "New workspace",
         newWorktree: "New worktree",
@@ -2309,11 +2415,11 @@ export const en = {
         uninstallFailed: "Unable to uninstall orchestration skills.",
         saveSelectionFailed: "Unable to save the orchestration skills selection.",
         updateAvailable: "Update available",
-        updateTitle: "Update Paseo skills?",
+        updateTitle: "Update Paseito skills?",
         updateFallback: "Sync bundled skills to this host.",
-        uninstallTitle: "Uninstall Paseo skills?",
+        uninstallTitle: "Uninstall Paseito skills?",
         uninstallMessage:
-          "Removes all Paseo orchestration skills from ~/.agents, ~/.claude, ~/.codex on this host.",
+          "Removes all Paseito orchestration skills from ~/.agents, ~/.claude, ~/.codex on this host.",
         choose: "Choose skills",
         chooseAll: "All skills",
         chooseAllHint: "Keep every bundled skill installed, including ones added later.",
@@ -2345,9 +2451,9 @@ export const en = {
         title: "Orchestration",
         unavailable: "Connect to this host to manage orchestration",
         enableTools: {
-          title: "Enable Paseo tools",
+          title: "Enable Paseito tools",
           hint: "Agents will be able to manage worktrees, agents and schedules",
-          accessibilityLabel: "Inject Paseo tools",
+          accessibilityLabel: "Inject Paseito tools",
         },
         systemPrompt: {
           title: "System prompt",
@@ -2450,15 +2556,15 @@ export const en = {
             "This host is not connected. Wait for it to come online before restarting.",
           offlineTitle: "Host offline",
           offlineMessage:
-            "This host is offline. Paseo reconnects automatically-wait until it's back online before restarting.",
+            "This host is offline. Paseito reconnects automatically-wait until it's back online before restarting.",
           requestFailedTitle: "Error",
           requestFailedMessage:
-            "Failed to send the restart request. Paseo reconnects automatically-try again once the host shows as online.",
+            "Failed to send the restart request. Paseito reconnects automatically-try again once the host shows as online.",
           dialogFailedMessage: "Unable to open the restart confirmation dialog.",
         },
         update: {
           desktopManagedHint:
-            "This daemon is managed by Paseo Desktop. Update Paseo Desktop on the host.",
+            "This daemon is managed by Paseito Desktop. Update Paseito Desktop on the host.",
           title: "Update daemon",
           hint: "Update the daemon to the latest version and restart it",
           confirm: "Update",
@@ -2619,7 +2725,7 @@ export const en = {
         newScript: "New script",
         editScript: "Edit {{name}}",
         runAsService: "Run as a service",
-        serviceHint: "Paseo supervises the process and assigns a port via $PASEO_PORT",
+        serviceHint: "Paseito supervises the process and assigns a port via $PASEO_PORT",
         actions: {
           add: "Add script",
           edit: "Edit",
@@ -2628,7 +2734,7 @@ export const en = {
       },
       metadata: {
         title: "Metadata generation",
-        info: "Project-specific instructions injected into the AI prompts Paseo uses to generate metadata - use them to enforce your team's conventions like branch naming, commit style, or PR format",
+        info: "Project-specific instructions injected into the AI prompts Paseito uses to generate metadata - use them to enforce your team's conventions like branch naming, commit style, or PR format",
         branchName: "Branch names",
         branchNamePlaceholder: "Prefix branches with feat/ or fix/, mb/ for personal branches",
         commitMessage: "Commit messages",
