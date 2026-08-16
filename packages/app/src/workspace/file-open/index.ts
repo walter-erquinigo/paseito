@@ -1,11 +1,13 @@
 import { isAbsolutePath } from "@/utils/path";
 
-export type OpenFileDisposition = "main" | "side";
+export type OpenFileDisposition = "main" | "side" | "markdown-preview";
 
 export interface WorkspaceFileLocation {
   path: string;
   lineStart?: number;
   lineEnd?: number;
+  column?: number;
+  openMode?: "source";
 }
 
 export type WorkspaceFileOpenOptions = Omit<WorkspaceFileLocation, "path">;
@@ -15,6 +17,7 @@ export type WorkspaceFileTabTarget = { kind: "file" } & WorkspaceFileLocation;
 export interface WorkspaceFileOpenRequest {
   location: WorkspaceFileLocation;
   disposition: OpenFileDisposition;
+  side?: "left" | "right";
 }
 
 export function normalizeWorkspaceFileLocation(
@@ -31,10 +34,14 @@ export function normalizeWorkspaceFileLocation(
 
   const lineStart = normalizeLineNumber(location.lineStart);
   const lineEnd = normalizeLineNumber(location.lineEnd);
+  const column = normalizeLineNumber(location.column);
+  const openMode = location.openMode === "source" ? "source" : undefined;
   return {
     path,
     ...(lineStart ? { lineStart } : {}),
     ...(lineStart && lineEnd && lineEnd >= lineStart ? { lineEnd } : {}),
+    ...(lineStart && column ? { column } : {}),
+    ...(openMode ? { openMode } : {}),
   };
 }
 
@@ -43,7 +50,11 @@ export function workspaceFileLocationsEqual(
   right: WorkspaceFileLocation,
 ): boolean {
   return (
-    left.path === right.path && left.lineStart === right.lineStart && left.lineEnd === right.lineEnd
+    left.path === right.path &&
+    left.lineStart === right.lineStart &&
+    left.lineEnd === right.lineEnd &&
+    left.column === right.column &&
+    left.openMode === right.openMode
   );
 }
 
