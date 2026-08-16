@@ -16,6 +16,7 @@ interface DiffScrollProps {
   onScrollViewWidthChange: (width: number) => void;
   style?: StyleProp<ViewStyle>;
   contentContainerStyle?: StyleProp<ViewStyle>;
+  testID?: string;
 }
 
 export function DiffScroll({
@@ -24,6 +25,7 @@ export function DiffScroll({
   onScrollViewWidthChange,
   style,
   contentContainerStyle,
+  testID,
 }: DiffScrollProps) {
   const [isAtLeftEdge, setIsAtLeftEdge] = useState(true);
   const horizontalScroll = useHorizontalScrollOptional();
@@ -71,6 +73,7 @@ export function DiffScroll({
       onScroll={handleScroll}
       scrollEventThrottle={16}
       onLayout={handleLayout}
+      testID={testID}
       // When at left edge, wait for close gesture to fail before scrolling.
       // The close gesture fails quickly on leftward swipes (failOffsetX=-10),
       // so scrolling left works normally. On rightward swipes, close gesture

@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { readFile, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { type Page } from "@playwright/test";
+import { type Locator, type Page } from "@playwright/test";
 import { buildHostWorkspaceRoute, buildSettingsSectionRoute } from "../../src/utils/host-routes";
 import { test, expect } from "../support/fixtures";
 import { daemonWsRoutePattern } from "../support/helpers/daemon-port";
@@ -13,6 +13,7 @@ import { waitForWorkspaceTabsVisible } from "../support/helpers/workspace-tabs";
 interface DirtyWorkspace {
   id: string;
   repoPath: string;
+  editedLineCount: number;
 }
 
 interface WorkspaceFixtureOptions {
@@ -239,9 +240,449 @@ test.afterEach(async () => {
   }
 });
 
-test("changes file actions open below the right-click without a reserved kebab", async ({
+test("line review controls stay in the fixed gutter across diff layouts", async ({ page }) => {
+  const workspace = await createWorkspaceWithMountedTabDiff();
+  await useUnwrappedDiffLines(page);
+  await openWorkspaceChanges(page, workspace);
+
+  await expectLineReviewControls(page, workspace.editedLineCount);
+  const reviewCheckboxes = page.getByTestId(/^diff-line-review-/);
+  const selectedReviewLine = page.locator('[data-paseito-review-selected="true"]');
+  const reviewFocusMarker = page.getByTestId(/^diff-review-focus-/);
+  await reviewCheckboxes.nth(1).click();
+  await expect(reviewCheckboxes.nth(1)).toHaveAccessibleName(/unreviewed$/);
+  await expect(reviewFocusMarker).toHaveCount(1);
+  await expect(reviewFocusMarker).toHaveAttribute(
+    "data-testid",
+    `diff-review-focus-${await getReviewTargetKey(reviewCheckboxes.nth(1))}`,
+  );
+  await expect(selectedReviewLine).toHaveAttribute(
+    "data-paseito-review-target-key",
+    await reviewCheckboxes
+      .nth(1)
+      .getAttribute("data-testid")
+      .then((testID) => testID?.replace("diff-line-review-", "") ?? ""),
+  );
+  await page.keyboard.press("Comma");
+  await expect(reviewFocusMarker).toHaveAttribute(
+    "data-testid",
+    `diff-review-focus-${await getReviewTargetKey(reviewCheckboxes.nth(0))}`,
+  );
+  await expect(selectedReviewLine).toHaveAttribute(
+    "data-paseito-review-target-key",
+    await reviewCheckboxes
+      .nth(0)
+      .getAttribute("data-testid")
+      .then((testID) => testID?.replace("diff-line-review-", "") ?? ""),
+  );
+  await page.keyboard.press("j");
+  await page.keyboard.press("k");
+  await expect(selectedReviewLine).toHaveAttribute(
+    "data-paseito-review-target-key",
+    await reviewCheckboxes
+      .nth(0)
+      .getAttribute("data-testid")
+      .then((testID) => testID?.replace("diff-line-review-", "") ?? ""),
+  );
+  await reviewCheckboxes.nth(1).click();
+
+  await reviewCheckboxes.nth(2).click();
+  await expect(reviewCheckboxes.nth(2)).toHaveAccessibleName(/unreviewed$/);
+  await page.keyboard.press("m");
+  await expect(reviewFocusMarker).toHaveAttribute(
+    "data-testid",
+    `diff-review-focus-${await getReviewTargetKey(reviewCheckboxes.nth(3))}`,
+  );
+  await expect(selectedReviewLine).toHaveAttribute(
+    "data-paseito-review-target-key",
+    await reviewCheckboxes
+      .nth(3)
+      .getAttribute("data-testid")
+      .then((testID) => testID?.replace("diff-line-review-", "") ?? ""),
+  );
+  await reviewCheckboxes.nth(2).click();
+  await expect(page.getByTestId("diff-file-0")).toContainText(`0/${workspace.editedLineCount}`);
+
+  await page.setViewportSize({ width: 1400, height: 600 });
+  const lowerSelectedCheckbox = reviewCheckboxes.nth(20);
+  const offscreenTargetCheckbox = reviewCheckboxes.nth(21);
+  const offscreenTargetKey = await getReviewTargetKey(offscreenTargetCheckbox);
+  await lowerSelectedCheckbox.click();
+  await page.evaluate((targetKey) => {
+    const target = document.querySelector<HTMLElement>(
+      `[data-paseito-review-target-key="${CSS.escape(targetKey)}"]`,
+    );
+    let viewport = target?.parentElement ?? null;
+    while (viewport) {
+      const style = getComputedStyle(viewport);
+      if (
+        viewport.scrollHeight > viewport.clientHeight &&
+        (style.overflowY === "auto" || style.overflowY === "scroll")
+      ) {
+        break;
+      }
+      viewport = viewport.parentElement;
+    }
+    if (!viewport || !target) throw new Error("Review navigation viewport is unavailable");
+    const viewportBounds = viewport.getBoundingClientRect();
+    const targetBounds = target.getBoundingClientRect();
+    viewport.scrollTop = Math.max(
+      0,
+      viewport.scrollTop + targetBounds.top - (viewportBounds.bottom + 4),
+    );
+  }, offscreenTargetKey);
+  await expect
+    .poll(() =>
+      page.evaluate((targetKey) => {
+        const target = document.querySelector<HTMLElement>(
+          `[data-paseito-review-target-key="${CSS.escape(targetKey)}"]`,
+        );
+        let viewport = target?.parentElement ?? null;
+        while (viewport) {
+          const style = getComputedStyle(viewport);
+          if (
+            viewport.scrollHeight > viewport.clientHeight &&
+            (style.overflowY === "auto" || style.overflowY === "scroll")
+          ) {
+            break;
+          }
+          viewport = viewport.parentElement;
+        }
+        if (!viewport || !target) return false;
+        return target.getBoundingClientRect().top > viewport.getBoundingClientRect().bottom;
+      }, offscreenTargetKey),
+    )
+    .toBe(true);
+  await page.keyboard.press("m");
+  await expect(reviewFocusMarker).toHaveAttribute(
+    "data-testid",
+    `diff-review-focus-${offscreenTargetKey}`,
+  );
+  await expect
+    .poll(() =>
+      page.evaluate((targetKey) => {
+        const target = document.querySelector<HTMLElement>(
+          `[data-paseito-review-target-key="${CSS.escape(targetKey)}"]`,
+        );
+        let viewport = target?.parentElement ?? null;
+        while (viewport) {
+          const style = getComputedStyle(viewport);
+          if (
+            viewport.scrollHeight > viewport.clientHeight &&
+            (style.overflowY === "auto" || style.overflowY === "scroll")
+          ) {
+            break;
+          }
+          viewport = viewport.parentElement;
+        }
+        if (!viewport || !target) return Number.POSITIVE_INFINITY;
+        const viewportBounds = viewport.getBoundingClientRect();
+        const targetBounds = target.getBoundingClientRect();
+        return Math.abs(
+          (targetBounds.top + targetBounds.bottom) / 2 -
+            (viewportBounds.top + viewportBounds.bottom) / 2,
+        );
+      }, offscreenTargetKey),
+    )
+    .toBeLessThan(30);
+  await lowerSelectedCheckbox.click();
+  await expect(page.getByTestId("diff-file-0")).toContainText(`0/${workspace.editedLineCount}`);
+  await page.setViewportSize({ width: 1400, height: 900 });
+
+  const unifiedCheckbox = page
+    .locator('[data-testid^="diff-gutter-cell-"]')
+    .getByRole("checkbox")
+    .first();
+  await expectCheckboxFixedWhileCodeScrolls(page, "diff-file-0-body", unifiedCheckbox);
+
+  await page.getByTestId("changes-options-menu").click();
+  await page.getByTestId("changes-toggle-wrap-lines").click();
+  await expectLineReviewControls(page, workspace.editedLineCount);
+  const blankReviewRowCount = await page
+    .getByTestId(/^diff-wrapped-row-/)
+    .evaluateAll((rows) => rows.filter((row) => !row.querySelector('[role="checkbox"]')).length);
+  expect(blankReviewRowCount).toBeGreaterThan(0);
+
+  await page.getByTestId("changes-options-menu").click();
+  await page.getByTestId("changes-toggle-wrap-lines").click();
+  await page.getByTestId("changes-toggle-layout").click();
+  await expectLineReviewControls(page, workspace.editedLineCount);
+  const leftCheckbox = page
+    .locator('[data-testid^="diff-left-gutter-cell-"]')
+    .getByRole("checkbox")
+    .first();
+  const rightCheckbox = page
+    .locator('[data-testid^="diff-right-gutter-cell-"]')
+    .getByRole("checkbox")
+    .first();
+  await expectCheckboxFixedWhileCodeScrolls(page, "diff-left-column", leftCheckbox);
+  await expectCheckboxFixedWhileCodeScrolls(page, "diff-right-column", rightCheckbox);
+});
+
+test("Changes keyboard focus, full expansion, and source search share one review surface", async ({
   page,
 }) => {
+  const workspace = await createWorkspaceWithMountedTabDiff();
+  await useUnwrappedDiffLines(page);
+  await openWorkspaceChanges(page, workspace);
+
+  const agentPrompt = page.getByRole("textbox", { name: "Message agent..." }).first();
+  await agentPrompt.focus();
+  await expect(agentPrompt).toBeFocused();
+  const commentScrollTop = await page
+    .getByTestId("git-diff-scroll")
+    .evaluate((element) => element.scrollTop);
+  await page.getByRole("button", { name: "Add review comment" }).first().click();
+  const commentInput = page.getByTestId("inline-review-editor-input");
+  await expect(commentInput).toBeFocused();
+  await expect(page.locator('[data-paseito-review-selected="true"]')).toHaveCount(0);
+  await expect
+    .poll(() => page.getByTestId("git-diff-scroll").evaluate((element) => element.scrollTop))
+    .toBe(commentScrollTop);
+  await commentInput.fill("Focus stays in this review comment");
+  await expect(commentInput).toHaveValue("Focus stays in this review comment");
+  await expect(agentPrompt).toHaveValue("");
+  await page.getByTestId("inline-review-editor-cancel").click();
+
+  const checkboxes = page.getByTestId(/^diff-line-review-/);
+  await checkboxes.nth(3).click();
+  const selectedKey = await getReviewTargetKey(checkboxes.nth(3));
+  await page.keyboard.press("Meta+l");
+  await expect(page.getByTestId("message-input-root")).toContainText("");
+  await page.keyboard.press("Meta+;");
+  await expect(
+    page.locator(
+      `[data-paseito-review-target-key="${selectedKey}"][data-paseito-review-selected="true"]`,
+    ),
+  ).toBeVisible();
+  await expect(page.getByTestId("git-diff-scroll")).toBeFocused();
+
+  await page.getByTestId("changes-open-tab").click();
+  const panel = page.getByTestId("working-diff-panel").filter({ visible: true });
+  const panelCheckboxes = panel.getByTestId(/^diff-line-review-/);
+  await panelCheckboxes.nth(3).click();
+  const panelSelectedKey = await getReviewTargetKey(panelCheckboxes.nth(3));
+  const otherTabTestID = await page
+    .getByTestId("workspace-tabs-row")
+    .locator('[role="button"][data-testid^="workspace-tab-"]')
+    .evaluateAll((tabs) =>
+      tabs
+        .map((tab) => tab.getAttribute("data-testid"))
+        .find((testID) => testID && testID !== "workspace-tab-working_diff"),
+    );
+  if (!otherTabTestID) throw new Error("Expected another workspace tab");
+  await page.getByTestId(otherTabTestID).click();
+  await expect(panel).toBeHidden();
+  await page.keyboard.press("Meta+;");
+  await expect(panel).toBeVisible();
+  await expect(
+    panel.locator(
+      `[data-paseito-review-target-key="${panelSelectedKey}"][data-paseito-review-selected="true"]`,
+    ),
+  ).toBeVisible();
+
+  const fileToggle = panel.getByTestId("diff-file-0-toggle");
+  await fileToggle.click();
+  const collapsedScrollTop = await panel
+    .getByTestId("git-diff-scroll")
+    .evaluate((element) => element.scrollTop);
+  await fileToggle.click();
+  await expect
+    .poll(() => panel.getByTestId("git-diff-scroll").evaluate((element) => element.scrollTop))
+    .toBe(collapsedScrollTop);
+
+  const hiddenBefore = await panel.getByTestId("diff-context-control").count();
+  expect(hiddenBefore).toBeGreaterThan(0);
+  const expandFile = panel.getByTestId("diff-file-0-expand-file");
+  await expandFile.scrollIntoViewIfNeeded();
+  await panel.getByTestId("git-diff-scroll").evaluate((element) => {
+    element.scrollTop = Math.max(1, element.scrollTop + 80);
+  });
+  const expansionScrollTop = await panel
+    .getByTestId("git-diff-scroll")
+    .evaluate((element) => element.scrollTop);
+  expect(expansionScrollTop).toBeGreaterThan(0);
+  await expandFile.click();
+  await expect(panel.getByTestId("diff-context-control")).toHaveCount(0, { timeout: 30_000 });
+  await expect
+    .poll(() => panel.getByTestId("git-diff-scroll").evaluate((element) => element.scrollTop))
+    .toBe(expansionScrollTop);
+  await expect(panel.getByTestId("git-diff-scroll")).toBeFocused();
+
+  await page.keyboard.press("/");
+  const search = panel.getByTestId("changes-search-input");
+  await expect(search).toBeFocused();
+  await search.fill("deriveRenderMountedTabIds");
+  await search.press("Enter");
+  await expect(panel.getByTestId("changes-search-status")).toContainText(/^1\/\d+/);
+  await expect(page.locator('[data-paseito-diff-navigation-selected="true"]')).toBeVisible();
+  await page.keyboard.press("n");
+  await expect(panel.getByTestId("changes-search-status")).toContainText(/^2\/\d+/);
+  await page.keyboard.press("Shift+n");
+  await expect(panel.getByTestId("changes-search-status")).toContainText(/^1\/\d+/);
+  await page.keyboard.press("Escape");
+  await expect(panel.getByTestId("changes-search-bar")).toHaveCount(0);
+});
+
+test("inline review comments retain focus beside an agent pane", async ({ page }) => {
+  const workspace = await createWorkspaceWithMountedTabDiff();
+  await useUnwrappedDiffLines(page);
+  await openWorkspaceChanges(page, workspace);
+
+  await page.getByRole("button", { name: "Split pane right" }).first().click();
+  await expect(
+    page.getByRole("textbox", { name: "Message agent..." }).filter({ visible: true }),
+  ).toHaveCount(2);
+  await page.getByTestId("changes-open-tab").click();
+
+  const panel = page.getByTestId("working-diff-panel").filter({ visible: true });
+  const agentPrompt = page
+    .getByRole("textbox", { name: "Message agent..." })
+    .filter({ visible: true });
+  await expect(agentPrompt).toHaveCount(1);
+  await agentPrompt.focus();
+  await expect(agentPrompt).toBeFocused();
+
+  await panel.getByRole("button", { name: "Add review comment" }).first().click();
+  const commentInput = panel.getByTestId("inline-review-editor-input");
+  await expect(commentInput).toBeFocused();
+
+  await agentPrompt.click();
+  await expect(agentPrompt).toBeFocused();
+  await commentInput.click();
+  await expect(commentInput).toBeFocused();
+  await commentInput.pressSequentially("Comment focus stays in Changes");
+  await expect(commentInput).toHaveValue("Comment focus stays in Changes");
+  await expect(agentPrompt).toHaveValue("");
+});
+
+test("opening an inline comment preserves the viewport or reveals only the clipped editor", async ({
+  page,
+}) => {
+  const workspace = await createWorkspaceWithMountedTabDiff();
+  await page.setViewportSize({ width: 1400, height: 600 });
+  await useUnwrappedDiffLines(page);
+  await openWorkspaceChanges(page, workspace);
+
+  const reviewCheckboxes = page.getByTestId(/^diff-line-review-/);
+  await reviewCheckboxes.nth(1).click();
+
+  const commentButtons = page.getByRole("button", { name: "Add review comment" });
+  const middleCommentButton = commentButtons.nth(14);
+  await middleCommentButton.evaluate((element) => {
+    let viewport = element.parentElement;
+    while (viewport) {
+      const style = getComputedStyle(viewport);
+      if (
+        viewport.scrollHeight > viewport.clientHeight &&
+        (style.overflowY === "auto" || style.overflowY === "scroll")
+      ) {
+        break;
+      }
+      viewport = viewport.parentElement;
+    }
+    if (!viewport) throw new Error("Inline comment viewport is unavailable");
+    const viewportBounds = viewport.getBoundingClientRect();
+    const targetBounds = element.getBoundingClientRect();
+    viewport.scrollTop += targetBounds.top - (viewportBounds.top + 80);
+  });
+  const middleScrollTop = await page
+    .getByTestId("git-diff-scroll")
+    .evaluate((element) => element.scrollTop);
+  await middleCommentButton.click();
+  await expect(page.getByTestId("inline-review-editor-input")).toBeFocused();
+  await expect
+    .poll(() => page.getByTestId("git-diff-scroll").evaluate((element) => element.scrollTop))
+    .toBe(middleScrollTop);
+  await page.getByTestId("inline-review-editor-cancel").click();
+
+  const lowerCommentButton = commentButtons.nth(27);
+  await lowerCommentButton.evaluate((element) => {
+    let viewport = element.parentElement;
+    while (viewport) {
+      const style = getComputedStyle(viewport);
+      if (
+        viewport.scrollHeight > viewport.clientHeight &&
+        (style.overflowY === "auto" || style.overflowY === "scroll")
+      ) {
+        break;
+      }
+      viewport = viewport.parentElement;
+    }
+    if (!viewport) throw new Error("Inline comment viewport is unavailable");
+    const viewportBounds = viewport.getBoundingClientRect();
+    const targetBounds = element.getBoundingClientRect();
+    viewport.scrollTop += targetBounds.bottom - (viewportBounds.bottom - 4);
+  });
+  const lowerScrollTop = await page
+    .getByTestId("git-diff-scroll")
+    .evaluate((element) => element.scrollTop);
+  await lowerCommentButton.click();
+  const editor = page.getByTestId("inline-review-editor");
+  await expect(page.getByTestId("inline-review-editor-input")).toBeFocused();
+  await expect
+    .poll(async () => {
+      const editorBounds = await editor.boundingBox();
+      const viewportBounds = await page.getByTestId("git-diff-scroll").boundingBox();
+      if (!editorBounds || !viewportBounds) return Number.POSITIVE_INFINITY;
+      return Math.abs(
+        editorBounds.y + editorBounds.height - (viewportBounds.y + viewportBounds.height),
+      );
+    })
+    .toBeLessThan(2);
+  await expect
+    .poll(() => page.getByTestId("git-diff-scroll").evaluate((element) => element.scrollTop))
+    .toBeGreaterThan(lowerScrollTop);
+});
+
+test("saved inline comments keep the fixed gutter aligned with code rows", async ({ page }) => {
+  const workspace = await createWorkspaceWithMountedTabDiff();
+  await useUnwrappedDiffLines(page);
+  await openWorkspaceChanges(page, workspace);
+
+  const commentButtons = page.getByRole("button", { name: "Add review comment" });
+  const targetButton = commentButtons.first();
+  const gutterTestID = await targetButton.getAttribute("data-testid");
+  const targetIndex = Number(gutterTestID?.replace("diff-gutter-cell-", ""));
+  expect(Number.isInteger(targetIndex)).toBe(true);
+
+  await targetButton.click();
+  await page
+    .getByTestId("inline-review-editor-input")
+    .fill(
+      "I don't want to use the existing parser here because it accepts negative numbers. Write a one-element parser.",
+    );
+  await page.getByTestId("inline-review-editor-save").click();
+  await expect(
+    page.getByText("I don't want to use the existing parser here", { exact: false }),
+  ).toBeVisible();
+
+  const secondTargetButton = commentButtons.nth(4);
+  await secondTargetButton.click();
+  await page
+    .getByTestId("inline-review-editor-input")
+    .fill("This second two-line comment must not add another fractional gutter offset.");
+  await page.getByTestId("inline-review-editor-save").click();
+  await expect(page.getByText("This second two-line comment", { exact: false })).toBeVisible();
+
+  const rowOffsets = await page.evaluate(
+    (firstIndex) =>
+      Array.from({ length: 12 }, (_, offset) => {
+        const index = firstIndex + offset;
+        const gutter = document.querySelector<HTMLElement>(
+          `[data-testid="diff-gutter-row-${index}"]`,
+        );
+        const code = document.querySelector<HTMLElement>(`[data-testid="diff-code-row-${index}"]`);
+        if (!gutter || !code) throw new Error(`Diff row ${index} is unavailable`);
+        return gutter.getBoundingClientRect().top - code.getBoundingClientRect().top;
+      }),
+    targetIndex,
+  );
+  expect(rowOffsets).toHaveLength(12);
+  expect(Math.max(...rowOffsets.map(Math.abs))).toBeLessThan(1);
+});
+
+test("changes file actions open from the kebab and right-click", async ({ page }) => {
   const workspace = await createWorkspaceWithMountedTabDiff({ includeDeletedFile: true });
   await useUnwrappedDiffLines(page);
   await openWorkspaceChanges(page, workspace);
@@ -490,6 +931,18 @@ test("Changes switches between inline and full-tab navigation", async ({ page })
   await visiblePanel.getByTestId("working-diff-toggle-expand-all").click();
   await expect(visiblePanel.getByTestId("diff-file-0-body")).toBeVisible();
 
+  const expandUnreviewedFiles = visiblePanel.getByTestId("working-diff-expand-unreviewed-files");
+  await expect(expandUnreviewedFiles).toHaveAccessibleName(
+    "Expand unreviewed files and collapse reviewed files",
+  );
+  await visiblePanel.getByTestId("diff-file-0-reviewed").click();
+  await expect(visiblePanel.getByTestId("diff-file-0-body")).toHaveCount(0);
+  await visiblePanel.getByTestId("diff-file-1-toggle").click();
+  await expect(visiblePanel.getByTestId("diff-file-1-body")).toHaveCount(0);
+  await expandUnreviewedFiles.click();
+  await expect(visiblePanel.getByTestId("diff-file-0-body")).toHaveCount(0);
+  await expect(visiblePanel.getByTestId("diff-file-1-body")).toBeVisible();
+
   await page.getByTestId("explorer-content-area").getByTestId("diff-file-0-toggle").click();
   await expect(
     page.getByTestId("explorer-content-area").getByTestId("diff-file-0-body"),
@@ -668,6 +1121,51 @@ async function expectFlatFileList(page: Page): Promise<void> {
   await expect(page.getByTestId("diff-file-0")).toContainText("src");
 }
 
+async function expectLineReviewControls(page: Page, editedLineCount: number): Promise<void> {
+  const controls = page.getByTestId(/^diff-line-review-/);
+  await expect(controls).toHaveCount(editedLineCount);
+  await expect(controls.first()).toBeVisible();
+  await expect(page.getByTestId("diff-file-0")).toContainText(`0/${editedLineCount}`);
+}
+
+async function getReviewTargetKey(checkbox: Locator): Promise<string> {
+  const testID = await checkbox.getAttribute("data-testid");
+  if (!testID?.startsWith("diff-line-review-")) {
+    throw new Error("Line review checkbox has no target key");
+  }
+  return testID.slice("diff-line-review-".length);
+}
+
+async function expectCheckboxFixedWhileCodeScrolls(
+  page: Page,
+  scrollContainerTestID: string,
+  checkbox: Locator,
+): Promise<void> {
+  await expect(checkbox).toBeVisible();
+  const before = await checkbox.boundingBox();
+  expect(before).not.toBeNull();
+  const overflow = await page.getByTestId(scrollContainerTestID).evaluate((container) => {
+    const candidates = [container, ...container.querySelectorAll<HTMLElement>("*")];
+    const scroll = candidates.find((element) => {
+      const style = getComputedStyle(element);
+      return (
+        element.scrollWidth > element.clientWidth &&
+        (style.overflowX === "auto" || style.overflowX === "scroll")
+      );
+    });
+    if (!scroll) throw new Error("Could not find the horizontal diff scroller");
+    const maxScrollLeft = scroll.scrollWidth - scroll.clientWidth;
+    scroll.scrollLeft = maxScrollLeft;
+    scroll.dispatchEvent(new Event("scroll", { bubbles: true }));
+    return { maxScrollLeft, scrollLeft: scroll.scrollLeft };
+  });
+  expect(overflow.maxScrollLeft).toBeGreaterThan(0);
+  expect(overflow.scrollLeft).toBeGreaterThan(0);
+  const after = await checkbox.boundingBox();
+  expect(after).not.toBeNull();
+  expect(after!.x).toBeCloseTo(before!.x, 0);
+}
+
 async function expectDiffCodeFontSize(page: Page, fontSize: number): Promise<void> {
   await expect
     .poll(async () => {
@@ -700,14 +1198,19 @@ async function readVisibleDiffRowGeometry(page: Page): Promise<{
     }
 
     const readRows = (prefix: string, textPrefix: string) =>
-      Array.from(root.querySelectorAll<HTMLElement>(`[data-testid^="${prefix}"]`)).map((row) => {
-        const testId = row.getAttribute("data-testid") ?? "";
-        const index = Number(testId.slice(prefix.length));
-        const rect = row.getBoundingClientRect();
-        const text = root.querySelector<HTMLElement>(`[data-testid="${textPrefix}${index}"]`);
-        const lineHeight = text ? Number.parseFloat(getComputedStyle(text).lineHeight) : 0;
-        return { index, top: rect.top, height: rect.height, lineHeight };
-      });
+      Array.from(root.querySelectorAll<HTMLElement>(`[data-testid^="${prefix}"]`))
+        .map((row) => {
+          const testId = row.getAttribute("data-testid") ?? "";
+          const index = Number(testId.slice(prefix.length));
+          const rect = row.getBoundingClientRect();
+          const text = root.querySelector<HTMLElement>(`[data-testid="${textPrefix}${index}"]`);
+          if (!text) {
+            return null;
+          }
+          const lineHeight = Number.parseFloat(getComputedStyle(text).lineHeight);
+          return { index, top: rect.top, height: rect.height, lineHeight };
+        })
+        .filter((row): row is NonNullable<typeof row> => row !== null);
 
     const gutters = new Map(
       readRows("diff-gutter-row-", "diff-gutter-text-").map((row) => [row.index, row]),
@@ -731,7 +1234,10 @@ async function readVisibleDiffRowGeometry(page: Page): Promise<{
 
     return {
       mismatchedTypography: rows
-        .filter((row) => Math.abs(row.gutterLineHeight - row.codeLineHeight) > 0.5)
+        .filter(
+          (row) =>
+            row.codeLineHeight > 0 && Math.abs(row.gutterLineHeight - row.codeLineHeight) > 0.5,
+        )
         .map((row) => ({
           index: row.index,
           gutterLineHeight: row.gutterLineHeight,
@@ -771,6 +1277,22 @@ async function createWorkspaceWithMountedTabDiff(
   if (options.includeUntrackedFile) {
     await writeFile(path.join(repo.path, "zz-untracked.txt"), "remove me\n");
   }
+  const editedLineCount = execFileSync(
+    "git",
+    ["diff", "--unified=0", "--", "src/use-mounted-tab-set.ts"],
+    { cwd: repo.path },
+  )
+    .toString()
+    .split("\n")
+    .filter(
+      (line) =>
+        (line.startsWith("+") && !line.startsWith("+++")) ||
+        (line.startsWith("-") && !line.startsWith("---")),
+    )
+    .filter((line) => {
+      const content = line.slice(1).trim();
+      return content !== "" && content !== "];" && content !== "};" && content !== "}";
+    }).length;
   if (options.includeDeletedFile) {
     await unlink(path.join(repo.path, "src/zz-deleted.ts"));
   }
@@ -792,7 +1314,7 @@ async function createWorkspaceWithMountedTabDiff(
   if (!createdWorkspace.workspace) {
     throw new Error(createdWorkspace.error ?? `Failed to create workspace ${repo.path}`);
   }
-  return { id: createdWorkspace.workspace.id, repoPath: repo.path };
+  return { id: createdWorkspace.workspace.id, repoPath: repo.path, editedLineCount };
 }
 
 async function openWorkspaceChanges(page: Page, workspace: DirtyWorkspace): Promise<void> {

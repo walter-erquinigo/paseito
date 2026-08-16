@@ -2,6 +2,7 @@ import {
   useState,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   memo,
@@ -15,6 +16,7 @@ import {
   View,
   Text,
   Pressable,
+  TextInput,
   FlatList,
   type LayoutChangeEvent,
   type NativeSyntheticEvent,
@@ -34,15 +36,22 @@ import {
   Columns2,
   FolderTree,
   List,
+  ListChecks,
   ListChevronsDownUp,
   ListChevronsUpDown,
+  ListTodo,
   Maximize2,
   Pilcrow,
   RotateCw,
+  Square,
+  SquareCheckBig,
   WrapText,
 } from "lucide-react-native";
 import { type ParsedDiffFile, type DiffLine, type HighlightToken } from "@/git/use-diff-query";
 import { buildDiffFlatItems, sumHeightsBefore, type DiffFlatItem } from "@/git/diff-flat-items";
+import type { ChangesSearchMatch, ChangesSearchResult } from "@/git/changes-search";
+import type { ChangesLspController } from "@/git/use-changes-lsp";
+import { useChangesLsp } from "@/git/use-changes-lsp";
 import { buildDiffTree, collectDirPaths, compressSingleChildChains } from "@/git/diff-tree";
 import { DiffFolderRow } from "@/git/diff-folder-row";
 import {
@@ -100,8 +109,12 @@ import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { useOverlayFlatListScrollbar } from "@/components/ui/overlay-scrollbar/use-overlay-flat-list-scrollbar";
 import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
 import { usePanelStore } from "@/stores/panel-store";
+import { useKeyboardActionHandler } from "@/hooks/use-keyboard-action-handler";
 import { collectAllTabs, useWorkspaceLayoutStore } from "@/stores/workspace-layout-store";
-import { buildWorkspaceTabPersistenceKey } from "@/workspace-tabs/model";
+import {
+  buildWorkspaceTabPersistenceKey,
+  type WorkspaceWorkingDiffTabTarget,
+} from "@/workspace-tabs/model";
 import { buildWorkspaceExplorerStateKey } from "@/hooks/use-file-explorer-actions";
 import {
   formatDiffContentText,
@@ -117,11 +130,40 @@ import {
   InlineReviewGutterCell,
   InlineReviewThread,
   isInlineReviewEditorForTarget,
+  SMALL_ACTION_HIT_SLOP,
   type InlineReviewActions,
+  type FileReviewActions,
+  type ReviewableChangedLine,
+  useReviewAttachmentSnapshot,
 } from "@/review";
 import { usePublishWorkingDiffAttachment, useWorkingDiff } from "@/git/use-working-diff";
 import { DiffTooLargeState } from "@/git/diff-too-large-state";
 import { openDesktopTarget, useDesktopOpenTargets } from "@/workspace/desktop-open-targets";
+import { ChangesBaseSelector } from "@/git/changes-base-selector";
+import { applyChangesBaseSelection } from "@/git/changes-base-selection";
+import {
+  buildDiffContextRegions,
+  parseDiffContextMarker,
+  type DiffContextRegion,
+} from "@/git/diff-context-expansion";
+import {
+  collapseReviewedFile,
+  expandOnlyUnreviewedFiles,
+  expandInvalidatedFiles,
+  expandUnreviewedFile,
+  revealFileAncestorFolders,
+} from "@/git/file-review-expansion";
+import {
+  findAdjacentHiddenContext,
+  findNextUncheckedLine,
+  getLineReviewKeyboardAction,
+  isReviewTargetFullyVisible,
+  shouldCenterReviewTarget,
+} from "@/review/line-review-navigation";
+import {
+  clearInlineWorkingDiffNavigationSnapshot,
+  publishInlineWorkingDiffNavigationSnapshot,
+} from "@/workspace/markdown-changes-navigation";
 
 export type { GitActionId, GitAction, GitActions } from "@/git/policy";
 
@@ -130,6 +172,10 @@ export function resolveDiffLayout(
   canUseSplitLayout: boolean,
 ): "unified" | "split" {
   return canUseSplitLayout ? layout : "unified";
+}
+
+function supportsSplitDiffLayout(isMobile: boolean): boolean {
+  return isWeb && !isMobile;
 }
 
 function fileHeaderPressableStyle(
@@ -232,6 +278,10 @@ interface DiffFileSectionProps {
   onDuplicate?: (path: string) => void;
   onRevert?: (path: string, oldPath?: string) => void;
   onHeaderHeightChange?: (path: string, height: number) => void;
+  fileReviews?: FileReviewActions;
+  onToggleReviewed?: (path: string) => void;
+  onExpandFile?: (path: string) => void;
+  isExpandingFile?: boolean;
   testID?: string;
 }
 
@@ -290,7 +340,225 @@ function useDiscardChangesAction({
   return discardSupported && diffMode === "uncommitted" ? handleDiscardPath : undefined;
 }
 
+function isReviewRangeTargetSelected(
+  reviewTarget: ReviewableDiffTarget | null | undefined,
+  reviewActions: InlineReviewActions | undefined,
+): boolean {
+  return Boolean(reviewTarget && reviewActions?.selectedRangeTargetKeys.has(reviewTarget.key));
+}
+
 const DIFF_LINE_HOVER_STYLE = isWeb ? ({ cursor: "auto" } as const) : null;
+const DIFF_REVIEW_SURFACE_DATASET = { paseitoDiffReviewSurface: "true" } as const;
+const LINE_REVIEW_GUTTER_WIDTH = 22;
+const DIFF_CONTEXT_CONTROL_HEIGHT = 20;
+
+interface LineReviewPresentation {
+  fileReviews: FileReviewActions;
+  selectedLineId: string | null;
+  onSelectLine: (line: ReviewableChangedLine) => void;
+  onToggleLine: (line: ReviewableChangedLine) => void;
+}
+
+interface DiffNavigationHighlight {
+  filePath: string;
+  lineStart: number;
+  lineEnd: number;
+}
+
+interface ChangesSearchState {
+  open: boolean;
+  query: string;
+  status: "idle" | "loading" | "ready" | "error";
+  matches: ChangesSearchMatch[];
+  selectedIndex: number;
+  truncated: boolean;
+  error: string | null;
+}
+
+interface ChangesLspTarget {
+  filePath: string;
+  lineNumber: number;
+  column: number;
+  clientX: number;
+  clientY: number;
+}
+
+function resolveChangesLspTarget(event: MouseEvent): ChangesLspTarget | null {
+  if (!(event.target instanceof Node)) return null;
+  const element = event.target instanceof Element ? event.target : event.target.parentElement;
+  const row = element?.closest<HTMLElement>(
+    "[data-paseito-diff-file][data-paseito-diff-current-line]",
+  );
+  if (!row) return null;
+  const filePath = row.dataset.paseitoDiffFile;
+  const lineNumber = Number(row.dataset.paseitoDiffCurrentLine);
+  if (!filePath || !Number.isSafeInteger(lineNumber)) return null;
+  const documentWithCaret = document as Document & {
+    caretPositionFromPoint?(x: number, y: number): { offsetNode: Node; offset: number } | null;
+    caretRangeFromPoint?(x: number, y: number): Range | null;
+  };
+  const caretPosition = documentWithCaret.caretPositionFromPoint?.(event.clientX, event.clientY);
+  const caretRange = documentWithCaret.caretRangeFromPoint?.(event.clientX, event.clientY);
+  const offsetNode = caretPosition?.offsetNode ?? caretRange?.startContainer;
+  const offset = caretPosition?.offset ?? caretRange?.startOffset;
+  if (!offsetNode || offset === undefined || !row.contains(offsetNode)) return null;
+  const prefix = document.createRange();
+  prefix.selectNodeContents(row);
+  prefix.setEnd(offsetNode, offset);
+  return {
+    filePath,
+    lineNumber,
+    column: prefix.toString().length + 1,
+    clientX: event.clientX,
+    clientY: event.clientY,
+  };
+}
+
+const CLOSED_CHANGES_SEARCH: ChangesSearchState = {
+  open: false,
+  query: "",
+  status: "idle",
+  matches: [],
+  selectedIndex: -1,
+  truncated: false,
+  error: null,
+};
+
+function getChangesSearchStatusLabel(state: ChangesSearchState, t: TFunction): string {
+  if (state.status === "loading") return t("workspace.git.diff.search.loading");
+  if (state.status === "error") return state.error ?? t("workspace.git.diff.search.failed");
+  if (state.matches.length > 0) {
+    return `${state.selectedIndex + 1}/${state.matches.length}${state.truncated ? "+" : ""}`;
+  }
+  if (state.status === "ready") return t("workspace.git.diff.search.noMatches");
+  return t("workspace.git.diff.search.submit");
+}
+
+function getCurrentNavigationLine(
+  reviewTarget: ReviewableDiffTarget | null | undefined,
+): number | null {
+  return reviewTarget?.side === "new" ? (reviewTarget.newLineNumber ?? null) : null;
+}
+
+function isDiffNavigationHighlighted(
+  reviewTarget: ReviewableDiffTarget | null | undefined,
+  navigation: DiffNavigationHighlight | undefined,
+): boolean {
+  const lineNumber = getCurrentNavigationLine(reviewTarget);
+  return Boolean(
+    navigation &&
+    reviewTarget?.filePath === navigation.filePath &&
+    lineNumber !== null &&
+    lineNumber >= navigation.lineStart &&
+    lineNumber <= navigation.lineEnd,
+  );
+}
+
+function findVerticalScrollViewport(element: HTMLElement): HTMLElement | null {
+  let viewport = element.parentElement;
+  while (viewport) {
+    const style = getComputedStyle(viewport);
+    const scrollable = style.overflowY === "auto" || style.overflowY === "scroll";
+    if (viewport.scrollHeight > viewport.clientHeight && scrollable) return viewport;
+    viewport = viewport.parentElement;
+  }
+  return null;
+}
+
+function revealReviewElement(input: {
+  element: HTMLElement;
+  file: ParsedDiffFile | undefined;
+  line: ReviewableChangedLine;
+  escapeSelector(value: string): string;
+  focus(): void;
+}) {
+  const viewport = findVerticalScrollViewport(input.element);
+  if (!viewport) {
+    input.element.scrollIntoView({ block: "center", inline: "nearest" });
+    input.focus();
+    return;
+  }
+  const viewportBounds = viewport.getBoundingClientRect();
+  const currentLine = input.line.target.newLineNumber ?? input.line.target.editLineNumber;
+  const renderedLinesAfter =
+    input.file?.newLineCount && currentLine
+      ? Math.max(0, input.file.newLineCount - currentLine)
+      : 0;
+  const surface = input.element.closest<HTMLElement>("[data-paseito-diff-review-surface]");
+  const sameFileLines = surface?.querySelectorAll<HTMLElement>(
+    `[data-paseito-diff-file="${input.escapeSelector(input.line.target.filePath)}"][data-paseito-diff-current-line]`,
+  );
+  const visibleFollowingLines = new Set<number>();
+  for (const candidate of sameFileLines ?? []) {
+    const lineNumber = Number(candidate.dataset.paseitoDiffCurrentLine);
+    if (!currentLine || lineNumber <= currentLine) continue;
+    const bounds = candidate.getBoundingClientRect();
+    if (bounds.top >= viewportBounds.top && bounds.bottom <= viewportBounds.bottom) {
+      visibleFollowingLines.add(lineNumber);
+    }
+  }
+  if (
+    shouldCenterReviewTarget({
+      isFullyVisible: isReviewTargetFullyVisible({
+        viewport: viewportBounds,
+        target: input.element.getBoundingClientRect(),
+      }),
+      renderedLinesAfter,
+      visibleLinesAfter: visibleFollowingLines.size,
+    })
+  ) {
+    input.element.scrollIntoView({ block: "center", inline: "nearest" });
+  }
+  input.focus();
+}
+
+function LineReviewCheckbox({
+  line,
+  presentation,
+}: {
+  line: ReviewableChangedLine;
+  presentation: LineReviewPresentation;
+}) {
+  const { t } = useTranslation();
+  const reviewed = presentation.fileReviews.reviewedLineIds.has(line.id);
+  const selected = presentation.selectedLineId === line.id;
+  const accessibilityState = useMemo(() => ({ checked: reviewed }), [reviewed]);
+  const handlePress = useCallback(
+    (event: { stopPropagation: () => void }) => {
+      event.stopPropagation();
+      presentation.onSelectLine(line);
+      presentation.onToggleLine(line);
+    },
+    [line, presentation],
+  );
+  return (
+    <Pressable
+      accessibilityRole="checkbox"
+      accessibilityState={accessibilityState}
+      accessibilityLabel={t(
+        reviewed ? "workspace.git.diff.markLineUnreviewed" : "workspace.git.diff.markLineReviewed",
+        { line: line.target.lineNumber },
+      )}
+      hitSlop={SMALL_ACTION_HIT_SLOP}
+      onPress={handlePress}
+      style={styles.lineReviewButton}
+      testID={`diff-line-review-${line.target.key}`}
+    >
+      {selected ? (
+        <View
+          pointerEvents="none"
+          style={styles.lineReviewFocusMarker}
+          testID={`diff-review-focus-${line.target.key}`}
+        />
+      ) : null}
+      {reviewed ? (
+        <ThemedSquareCheckBig size={14} uniProps={reviewedIconColorMapping} />
+      ) : (
+        <ThemedSquare size={14} uniProps={foregroundMutedIconColorMapping} />
+      )}
+    </Pressable>
+  );
+}
 
 function LongPressableLine({
   reviewTarget,
@@ -300,6 +568,8 @@ function LongPressableLine({
   onHoverTargetChange,
   style,
   children,
+  lineReview,
+  navigation,
 }: {
   reviewTarget: ReviewableDiffTarget | null | undefined;
   reviewActions: InlineReviewActions | undefined;
@@ -308,6 +578,8 @@ function LongPressableLine({
   onHoverTargetChange?: (key: string | null) => void;
   style: StyleProp<ViewStyle>;
   children: ReactNode;
+  lineReview?: LineReviewPresentation;
+  navigation?: DiffNavigationHighlight;
 }) {
   const onStartComment = reviewActions?.onStartComment;
   const handlePress = useCallback(() => {
@@ -315,10 +587,17 @@ function LongPressableLine({
     if (selection && !selection.isCollapsed && selection.toString().length > 0) {
       return;
     }
-    if (reviewTarget && onStartComment) {
+    const changedLine = reviewTarget
+      ? lineReview?.fileReviews.lineByTargetKey.get(reviewTarget.key)
+      : null;
+    if (changedLine && lineReview) {
+      lineReview.onSelectLine(changedLine);
+      return;
+    }
+    if (reviewTarget && onStartComment && isNative) {
       onStartComment(reviewTarget);
     }
-  }, [reviewTarget, onStartComment]);
+  }, [lineReview, reviewTarget, onStartComment]);
 
   const handleHoverIn = useCallback(() => {
     onHoverChange?.(true);
@@ -332,21 +611,76 @@ function LongPressableLine({
       onHoverTargetChange?.(null);
     }
   }, [hoverTargetKey, onHoverChange, onHoverTargetChange]);
-  const hoverStyle = useMemo(() => [style, DIFF_LINE_HOVER_STYLE], [style]);
+  const changedLine = reviewTarget
+    ? lineReview?.fileReviews.lineByTargetKey.get(reviewTarget.key)
+    : null;
+  const selected = Boolean(changedLine && lineReview?.selectedLineId === changedLine.id);
+  const navigationHighlighted = isDiffNavigationHighlighted(reviewTarget, navigation);
+  const currentLineNumber = getCurrentNavigationLine(reviewTarget);
+  const reviewTargetDataSet = useMemo(
+    () =>
+      reviewTarget
+        ? {
+            paseitoReviewTargetKey: reviewTarget.key,
+            paseitoReviewSelected: selected ? "true" : "false",
+            ...(currentLineNumber !== null
+              ? {
+                  paseitoDiffFile: reviewTarget.filePath,
+                  paseitoDiffCurrentLine: String(currentLineNumber),
+                  paseitoDiffNavigationSelected: navigationHighlighted ? "true" : "false",
+                }
+              : {}),
+          }
+        : undefined,
+    [currentLineNumber, navigationHighlighted, reviewTarget, selected],
+  );
+  const rowStyle = useMemo(
+    () => [
+      style,
+      navigationHighlighted && styles.diffNavigationHighlight,
+      selected && styles.selectedReviewLine,
+    ],
+    [navigationHighlighted, selected, style],
+  );
+  const hoverStyle = useMemo(() => [rowStyle, DIFF_LINE_HOVER_STYLE], [rowStyle]);
+
+  if (changedLine && lineReview) {
+    return (
+      <Pressable
+        dataSet={reviewTargetDataSet}
+        onPress={handlePress}
+        onHoverIn={isWeb ? handleHoverIn : undefined}
+        onHoverOut={isWeb ? handleHoverOut : undefined}
+        style={rowStyle}
+      >
+        {children}
+      </Pressable>
+    );
+  }
 
   if (isWeb && (onHoverChange || onHoverTargetChange)) {
     return (
-      <Pressable onHoverIn={handleHoverIn} onHoverOut={handleHoverOut} style={hoverStyle}>
+      <Pressable
+        dataSet={reviewTargetDataSet}
+        onPress={changedLine ? handlePress : undefined}
+        onHoverIn={handleHoverIn}
+        onHoverOut={handleHoverOut}
+        style={hoverStyle}
+      >
         {children}
       </Pressable>
     );
   }
 
   if (!isNative || !reviewTarget || !onStartComment) {
-    return <View style={style}>{children}</View>;
+    return (
+      <View dataSet={reviewTargetDataSet} style={rowStyle}>
+        {children}
+      </View>
+    );
   }
   return (
-    <Pressable onPress={handlePress} style={style}>
+    <Pressable onPress={handlePress} style={rowStyle}>
       {children}
     </Pressable>
   );
@@ -369,8 +703,12 @@ function DiffGutterCell({
   reviewActions,
   isLineHovered,
   style,
+  testID,
   textTestID,
   actionTestID,
+  lineReview,
+  rowHeight,
+  navigation,
 }: {
   lineNumber: number | null;
   type: DiffLine["type"] | undefined | null;
@@ -380,20 +718,43 @@ function DiffGutterCell({
   reviewActions?: InlineReviewActions;
   isLineHovered?: boolean;
   style?: StyleProp<ViewStyle>;
+  testID?: string;
   textTestID?: string;
   actionTestID?: string;
+  lineReview?: LineReviewPresentation;
+  rowHeight?: number;
+  navigation?: DiffNavigationHighlight;
 }) {
   const lineHeight = getNumericLineHeight(textMetricsStyle);
   const rowMetricsStyle = useDiffRowMetricsStyle(textMetricsStyle);
+  const changedLine = reviewTarget
+    ? lineReview?.fileReviews.lineByTargetKey.get(reviewTarget.key)
+    : null;
+  const selected = Boolean(changedLine && lineReview?.selectedLineId === changedLine.id);
+  const navigationHighlighted = isDiffNavigationHighlighted(reviewTarget, navigation);
   const containerStyle = useMemo(
     () => [
       styles.gutterCell,
       lineTypeBackground(type),
+      isReviewRangeTargetSelected(reviewTarget, reviewActions) && styles.suggestionSelectionLine,
+      navigationHighlighted && styles.diffNavigationHighlight,
+      selected && styles.selectedReviewLine,
       rowMetricsStyle,
+      rowHeight !== undefined && inlineUnistylesStyle({ height: rowHeight, minHeight: rowHeight }),
       inlineUnistylesStyle({ width: gutterWidth }),
       style,
     ],
-    [type, rowMetricsStyle, gutterWidth, style],
+    [
+      type,
+      reviewActions,
+      reviewTarget,
+      navigationHighlighted,
+      selected,
+      rowMetricsStyle,
+      rowHeight,
+      gutterWidth,
+      style,
+    ],
   );
   const textStyle = useMemo(
     () => [
@@ -423,13 +784,105 @@ function DiffGutterCell({
       isLineHovered={isLineHovered}
       lineHeight={lineHeight}
       onStartComment={onStartComment}
+      reviewActions={reviewActions}
       style={containerStyle}
       actionTestID={actionTestID}
+      testID={testID}
     >
-      <Text numberOfLines={1} style={textStyle} testID={textTestID}>
-        {formatDiffGutterText(lineNumber)}
-      </Text>
+      <View style={styles.lineReviewGutterContent}>
+        {lineReview ? (
+          <View style={styles.lineReviewGutterSlot}>
+            {changedLine ? (
+              <LineReviewCheckbox line={changedLine} presentation={lineReview} />
+            ) : null}
+          </View>
+        ) : null}
+        <Text numberOfLines={1} style={textStyle} testID={textTestID}>
+          {formatDiffGutterText(lineNumber)}
+        </Text>
+      </View>
     </InlineReviewGutterCell>
+  );
+}
+
+function DiffContextControl({
+  region,
+  onExpand,
+}: {
+  region: DiffContextRegion;
+  onExpand: (region: DiffContextRegion, direction: "up" | "down" | "all") => void;
+}) {
+  const { t } = useTranslation();
+  const expandUp = useCallback(() => onExpand(region, "up"), [onExpand, region]);
+  const expandDown = useCallback(() => onExpand(region, "down"), [onExpand, region]);
+  const expandAll = useCallback(() => onExpand(region, "all"), [onExpand, region]);
+  return (
+    <View style={styles.contextControl} testID="diff-context-control">
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={t("workspace.git.diff.context.expandUp")}
+        onPress={expandUp}
+        style={styles.contextControlButton}
+      >
+        <Text style={styles.contextControlButtonText}>↑</Text>
+      </Pressable>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={t("workspace.git.diff.context.expandAll")}
+        onPress={expandAll}
+        style={styles.contextControlLabelButton}
+      >
+        <Text style={styles.contextControlText}>
+          {t("workspace.git.diff.context.hiddenLines", { count: region.lineCount })}
+        </Text>
+      </Pressable>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={t("workspace.git.diff.context.expandDown")}
+        onPress={expandDown}
+        style={styles.contextControlButton}
+      >
+        <Text style={styles.contextControlButtonText}>↓</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+function DiffCodeContent({
+  line,
+  visibleTokens,
+  textMetricsStyle,
+  wrapLines,
+  textStyle,
+  textTestID,
+  onExpandContext,
+}: {
+  line: DiffLine;
+  visibleTokens: HighlightToken[] | null | undefined;
+  textMetricsStyle: TextStyle;
+  wrapLines: boolean;
+  textStyle: StyleProp<TextStyle>;
+  textTestID?: string;
+  onExpandContext?: (region: DiffContextRegion, direction: "up" | "down" | "all") => void;
+}) {
+  const contextRegion = parseDiffContextMarker(line.content);
+  if (contextRegion && onExpandContext) {
+    return <DiffContextControl region={contextRegion} onExpand={onExpandContext} />;
+  }
+  if (line.type !== "header" && visibleTokens) {
+    return (
+      <HighlightedText
+        tokens={visibleTokens}
+        textMetricsStyle={textMetricsStyle}
+        wrapLines={wrapLines}
+        testID={textTestID}
+      />
+    );
+  }
+  return (
+    <Text style={textStyle} testID={textTestID}>
+      {formatDiffContentText(line.content)}
+    </Text>
   );
 }
 
@@ -443,6 +896,9 @@ function DiffTextLine({
   hoverTargetKey,
   onHoverTargetChange,
   textTestID,
+  onExpandContext,
+  lineReview,
+  navigation,
 }: {
   line: DiffLine;
   wrapLines: boolean;
@@ -453,13 +909,21 @@ function DiffTextLine({
   hoverTargetKey?: string | null;
   onHoverTargetChange?: (key: string | null) => void;
   textTestID?: string;
+  onExpandContext?: (region: DiffContextRegion, direction: "up" | "down" | "all") => void;
+  lineReview?: LineReviewPresentation;
+  navigation?: DiffNavigationHighlight;
 }) {
   const visibleTokens = hasVisibleDiffTokens(line.tokens) ? line.tokens : null;
   const rowMetricsStyle = useDiffRowMetricsStyle(textMetricsStyle);
 
   const containerStyle = useMemo(
-    () => [styles.textLineContainer, lineTypeBackground(line.type), rowMetricsStyle],
-    [line.type, rowMetricsStyle],
+    () => [
+      styles.textLineContainer,
+      lineTypeBackground(line.type),
+      isReviewRangeTargetSelected(reviewTarget, reviewActions) && styles.suggestionSelectionLine,
+      rowMetricsStyle,
+    ],
+    [line.type, reviewActions, reviewTarget, rowMetricsStyle],
   );
   const textStyle = useMemo(
     () => [
@@ -483,19 +947,18 @@ function DiffTextLine({
       hoverTargetKey={hoverTargetKey}
       onHoverTargetChange={onHoverTargetChange}
       style={containerStyle}
+      lineReview={lineReview}
+      navigation={navigation}
     >
-      {line.type !== "header" && visibleTokens ? (
-        <HighlightedText
-          tokens={visibleTokens}
-          textMetricsStyle={textMetricsStyle}
-          wrapLines={wrapLines}
-          testID={textTestID}
-        />
-      ) : (
-        <Text style={textStyle} testID={textTestID}>
-          {formatDiffContentText(line.content)}
-        </Text>
-      )}
+      <DiffCodeContent
+        line={line}
+        visibleTokens={visibleTokens}
+        textMetricsStyle={textMetricsStyle}
+        wrapLines={wrapLines}
+        textStyle={textStyle}
+        textTestID={textTestID}
+        onExpandContext={onExpandContext}
+      />
     </LongPressableLine>
   );
 }
@@ -508,6 +971,8 @@ function SplitTextLine({
   onHoverChange,
   hoverTargetKey,
   onHoverTargetChange,
+  lineReview,
+  navigation,
 }: {
   line: SplitDiffDisplayLine | null;
   wrapLines: boolean;
@@ -516,13 +981,21 @@ function SplitTextLine({
   onHoverChange?: (hovered: boolean) => void;
   hoverTargetKey?: string | null;
   onHoverTargetChange?: (key: string | null) => void;
+  lineReview?: LineReviewPresentation;
+  navigation?: DiffNavigationHighlight;
 }) {
   const visibleTokens = line && hasVisibleDiffTokens(line.tokens) ? line.tokens : null;
   const rowMetricsStyle = useDiffRowMetricsStyle(textMetricsStyle);
 
   const containerStyle = useMemo(
-    () => [styles.textLineContainer, lineTypeBackground(line?.type), rowMetricsStyle],
-    [line?.type, rowMetricsStyle],
+    () => [
+      styles.textLineContainer,
+      lineTypeBackground(line?.type),
+      isReviewRangeTargetSelected(line?.reviewTarget, reviewActions) &&
+        styles.suggestionSelectionLine,
+      rowMetricsStyle,
+    ],
+    [line?.reviewTarget, line?.type, reviewActions, rowMetricsStyle],
   );
   const textStyle = useMemo(
     () => [
@@ -546,6 +1019,8 @@ function SplitTextLine({
       hoverTargetKey={hoverTargetKey}
       onHoverTargetChange={onHoverTargetChange}
       style={containerStyle}
+      lineReview={lineReview}
+      navigation={navigation}
     >
       {visibleTokens ? (
         <HighlightedText
@@ -568,6 +1043,9 @@ function DiffLineView({
   textMetricsStyle,
   reviewTarget,
   reviewActions,
+  onExpandContext,
+  lineReview,
+  navigation,
 }: {
   line: DiffLine;
   lineNumber: number | null;
@@ -576,14 +1054,22 @@ function DiffLineView({
   textMetricsStyle: TextStyle;
   reviewTarget?: ReviewableDiffTarget | null;
   reviewActions?: InlineReviewActions;
+  onExpandContext?: (region: DiffContextRegion, direction: "up" | "down" | "all") => void;
+  lineReview?: LineReviewPresentation;
+  navigation?: DiffNavigationHighlight;
 }) {
   const [isLineHovered, setIsLineHovered] = useState(false);
   const visibleTokens = hasVisibleDiffTokens(line.tokens) ? line.tokens : null;
   const rowMetricsStyle = useDiffRowMetricsStyle(textMetricsStyle);
 
   const containerStyle = useMemo(
-    () => [styles.diffLineContainer, lineTypeBackground(line.type), rowMetricsStyle],
-    [line.type, rowMetricsStyle],
+    () => [
+      styles.diffLineContainer,
+      lineTypeBackground(line.type),
+      isReviewRangeTargetSelected(reviewTarget, reviewActions) && styles.suggestionSelectionLine,
+      rowMetricsStyle,
+    ],
+    [line.type, reviewActions, reviewTarget, rowMetricsStyle],
   );
   const textStyle = useMemo(
     () => [
@@ -605,6 +1091,8 @@ function DiffLineView({
       reviewActions={reviewActions}
       onHoverChange={setIsLineHovered}
       style={containerStyle}
+      lineReview={lineReview}
+      navigation={navigation}
     >
       <DiffGutterCell
         lineNumber={lineNumber}
@@ -615,16 +1103,17 @@ function DiffLineView({
         reviewActions={reviewActions}
         isLineHovered={isLineHovered}
         style={styles.lineNumberGutter}
+        lineReview={lineReview}
+        navigation={navigation}
       />
-      {line.type !== "header" && visibleTokens ? (
-        <HighlightedText
-          tokens={visibleTokens}
-          textMetricsStyle={textMetricsStyle}
-          wrapLines={wrapLines}
-        />
-      ) : (
-        <Text style={textStyle}>{formatDiffContentText(line.content)}</Text>
-      )}
+      <DiffCodeContent
+        line={line}
+        visibleTokens={visibleTokens}
+        textMetricsStyle={textMetricsStyle}
+        wrapLines={wrapLines}
+        textStyle={textStyle}
+        onExpandContext={onExpandContext}
+      />
     </LongPressableLine>
   );
 }
@@ -635,20 +1124,30 @@ function SplitDiffLine({
   wrapLines,
   textMetricsStyle,
   reviewActions,
+  lineReview,
+  navigation,
 }: {
   line: SplitDiffDisplayLine | null;
   gutterWidth: number;
   wrapLines: boolean;
   textMetricsStyle: TextStyle;
   reviewActions?: InlineReviewActions;
+  lineReview?: LineReviewPresentation;
+  navigation?: DiffNavigationHighlight;
 }) {
   const [isLineHovered, setIsLineHovered] = useState(false);
   const visibleTokens = line && hasVisibleDiffTokens(line.tokens) ? line.tokens : null;
   const rowMetricsStyle = useDiffRowMetricsStyle(textMetricsStyle);
 
   const containerStyle = useMemo(
-    () => [styles.diffLineContainer, lineTypeBackground(line?.type), rowMetricsStyle],
-    [line?.type, rowMetricsStyle],
+    () => [
+      styles.diffLineContainer,
+      lineTypeBackground(line?.type),
+      isReviewRangeTargetSelected(line?.reviewTarget, reviewActions) &&
+        styles.suggestionSelectionLine,
+      rowMetricsStyle,
+    ],
+    [line?.reviewTarget, line?.type, reviewActions, rowMetricsStyle],
   );
   const textStyle = useMemo(
     () => [
@@ -670,6 +1169,8 @@ function SplitDiffLine({
       reviewActions={reviewActions}
       onHoverChange={setIsLineHovered}
       style={containerStyle}
+      lineReview={lineReview}
+      navigation={navigation}
     >
       <DiffGutterCell
         lineNumber={line?.lineNumber ?? null}
@@ -680,6 +1181,8 @@ function SplitDiffLine({
         reviewActions={reviewActions}
         isLineHovered={isLineHovered}
         style={styles.lineNumberGutter}
+        lineReview={lineReview}
+        navigation={navigation}
       />
       {visibleTokens ? (
         <HighlightedText
@@ -804,6 +1307,25 @@ function InlineReviewRow({
   );
 }
 
+function SplitHeaderContent({
+  content,
+  side,
+  textStyle,
+  onExpandContext,
+}: {
+  content: string;
+  side: "left" | "right";
+  textStyle: StyleProp<TextStyle>;
+  onExpandContext?: (region: DiffContextRegion, direction: "up" | "down" | "all") => void;
+}) {
+  const contextRegion = parseDiffContextMarker(content);
+  if (!contextRegion) return <Text style={textStyle}>{content}</Text>;
+  if (side === "right" && onExpandContext) {
+    return <DiffContextControl region={contextRegion} onExpand={onExpandContext} />;
+  }
+  return null;
+}
+
 function SplitDiffColumn({
   rows,
   side,
@@ -812,6 +1334,9 @@ function SplitDiffColumn({
   textMetricsStyle,
   reviewActions,
   showDivider = false,
+  onExpandContext,
+  lineReview,
+  navigation,
 }: {
   rows: SplitDiffRow[];
   side: "left" | "right";
@@ -820,9 +1345,16 @@ function SplitDiffColumn({
   textMetricsStyle: TextStyle;
   reviewActions?: InlineReviewActions;
   showDivider?: boolean;
+  onExpandContext?: (region: DiffContextRegion, direction: "up" | "down" | "all") => void;
+  lineReview?: LineReviewPresentation;
+  navigation?: DiffNavigationHighlight;
 }) {
   const [scrollWidth, setScrollWidth] = useState(0);
   const [hoveredReviewTargetKey, setHoveredReviewTargetKey] = useState<string | null>(null);
+  const contextControlRowHeight = Math.max(
+    DIFF_CONTEXT_CONTROL_HEIGHT,
+    getNumericLineHeight(textMetricsStyle) ?? 0,
+  );
 
   const wrapCellStyle = useMemo(
     () => [styles.splitCell, showDivider && styles.splitCellWithDivider],
@@ -848,13 +1380,25 @@ function SplitDiffColumn({
 
   if (wrapLines) {
     return (
-      <View style={wrapCellStyle}>
+      <View style={wrapCellStyle} testID={`diff-${side}-column`}>
         <View style={styles.linesContainer}>
           {keyedRows.map(({ key, row }) => {
             if (row.kind === "header") {
               return (
-                <View key={key} style={styles.splitHeaderRow}>
-                  <Text style={headerLineTextStyle}>{row.content}</Text>
+                <View
+                  key={key}
+                  style={[
+                    styles.splitHeaderRow,
+                    parseDiffContextMarker(row.content) &&
+                      inlineUnistylesStyle({ minHeight: contextControlRowHeight }),
+                  ]}
+                >
+                  <SplitHeaderContent
+                    content={row.content}
+                    side={side}
+                    textStyle={headerLineTextStyle}
+                    onExpandContext={onExpandContext}
+                  />
                 </View>
               );
             }
@@ -872,6 +1416,8 @@ function SplitDiffColumn({
                   wrapLines={wrapLines}
                   textMetricsStyle={textMetricsStyle}
                   reviewActions={reviewActions}
+                  lineReview={lineReview}
+                  navigation={navigation}
                 />
                 <InlineReviewRow
                   reviewTarget={line?.reviewTarget}
@@ -888,7 +1434,7 @@ function SplitDiffColumn({
   }
 
   return (
-    <View style={rowCellStyle}>
+    <View style={rowCellStyle} testID={`diff-${side}-column`}>
       <View style={styles.gutterColumn}>
         {keyedRows.map(({ key, row }) => {
           if (row.kind === "header") {
@@ -899,6 +1445,12 @@ function SplitDiffColumn({
                 type="header"
                 gutterWidth={gutterWidth}
                 textMetricsStyle={textMetricsStyle}
+                lineReview={lineReview}
+                navigation={navigation}
+                testID={`diff-${side}-gutter-cell-${key}`}
+                rowHeight={
+                  parseDiffContextMarker(row.content) ? contextControlRowHeight : undefined
+                }
               />
             );
           }
@@ -921,6 +1473,9 @@ function SplitDiffColumn({
                 isLineHovered={
                   reviewTargetKey !== null && hoveredReviewTargetKey === reviewTargetKey
                 }
+                lineReview={lineReview}
+                navigation={navigation}
+                testID={`diff-${side}-gutter-cell-${key}`}
               />
               <InlineReviewGutterSpacer
                 reviewTarget={line?.reviewTarget}
@@ -937,13 +1492,26 @@ function SplitDiffColumn({
         onScrollViewWidthChange={setScrollWidth}
         style={styles.splitColumnScroll}
         contentContainerStyle={styles.diffContentInner}
+        testID="diff-horizontal-scroll"
       >
         <View style={linesContainerRowStyle}>
           {keyedRows.map(({ key, row }) => {
             if (row.kind === "header") {
               return (
-                <View key={key} style={styles.splitHeaderRow}>
-                  <Text style={headerLineTextStyle}>{row.content}</Text>
+                <View
+                  key={key}
+                  style={[
+                    styles.splitHeaderRow,
+                    parseDiffContextMarker(row.content) &&
+                      inlineUnistylesStyle({ minHeight: contextControlRowHeight }),
+                  ]}
+                >
+                  <SplitHeaderContent
+                    content={row.content}
+                    side={side}
+                    textStyle={headerLineTextStyle}
+                    onExpandContext={onExpandContext}
+                  />
                 </View>
               );
             }
@@ -963,6 +1531,8 @@ function SplitDiffColumn({
                   reviewActions={reviewActions}
                   hoverTargetKey={reviewTargetKey}
                   onHoverTargetChange={setHoveredReviewTargetKey}
+                  lineReview={lineReview}
+                  navigation={navigation}
                 />
                 <InlineReviewThreadContent
                   reviewTarget={line?.reviewTarget}
@@ -1039,6 +1609,79 @@ function DiffFileActionsContextMenuContent({
   );
 }
 
+function DiffFileReviewToggle({
+  file,
+  fileName,
+  fileReviews,
+  testID,
+  onToggleReviewed,
+}: {
+  file: ParsedDiffFile;
+  fileName: string;
+  fileReviews?: FileReviewActions;
+  testID?: string;
+  onToggleReviewed?: (path: string) => void;
+}) {
+  const { t } = useTranslation();
+  const isReviewed = fileReviews?.reviewedPaths.has(file.path) === true;
+  const progress = fileReviews?.lineProgressByPath.get(file.path);
+  const isPartial = Boolean(
+    progress && progress.reviewed > 0 && progress.reviewed < progress.total,
+  );
+  const accessibilityState = useMemo(
+    () => ({ checked: isPartial ? ("mixed" as const) : isReviewed }),
+    [isPartial, isReviewed],
+  );
+  const toggleReviewed = useCallback(
+    (event: { stopPropagation: () => void }) => {
+      event.stopPropagation();
+      onToggleReviewed?.(file.path);
+    },
+    [file.path, onToggleReviewed],
+  );
+  if (!fileReviews?.available || !file.contentRevision) return null;
+
+  const actionLabel = isReviewed
+    ? t("workspace.git.diff.markUnreviewed")
+    : t("workspace.git.diff.markReviewed");
+  let reviewIcon: ReactNode = <ThemedSquare size={16} uniProps={foregroundMutedIconColorMapping} />;
+  if (isReviewed) {
+    reviewIcon = <ThemedSquareCheckBig size={16} uniProps={reviewedIconColorMapping} />;
+  } else if (isPartial) {
+    reviewIcon = <ThemedListChecks size={16} uniProps={foregroundMutedIconColorMapping} />;
+  }
+  return (
+    <View style={styles.fileReviewControl}>
+      <Tooltip delayDuration={300}>
+        <TooltipTrigger asChild>
+          <Pressable
+            accessibilityRole="checkbox"
+            accessibilityState={accessibilityState}
+            accessibilityLabel={
+              isReviewed
+                ? t("workspace.git.diff.markFileUnreviewed", { file: fileName })
+                : t("workspace.git.diff.markFileReviewed", { file: fileName })
+            }
+            testID={testID ? `${testID}-reviewed` : undefined}
+            style={styles.fileReviewButton}
+            onPress={toggleReviewed}
+          >
+            {reviewIcon}
+          </Pressable>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">
+          <Text style={styles.tooltipText}>{actionLabel}</Text>
+        </TooltipContent>
+      </Tooltip>
+      {progress && progress.total > 0 ? (
+        <Text style={styles.fileReviewProgress}>
+          {progress.reviewed}/{progress.total}
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
 const DiffFileHeader = memo(function DiffFileHeader({
   file,
   workspaceFileDragScope,
@@ -1059,6 +1702,10 @@ const DiffFileHeader = memo(function DiffFileHeader({
   onDuplicate,
   onRevert,
   onHeaderHeightChange,
+  fileReviews,
+  onToggleReviewed,
+  onExpandFile,
+  isExpandingFile = false,
   testID,
 }: DiffFileSectionProps) {
   const dragSourceRef = useWorkspaceFileDragSource({
@@ -1182,6 +1829,19 @@ const DiffFileHeader = memo(function DiffFileHeader({
         {file.isDeleted && <FileChangeIcon change="deleted" />}
       </View>
       <View style={styles.fileHeaderRight}>
+        <DiffFileExpandButton
+          file={file}
+          isExpanding={isExpandingFile}
+          onExpand={onExpandFile}
+          testID={testID}
+        />
+        <DiffFileReviewToggle
+          file={file}
+          fileName={fileName}
+          fileReviews={fileReviews}
+          testID={testID}
+          onToggleReviewed={onToggleReviewed}
+        />
         <DiffStat
           additions={file.additions}
           deletions={file.deletions}
@@ -1253,6 +1913,53 @@ const DiffFileHeader = memo(function DiffFileHeader({
   );
 });
 
+function DiffFileExpandButton({
+  file,
+  isExpanding,
+  onExpand,
+  testID,
+}: {
+  file: ParsedDiffFile;
+  isExpanding: boolean;
+  onExpand?: (path: string) => void;
+  testID?: string;
+}) {
+  const { t } = useTranslation();
+  const accessibilityState = useMemo(() => ({ disabled: isExpanding }), [isExpanding]);
+  const handlePress = useCallback(
+    (event: { stopPropagation: () => void }) => {
+      event.stopPropagation();
+      onExpand?.(file.path);
+    },
+    [file.path, onExpand],
+  );
+  if (!onExpand || buildDiffContextRegions(file).length === 0) return null;
+  return (
+    <Tooltip delayDuration={300}>
+      <TooltipTrigger asChild>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t("workspace.git.diff.context.expandFile")}
+          accessibilityState={accessibilityState}
+          disabled={isExpanding}
+          onPress={handlePress}
+          style={styles.fileReviewButton}
+          testID={testID ? `${testID}-expand-file` : undefined}
+        >
+          {isExpanding ? (
+            <ThemedLoadingSpinner size={14} uniProps={foregroundMutedIconColorMapping} />
+          ) : (
+            <ThemedMaximize2 size={14} uniProps={foregroundMutedIconColorMapping} />
+          )}
+        </Pressable>
+      </TooltipTrigger>
+      <TooltipContent side="bottom">
+        <Text style={styles.tooltipText}>{t("workspace.git.diff.context.expandFile")}</Text>
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
 export function DiffFileBody({
   file,
   layout,
@@ -1260,8 +1967,11 @@ export function DiffFileBody({
   codeFontSize,
   textMetricsStyle,
   reviewActions,
+  onExpandContext,
   onBodyHeightChange,
   testID,
+  lineReview,
+  navigation,
 }: {
   file: ParsedDiffFile;
   layout: "unified" | "split";
@@ -1269,14 +1979,25 @@ export function DiffFileBody({
   codeFontSize: number;
   textMetricsStyle: TextStyle;
   reviewActions?: InlineReviewActions;
+  onExpandContext?: (
+    filePath: string,
+    region: DiffContextRegion,
+    direction: "up" | "down" | "all",
+  ) => void | Promise<void>;
   onBodyHeightChange?: (file: ParsedDiffFile, height: number) => void;
   testID?: string;
+  lineReview?: LineReviewPresentation;
+  navigation?: DiffNavigationHighlight;
 }) {
   const [scrollViewWidth, setScrollViewWidth] = useState(0);
   const [bodyWidth, setBodyWidth] = useState(0);
   const [hoveredReviewTargetKey, setHoveredReviewTargetKey] = useState<string | null>(null);
   const { t } = useTranslation();
-
+  const handleExpandContext = useCallback(
+    (region: DiffContextRegion, direction: "up" | "down" | "all") =>
+      onExpandContext?.(file.path, region, direction),
+    [file.path, onExpandContext],
+  );
   const handleLayout = useCallback(
     (event: LayoutChangeEvent) => {
       setBodyWidth(event.nativeEvent.layout.width);
@@ -1321,7 +2042,13 @@ export function DiffFileBody({
             hunk.newStart + hunk.newCount,
           );
         }
-        const gutterWidth = lineNumberGutterWidth(maxLineNo, codeFontSize);
+        const gutterWidth =
+          lineNumberGutterWidth(maxLineNo, codeFontSize) +
+          (lineReview ? LINE_REVIEW_GUTTER_WIDTH : 0);
+        const contextControlRowHeight = Math.max(
+          DIFF_CONTEXT_CONTROL_HEIGHT,
+          getNumericLineHeight(textMetricsStyle) ?? 0,
+        );
 
         if (layout === "split") {
           const rows = buildSplitDiffRows(file);
@@ -1334,6 +2061,9 @@ export function DiffFileBody({
                 wrapLines={wrapLines}
                 textMetricsStyle={textMetricsStyle}
                 reviewActions={reviewActions}
+                onExpandContext={onExpandContext ? handleExpandContext : undefined}
+                lineReview={lineReview}
+                navigation={navigation}
               />
               <SplitDiffColumn
                 rows={rows}
@@ -1342,7 +2072,10 @@ export function DiffFileBody({
                 wrapLines={wrapLines}
                 textMetricsStyle={textMetricsStyle}
                 reviewActions={reviewActions}
+                onExpandContext={onExpandContext ? handleExpandContext : undefined}
                 showDivider
+                lineReview={lineReview}
+                navigation={navigation}
               />
             </View>
           );
@@ -1364,6 +2097,9 @@ export function DiffFileBody({
                       textMetricsStyle={textMetricsStyle}
                       reviewTarget={reviewTarget}
                       reviewActions={reviewActions}
+                      onExpandContext={onExpandContext ? handleExpandContext : undefined}
+                      lineReview={lineReview}
+                      navigation={navigation}
                     />
                     <InlineReviewRow
                       reviewTarget={reviewTarget}
@@ -1396,6 +2132,14 @@ export function DiffFileBody({
                     }
                     textTestID={`diff-gutter-text-${index}`}
                     actionTestID={`diff-gutter-action-${index}`}
+                    testID={`diff-gutter-cell-${index}`}
+                    lineReview={lineReview}
+                    navigation={navigation}
+                    rowHeight={
+                      parseDiffContextMarker(line.content) && onExpandContext
+                        ? contextControlRowHeight
+                        : undefined
+                    }
                   />
                   <InlineReviewGutterSpacer
                     reviewTarget={reviewTarget}
@@ -1410,6 +2154,7 @@ export function DiffFileBody({
               onScrollViewWidthChange={setScrollViewWidth}
               style={styles.splitColumnScroll}
               contentContainerStyle={styles.diffContentInner}
+              testID="diff-horizontal-scroll"
             >
               <View style={linesContainerRowStyle}>
                 {computedLines.map(({ line, key, reviewTarget }, index) => (
@@ -1423,6 +2168,9 @@ export function DiffFileBody({
                       hoverTargetKey={reviewTarget?.key ?? null}
                       onHoverTargetChange={setHoveredReviewTargetKey}
                       textTestID={`diff-code-text-${index}`}
+                      onExpandContext={onExpandContext ? handleExpandContext : undefined}
+                      lineReview={lineReview}
+                      navigation={navigation}
                     />
                     <InlineReviewThreadContent
                       reviewTarget={reviewTarget}
@@ -1446,8 +2194,76 @@ interface GitDiffPaneProps {
   workspaceId?: string | null;
   cwd: string;
   enabled?: boolean;
-  onOpenFile?: (path: string) => void;
+  onOpenFile?: (path: string, options?: { lineStart: number; openMode: "source" }) => void;
   onAddToChat?: (path: string) => void;
+}
+
+function useInlineChangesNavigationTarget(): {
+  focus: Pick<
+    WorkspaceWorkingDiffTabTarget,
+    "focusPath" | "focusRequestId" | "focusLineStart" | "focusLineEnd" | "focusColumn"
+  >;
+  requestedLine: { filePath: string; lineNumber: number } | undefined;
+  navigate: (target: WorkspaceWorkingDiffTabTarget) => void;
+} {
+  const [target, setTarget] = useState<WorkspaceWorkingDiffTabTarget | null>(null);
+  const navigate = useCallback((nextTarget: WorkspaceWorkingDiffTabTarget) => {
+    setTarget(nextTarget);
+  }, []);
+  const requestedLine = useMemo(
+    () =>
+      target?.focusPath && target.focusLineStart
+        ? { filePath: target.focusPath, lineNumber: target.focusLineStart }
+        : undefined,
+    [target?.focusLineStart, target?.focusPath],
+  );
+  const focus = useMemo(
+    () => ({
+      focusPath: target?.focusPath,
+      focusRequestId: target?.focusRequestId,
+      focusLineStart: target?.focusLineStart,
+      focusLineEnd: target?.focusLineEnd,
+      focusColumn: target?.focusColumn,
+    }),
+    [target],
+  );
+  return { focus, requestedLine, navigate };
+}
+
+function usePublishInlineChangesNavigation(input: {
+  workspaceKey: string | null;
+  enabled?: boolean;
+  changesTabOpen: boolean;
+  files: ParsedDiffFile[];
+  isLoading: boolean;
+  contextExpansionSupported: boolean;
+  navigate: (target: WorkspaceWorkingDiffTabTarget) => void;
+}): void {
+  const ownerRef = useRef<object>({});
+  useEffect(() => {
+    if (!input.workspaceKey || input.enabled === false || input.changesTabOpen) {
+      return;
+    }
+    const owner = ownerRef.current;
+    const workspaceKey = input.workspaceKey;
+    publishInlineWorkingDiffNavigationSnapshot(workspaceKey, owner, {
+      files: input.files,
+      isLoading: input.isLoading,
+      contextExpansionSupported: input.contextExpansionSupported,
+      navigate: input.navigate,
+    });
+    return () => {
+      clearInlineWorkingDiffNavigationSnapshot(workspaceKey, owner);
+    };
+  }, [
+    input.changesTabOpen,
+    input.contextExpansionSupported,
+    input.enabled,
+    input.files,
+    input.isLoading,
+    input.navigate,
+    input.workspaceKey,
+  ]);
 }
 
 type PressableStyleFn = (
@@ -1455,6 +2271,7 @@ type PressableStyleFn = (
 ) => StyleProp<ViewStyle>;
 
 const foregroundMutedIconColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
+const reviewedIconColorMapping = (theme: Theme) => ({ color: theme.colors.success });
 
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
 const ThemedAlignJustify = withUnistyles(AlignJustify);
@@ -1463,10 +2280,14 @@ const ThemedPilcrow = withUnistyles(Pilcrow);
 const ThemedWrapText = withUnistyles(WrapText);
 const ThemedListChevronsDownUp = withUnistyles(ListChevronsDownUp);
 const ThemedListChevronsUpDown = withUnistyles(ListChevronsUpDown);
+const ThemedListTodo = withUnistyles(ListTodo);
 const ThemedFolderTree = withUnistyles(FolderTree);
 const ThemedList = withUnistyles(List);
 const ThemedMaximize2 = withUnistyles(Maximize2);
 const ThemedChevronDown = withUnistyles(ChevronDown);
+const ThemedSquare = withUnistyles(Square);
+const ThemedSquareCheckBig = withUnistyles(SquareCheckBig);
+const ThemedListChecks = withUnistyles(ListChecks);
 const DIFF_OPTIONS_WHITESPACE_ICON = (
   <ThemedPilcrow size={14} uniProps={foregroundMutedIconColorMapping} />
 );
@@ -1664,26 +2485,54 @@ function DiffViewModeToggle({
 
 interface DiffFilesToolbarProps {
   allFileDiffsExpanded: boolean;
+  canExpandUnreviewed: boolean;
   isMobile: boolean;
   testID?: string;
+  expandUnreviewedTestID?: string;
   expandAllToggleStyle?: PressableStyleFn;
   onToggleExpandAll: () => void;
+  onExpandUnreviewed: () => void;
 }
 
 export function DiffFilesToolbar({
   allFileDiffsExpanded,
+  canExpandUnreviewed,
   isMobile,
   testID,
+  expandUnreviewedTestID,
   expandAllToggleStyle,
   onToggleExpandAll,
+  onExpandUnreviewed,
 }: DiffFilesToolbarProps) {
   const defaultToggleStyle = useMemo(() => buildExpandAllButtonStyle(), []);
   const { t } = useTranslation();
+  const expandUnreviewedLabel = t("workspace.git.diff.expandUnreviewed");
   const expandAllLabel = allFileDiffsExpanded
     ? t("workspace.git.diff.collapseAll")
     : t("workspace.git.diff.expandAll");
   return (
     <View style={styles.diffStatusButtons}>
+      {canExpandUnreviewed ? (
+        <Tooltip delayDuration={300}>
+          <TooltipTrigger asChild>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={expandUnreviewedLabel}
+              testID={expandUnreviewedTestID}
+              style={expandAllToggleStyle ?? defaultToggleStyle}
+              onPress={onExpandUnreviewed}
+            >
+              <ThemedListTodo
+                size={isMobile ? 18 : 14}
+                uniProps={foregroundMutedIconColorMapping}
+              />
+            </Pressable>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">
+            <Text style={styles.tooltipText}>{expandUnreviewedLabel}</Text>
+          </TooltipContent>
+        </Tooltip>
+      ) : null}
       <Tooltip delayDuration={300}>
         <TooltipTrigger asChild>
           <Pressable
@@ -1714,6 +2563,70 @@ export function DiffFilesToolbar({
   );
 }
 
+export function FileReviewBulkToggle({
+  fileReviews,
+  isMobile,
+  visible = true,
+  testID,
+  onToggle,
+}: {
+  fileReviews: FileReviewActions;
+  isMobile: boolean;
+  visible?: boolean;
+  testID?: string;
+  onToggle: () => void;
+}) {
+  const { t } = useTranslation();
+  const allReviewed =
+    fileReviews.reviewableCount > 0 && fileReviews.reviewedCount === fileReviews.reviewableCount;
+  const disabled = !fileReviews.available || fileReviews.reviewableCount === 0;
+  let label = allReviewed
+    ? t("workspace.git.diff.clearAllReviewed")
+    : t("workspace.git.diff.markAllReviewed");
+  if (!fileReviews.supported) label = t("workspace.git.diff.reviewUpdateHost");
+  else if (!fileReviews.available) label = t("workspace.git.diff.reviewBranchRequired");
+  const accessibilityState = useMemo(() => ({ disabled }), [disabled]);
+  const toggleStyle = useCallback(
+    ({ hovered, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
+      styles.expandAllButton,
+      (Boolean(hovered) || pressed || allReviewed) && styles.toggleButtonSelected,
+      disabled && styles.fileReviewButtonDisabled,
+    ],
+    [allReviewed, disabled],
+  );
+  if (!visible) return null;
+
+  return (
+    <Tooltip delayDuration={300}>
+      <TooltipTrigger asChild>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={label}
+          accessibilityState={accessibilityState}
+          disabled={disabled}
+          testID={testID}
+          style={toggleStyle}
+          onPress={onToggle}
+        >
+          <ThemedListChecks
+            size={isMobile ? 18 : 14}
+            uniProps={allReviewed ? reviewedIconColorMapping : foregroundMutedIconColorMapping}
+          />
+          {fileReviews.supported && fileReviews.available ? (
+            <Text style={styles.fileReviewProgress}>
+              {fileReviews.reviewedLineCount}/{fileReviews.reviewableLineCount} ·{" "}
+              {fileReviews.reviewedCount}/{fileReviews.reviewableCount}
+            </Text>
+          ) : null}
+        </Pressable>
+      </TooltipTrigger>
+      <TooltipContent side="bottom">
+        <Text style={styles.tooltipText}>{label}</Text>
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
 interface DiffOptionsMenuProps {
   brand?: string;
   hideWhitespace: boolean;
@@ -1723,9 +2636,12 @@ interface DiffOptionsMenuProps {
   refreshSupported?: boolean;
   testIDPrefix?: string;
   wrapLines: boolean;
+  lspSupported?: boolean;
+  lspEnabled?: boolean;
   onRefresh?: () => void;
   onToggleHideWhitespace: () => void;
   onToggleWrapLines: () => void;
+  onToggleLsp?: () => void;
 }
 
 export function DiffOptionsMenu({
@@ -1737,9 +2653,12 @@ export function DiffOptionsMenu({
   refreshSupported = false,
   testIDPrefix = "changes",
   wrapLines,
+  lspSupported,
+  lspEnabled = false,
   onRefresh,
   onToggleHideWhitespace,
   onToggleWrapLines,
+  onToggleLsp,
 }: DiffOptionsMenuProps) {
   const { t } = useTranslation();
   const defaultToggleStyle = useMemo(() => buildOverflowButtonStyle(), []);
@@ -1803,6 +2722,16 @@ export function DiffOptionsMenu({
         >
           {wrapLinesLabel}
         </DropdownMenuItem>
+        {onToggleLsp ? (
+          <DropdownMenuItem
+            disabled={!lspSupported}
+            selected={lspEnabled}
+            testID={`${testIDPrefix}-toggle-lsp`}
+            onSelect={onToggleLsp}
+          >
+            {lspSupported ? t("workspace.git.diff.lsp") : t("workspace.git.diff.lspUpdateHost")}
+          </DropdownMenuItem>
+        ) : null}
         {refreshSupported && onRefresh ? (
           <>
             <DropdownMenuSeparator />
@@ -1860,6 +2789,32 @@ function getSplitDiffLineCount(file: ParsedDiffFile): number {
   return metrics.splitLineCount;
 }
 
+function revealDiffNavigationColumn(
+  element: HTMLElement,
+  column: number,
+  codeFontSize: number,
+  verticalScrollElement: HTMLElement,
+): boolean {
+  const horizontalViewport = element.closest<HTMLElement>('[data-testid="diff-horizontal-scroll"]');
+  if (
+    !horizontalViewport ||
+    horizontalViewport === verticalScrollElement ||
+    horizontalViewport.scrollWidth <= horizontalViewport.clientWidth + 1
+  ) {
+    return false;
+  }
+  const approximateCharacterWidth = Math.max(1, codeFontSize * 0.6);
+  const columnOffset = Math.max(0, column - 1) * approximateCharacterWidth;
+  horizontalViewport.scrollLeft = Math.max(
+    0,
+    Math.min(
+      columnOffset - horizontalViewport.clientWidth * 0.25,
+      horizontalViewport.scrollWidth - horizontalViewport.clientWidth,
+    ),
+  );
+  return true;
+}
+
 function computeEmptyMessage(
   hideWhitespace: boolean,
   diffMode: "uncommitted" | "base",
@@ -1877,6 +2832,14 @@ function computeEmptyMessage(
     return labels.uncommitted;
   }
   return labels.againstBase(baseRefLabel);
+}
+
+function resolveEditLineHandler(
+  openFile: GitDiffPaneProps["onOpenFile"],
+  supported: boolean,
+  handler: (line: ReviewableChangedLine) => void,
+) {
+  return openFile && supported ? handler : undefined;
 }
 
 interface DiffBodyContentProps {
@@ -1970,6 +2933,7 @@ interface SharedDiffViewProps {
         expandedPaths: string[];
         collapsedFolders: string[];
         reviewActions?: InlineReviewActions;
+        fileReviews: FileReviewActions;
         onFilePress?: (path: string) => void;
         workspaceFileDragScope?: { serverId: string; workspaceId: string };
         onOpenFile?: (path: string) => void;
@@ -1981,23 +2945,145 @@ interface SharedDiffViewProps {
         onDownload?: (path: string) => void;
         onDuplicate?: (path: string) => void;
         onRevert?: (path: string, oldPath?: string) => void;
+        onEditLine?: (line: ReviewableChangedLine) => void;
+        onExpandContext?: (
+          filePath: string,
+          region: DiffContextRegion,
+          direction: "up" | "down" | "all",
+        ) => void | Promise<void>;
+        onExpandFile?: (filePath: string) => void | Promise<void>;
+        expandingFilePaths?: readonly string[];
+        onSearch?: (query: string) => Promise<ChangesSearchResult>;
+        lsp?: ChangesLspController;
         onExpandedPathsChange: (paths: string[]) => void;
         onCollapsedFoldersChange: (paths: string[]) => void;
+        keyboardEnabled?: boolean;
+        focusShortcutEnabled?: boolean;
+        onActivate?: () => void;
+        focusPath?: string;
+        focusRequestId?: number;
+        focusLineStart?: number;
+        focusLineEnd?: number;
+        focusColumn?: number;
       }
     | {
         kind: "working_tab";
         expandedPaths: string[] | null;
         reviewActions: InlineReviewActions;
+        fileReviews: FileReviewActions;
         focusPath?: string;
         focusRequestId?: number;
+        focusLineStart?: number;
+        focusLineEnd?: number;
+        focusColumn?: number;
         onExpandedPathsChange: (paths: string[]) => void;
+        onEditLine?: (line: ReviewableChangedLine) => void;
+        keyboardEnabled?: boolean;
+        focusShortcutEnabled?: boolean;
+        onActivate?: () => void;
+        onExpandContext?: (
+          filePath: string,
+          region: DiffContextRegion,
+          direction: "up" | "down" | "all",
+        ) => void | Promise<void>;
+        onExpandFile?: (filePath: string) => void | Promise<void>;
+        expandingFilePaths?: readonly string[];
+        onSearch?: (query: string) => Promise<ChangesSearchResult>;
+        lsp?: ChangesLspController;
       }
     | {
         kind: "commit";
       };
 }
 
+function resolveSharedDiffMode(
+  mode: SharedDiffViewProps["mode"],
+  files: readonly ParsedDiffFile[],
+) {
+  if (mode.kind === "commit") {
+    return {
+      kind: mode.kind,
+      viewMode: "flat" as const,
+      expandedPathsArray: files.map((file) => file.path),
+      collapsedFoldersArray: EMPTY_PATH_LIST,
+      stickyHeaders: false,
+      interactive: false,
+      reviewActions: undefined,
+      fileReviews: undefined,
+      onFilePress: undefined,
+      focusPath: undefined,
+      focusRequestId: undefined,
+      focusLineStart: undefined,
+      focusLineEnd: undefined,
+      focusColumn: undefined,
+      onOpenFile: undefined,
+      onAddToChat: undefined,
+      workspaceFileDragScope: undefined,
+      onCopyPath: undefined,
+      onDownload: undefined,
+      onEditLine: undefined,
+      keyboardEnabled: false,
+      focusShortcutEnabled: false,
+      onExpandContext: undefined,
+      onExpandFile: undefined,
+      onSearch: undefined,
+      changesLsp: undefined,
+      expandingFilePathsArray: EMPTY_PATH_LIST,
+      onActivate: undefined,
+    };
+  }
+  const common = {
+    kind: mode.kind,
+    stickyHeaders: true,
+    interactive: true,
+    reviewActions: mode.reviewActions,
+    fileReviews: mode.fileReviews,
+    focusPath: mode.focusPath,
+    focusRequestId: mode.focusRequestId,
+    focusLineStart: mode.focusLineStart,
+    focusLineEnd: mode.focusLineEnd,
+    focusColumn: mode.focusColumn,
+    onEditLine: mode.onEditLine,
+    keyboardEnabled: mode.keyboardEnabled !== false,
+    focusShortcutEnabled: mode.focusShortcutEnabled !== false,
+    onExpandContext: mode.onExpandContext,
+    onExpandFile: mode.onExpandFile,
+    onSearch: mode.onSearch,
+    changesLsp: mode.lsp,
+    expandingFilePathsArray: mode.expandingFilePaths ?? EMPTY_PATH_LIST,
+    onActivate: mode.onActivate,
+  };
+  if (mode.kind === "working_tree") {
+    return {
+      ...common,
+      viewMode: mode.viewMode,
+      expandedPathsArray: mode.expandedPaths,
+      collapsedFoldersArray: mode.collapsedFolders,
+      onFilePress: mode.onFilePress,
+      onOpenFile: mode.onOpenFile,
+      onAddToChat: mode.onAddToChat,
+      workspaceFileDragScope: mode.workspaceFileDragScope,
+      onCopyPath: mode.onCopyPath,
+      onDownload: mode.onDownload,
+    };
+  }
+  return {
+    ...common,
+    viewMode: "flat" as const,
+    expandedPathsArray: mode.expandedPaths ?? files.map((file) => file.path),
+    collapsedFoldersArray: EMPTY_PATH_LIST,
+    onFilePress: undefined,
+    onOpenFile: undefined,
+    onAddToChat: undefined,
+    workspaceFileDragScope: undefined,
+    onCopyPath: undefined,
+    onDownload: undefined,
+  };
+}
+
 export function SharedDiffView({ files, displayPreferences, mode }: SharedDiffViewProps) {
+  const { t } = useTranslation();
+  const toast = useToast();
   const isCompact = useIsCompactFormFactor();
   const { layout, wrapLines, codeFontSize, monoFontFamily } = displayPreferences;
   const diffBodyLineHeight = Math.round(codeFontSize * 1.5);
@@ -2010,19 +3096,37 @@ export function SharedDiffView({ files, displayPreferences, mode }: SharedDiffVi
       ...(trimmedMonoFontFamily ? { fontFamily: trimmedMonoFontFamily } : null),
     };
   }, [codeFontSize, diffBodyLineHeight, monoFontFamily]);
-  const viewMode = mode.kind === "working_tree" ? mode.viewMode : "flat";
-  const expandedPathsArray = useMemo(() => {
-    if (mode.kind === "working_tree") {
-      return mode.expandedPaths;
-    }
-    if (mode.kind === "working_tab" && mode.expandedPaths !== null) {
-      return mode.expandedPaths;
-    }
-    return files.map((file) => file.path);
-  }, [files, mode]);
+  const resolvedMode = useMemo(() => resolveSharedDiffMode(mode, files), [files, mode]);
+  const {
+    viewMode,
+    expandedPathsArray,
+    collapsedFoldersArray,
+    stickyHeaders,
+    interactive,
+    reviewActions,
+    fileReviews,
+    onFilePress,
+    focusPath,
+    focusRequestId,
+    focusLineStart,
+    focusLineEnd,
+    focusColumn,
+    onOpenFile,
+    onAddToChat,
+    workspaceFileDragScope,
+    onCopyPath,
+    onDownload,
+    onEditLine,
+    keyboardEnabled,
+    focusShortcutEnabled,
+    onExpandContext,
+    onExpandFile,
+    onSearch,
+    changesLsp,
+    expandingFilePathsArray,
+    onActivate,
+  } = resolvedMode;
   const expandedPaths = useMemo(() => new Set(expandedPathsArray), [expandedPathsArray]);
-  const collapsedFoldersArray =
-    mode.kind === "working_tree" ? mode.collapsedFolders : EMPTY_PATH_LIST;
   const collapsedFolders = useMemo(() => new Set(collapsedFoldersArray), [collapsedFoldersArray]);
   const stickyHeaders = mode.kind !== "commit";
   const interactive = mode.kind !== "commit";
@@ -2045,6 +3149,33 @@ export function SharedDiffView({ files, displayPreferences, mode }: SharedDiffVi
   // can target the current VCS file or folder without changing its open state.
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const handleSelectPath = useCallback((path: string) => setSelectedPath(path), []);
+  const [changesSearch, setChangesSearch] = useState<ChangesSearchState>(CLOSED_CHANGES_SEARCH);
+  const [lspHover, setLspHover] = useState<{
+    text: string;
+    clientX: number;
+    clientY: number;
+  } | null>(null);
+  const searchInputRef = useRef<TextInput>(null);
+  const selectedSearchMatch = changesSearch.matches[changesSearch.selectedIndex];
+  const navigationHighlight = useMemo<DiffNavigationHighlight | undefined>(() => {
+    if (selectedSearchMatch?.kind === "text") {
+      return {
+        filePath: selectedSearchMatch.filePath,
+        lineStart: selectedSearchMatch.lineNumber,
+        lineEnd: selectedSearchMatch.lineNumber,
+      };
+    }
+    if (!focusPath || !focusLineStart) return undefined;
+    return {
+      filePath: focusPath,
+      lineStart: focusLineStart,
+      lineEnd: Math.max(focusLineStart, focusLineEnd ?? focusLineStart),
+    };
+  }, [focusLineEnd, focusLineStart, focusPath, selectedSearchMatch]);
+  const expandingFilePaths = useMemo(
+    () => new Set(expandingFilePathsArray),
+    [expandingFilePathsArray],
+  );
   const compressedTree = useMemo(() => compressSingleChildChains(buildDiffTree(files)), [files]);
   const allFolderPaths = useMemo(() => collectDirPaths(compressedTree), [compressedTree]);
   const allFolderPathSet = useMemo(() => new Set(allFolderPaths), [allFolderPaths]);
@@ -2062,6 +3193,15 @@ export function SharedDiffView({ files, displayPreferences, mode }: SharedDiffVi
     [allFolderPathSet, collapsedFolders],
   );
   const diffListRef = useRef<FlatList<DiffFlatItem>>(null);
+  const diffReviewSurfaceRef = useRef<View>(null);
+  const viewportPreservationRef = useRef<{
+    scrollTop: number;
+    surfaceElement: HTMLElement | null;
+    focusedElement: HTMLElement | null;
+    focusedTestID: string | null;
+    operationId: number;
+  } | null>(null);
+  const nextViewportOperationIdRef = useRef(1);
   const scrollbar = useOverlayFlatListScrollbar(diffListRef, { enabled: !isCompact });
   const { onLayout: updateScrollbarLayout, onScroll: updateScrollbarOffset } = scrollbar;
   const consumedFocusRequestRef = useRef<string | null>(null);
@@ -2073,6 +3213,174 @@ export function SharedDiffView({ files, displayPreferences, mode }: SharedDiffVi
   const folderRowHeightRef = useRef<number>(0);
   const defaultHeaderHeightRef = useRef<number>(44);
   const [heightVersion, setHeightVersion] = useState(0);
+  const [diffListViewportHeight, setDiffListViewportHeight] = useState(0);
+  const [selectedLineId, setSelectedLineId] = useState<string | null>(null);
+  const focusChangesHandlerIdRef = useRef(`changes-focus:${Math.random().toString(36).slice(2)}`);
+  const [lastAutoApprovedLine, setLastAutoApprovedLine] = useState<ReviewableChangedLine | null>(
+    null,
+  );
+
+  const restorePreservedViewport = useCallback((operationId?: number) => {
+    if (!isWeb) return;
+    const snapshot = viewportPreservationRef.current;
+    if (!snapshot || (operationId !== undefined && snapshot.operationId !== operationId)) return;
+    const scrollElement = diffListRef.current?.getNativeScrollRef();
+    if (!(scrollElement instanceof HTMLElement)) return;
+    scrollElement.scrollTop = snapshot.scrollTop;
+    diffListScrollOffsetRef.current = snapshot.scrollTop;
+    let focusedElement = snapshot.focusedElement?.isConnected ? snapshot.focusedElement : null;
+    if (!focusedElement && snapshot.focusedTestID) {
+      const focusRoot = snapshot.surfaceElement?.isConnected ? snapshot.surfaceElement : document;
+      focusedElement = focusRoot.querySelector<HTMLElement>(
+        `[data-testid="${globalThis.CSS?.escape(snapshot.focusedTestID) ?? snapshot.focusedTestID}"]`,
+      );
+    }
+    if (focusedElement?.isConnected) {
+      focusedElement.focus({ preventScroll: true });
+    } else {
+      scrollElement.focus({ preventScroll: true });
+    }
+  }, []);
+
+  const finishViewportPreservation = useCallback(
+    (operationId: number) => {
+      requestAnimationFrame(() => {
+        restorePreservedViewport(operationId);
+        requestAnimationFrame(() => {
+          restorePreservedViewport(operationId);
+          if (viewportPreservationRef.current?.operationId === operationId) {
+            viewportPreservationRef.current = null;
+          }
+        });
+      });
+    },
+    [restorePreservedViewport],
+  );
+
+  const runManualExpansion = useCallback(
+    (operation: () => void | Promise<void>) => {
+      if (!isWeb) {
+        void operation();
+        return;
+      }
+      const scrollElement = diffListRef.current?.getNativeScrollRef();
+      if (!(scrollElement instanceof HTMLElement)) {
+        void operation();
+        return;
+      }
+      const operationId = nextViewportOperationIdRef.current++;
+      const surface = diffReviewSurfaceRef.current;
+      const surfaceElement = surface instanceof HTMLElement ? surface : null;
+      const activeElement = document.activeElement;
+      viewportPreservationRef.current = {
+        scrollTop: scrollElement.scrollTop,
+        surfaceElement,
+        focusedElement:
+          activeElement instanceof HTMLElement && surfaceElement?.contains(activeElement)
+            ? activeElement
+            : null,
+        focusedTestID:
+          activeElement instanceof HTMLElement && surfaceElement?.contains(activeElement)
+            ? (activeElement.dataset.testid ?? null)
+            : null,
+        operationId,
+      };
+      try {
+        const result = operation();
+        if (result instanceof Promise) {
+          void result.finally(() => finishViewportPreservation(operationId));
+        } else {
+          finishViewportPreservation(operationId);
+        }
+      } catch (error) {
+        finishViewportPreservation(operationId);
+        throw error;
+      }
+    },
+    [finishViewportPreservation],
+  );
+
+  useLayoutEffect(() => {
+    restorePreservedViewport();
+  }, [collapsedFoldersArray, expandedPathsArray, files, heightVersion, restorePreservedViewport]);
+
+  const handleManualExpandContext = useCallback(
+    (filePath: string, region: DiffContextRegion, direction: "up" | "down" | "all") => {
+      if (!onExpandContext) return;
+      runManualExpansion(() => onExpandContext(filePath, region, direction));
+    },
+    [onExpandContext, runManualExpansion],
+  );
+
+  const handleManualExpandFile = useCallback(
+    (filePath: string) => {
+      if (!onExpandFile) return;
+      runManualExpansion(() => onExpandFile(filePath));
+    },
+    [onExpandFile, runManualExpansion],
+  );
+  const orderedReviewLines = useMemo(() => {
+    if (!fileReviews) return [];
+    const byPath = new Map(fileReviews.files.map((file) => [file.path, file.lines] as const));
+    return files.flatMap((file) => byPath.get(file.path) ?? []);
+  }, [fileReviews, files]);
+  const selectedLine = useMemo(
+    () => orderedReviewLines.find((line) => line.id === selectedLineId) ?? null,
+    [orderedReviewLines, selectedLineId],
+  );
+  const handleSelectReviewLine = useCallback((line: ReviewableChangedLine) => {
+    setSelectedLineId(line.id);
+  }, []);
+  const setReviewFileExpanded = useCallback(
+    (path: string, expanded: boolean) => {
+      if (mode.kind === "commit") return;
+      const expansionChanged = expanded !== expandedPaths.has(path);
+      if (expansionChanged) {
+        const next = expanded
+          ? Array.from(new Set([...expandedPaths, path]))
+          : Array.from(expandedPaths).filter((candidate) => candidate !== path);
+        mode.onExpandedPathsChange(next);
+      }
+      if (expanded && mode.kind === "working_tree") {
+        const directoryParts = path.split("/").slice(0, -1);
+        const ancestors = new Set(
+          directoryParts.map((_, index) => directoryParts.slice(0, index + 1).join("/")),
+        );
+        const nextCollapsed = mode.collapsedFolders.filter((folder) => !ancestors.has(folder));
+        if (nextCollapsed.length !== mode.collapsedFolders.length) {
+          mode.onCollapsedFoldersChange(nextCollapsed);
+        }
+      }
+    },
+    [expandedPaths, mode],
+  );
+  const handleToggleReviewLine = useCallback(
+    (line: ReviewableChangedLine) => {
+      if (!fileReviews) return;
+      const currentlyReviewed = fileReviews.reviewedLineIds.has(line.id);
+      fileReviews.toggleLine(line);
+      if (!currentlyReviewed) {
+        const progress = fileReviews.lineProgressByPath.get(line.target.filePath);
+        if (progress && progress.total > 0 && progress.reviewed + 1 === progress.total) {
+          setReviewFileExpanded(line.target.filePath, false);
+          setSelectedLineId(null);
+        }
+      }
+    },
+    [fileReviews, setReviewFileExpanded],
+  );
+  const lineReviewPresentation = useMemo<LineReviewPresentation | undefined>(
+    () =>
+      fileReviews
+        ? {
+            fileReviews,
+            selectedLineId,
+            onSelectLine: handleSelectReviewLine,
+            onToggleLine: handleToggleReviewLine,
+          }
+        : undefined,
+    [fileReviews, handleSelectReviewLine, handleToggleReviewLine, selectedLineId],
+  );
   const heightVersionFrameRef = useRef<number | null>(null);
   const scheduleHeightVersionUpdate = useCallback(() => {
     if (heightVersionFrameRef.current !== null) {
@@ -2223,14 +3531,25 @@ export function SharedDiffView({ files, displayPreferences, mode }: SharedDiffVi
 
   const handleDiffListLayout = useCallback(
     (event: LayoutChangeEvent) => {
+      updateScrollbarLayout(event);
       const height = event.nativeEvent.layout.height;
       if (!Number.isFinite(height) || height <= 0) {
         return;
       }
       diffListViewportHeightRef.current = height;
-      updateScrollbarLayout(event);
+      setDiffListViewportHeight(height);
     },
     [updateScrollbarLayout],
+  );
+
+  const diffListContentStyle = useMemo(
+    () => [
+      styles.contentContainer,
+      focusPath &&
+        diffListViewportHeight > 0 &&
+        inlineUnistylesStyle({ paddingBottom: diffListViewportHeight }),
+    ],
+    [diffListViewportHeight, focusPath],
   );
 
   const computeItemOffset = useCallback(
@@ -2250,8 +3569,423 @@ export function SharedDiffView({ files, displayPreferences, mode }: SharedDiffVi
     [computeItemOffset],
   );
 
+  const focusDiffScrollSurface = useCallback(() => {
+    if (!isWeb) {
+      return;
+    }
+    const scrollElement = diffListRef.current?.getNativeScrollRef();
+    if (scrollElement instanceof HTMLElement) {
+      // File navigation is a focus handoff: keyboard scrolling must continue in
+      // the diff rather than remaining on the file-tree activation control.
+      scrollElement.focus({ preventScroll: true });
+    }
+  }, []);
+
+  const revealSearchMatch = useCallback(
+    async (match: ChangesSearchMatch) => {
+      setReviewFileExpanded(match.filePath, true);
+      if (match.kind === "file") {
+        diffListRef.current?.scrollToOffset({
+          offset: computeHeaderOffset(match.filePath),
+          animated: false,
+        });
+        requestAnimationFrame(focusDiffScrollSurface);
+        return;
+      }
+      await onExpandFile?.(match.filePath);
+      let attempts = 30;
+      const reveal = () => {
+        const escape =
+          globalThis.CSS?.escape ?? ((value: string) => value.replace(/["\\]/g, "\\$&"));
+        const element = document.querySelector<HTMLElement>(
+          `[data-paseito-diff-file="${escape(match.filePath)}"][data-paseito-diff-current-line="${match.lineNumber}"]`,
+        );
+        if (element) {
+          element.scrollIntoView({ block: "center", inline: "nearest" });
+          focusDiffScrollSurface();
+          return;
+        }
+        if (attempts > 0) {
+          attempts -= 1;
+          requestAnimationFrame(reveal);
+        }
+      };
+      requestAnimationFrame(reveal);
+    },
+    [computeHeaderOffset, focusDiffScrollSurface, onExpandFile, setReviewFileExpanded],
+  );
+
+  const selectSearchMatch = useCallback(
+    (index: number) => {
+      if (changesSearch.matches.length === 0) return;
+      const selectedIndex = (index + changesSearch.matches.length) % changesSearch.matches.length;
+      setChangesSearch((current) => ({ ...current, selectedIndex }));
+      void revealSearchMatch(changesSearch.matches[selectedIndex]);
+    },
+    [changesSearch.matches, revealSearchMatch],
+  );
+
+  const submitChangesSearch = useCallback(async () => {
+    const query = changesSearch.query.trim();
+    if (!query || !onSearch) return;
+    setChangesSearch((current) => ({ ...current, status: "loading", error: null }));
+    searchInputRef.current?.blur();
+    try {
+      const result = await onSearch(query);
+      setChangesSearch((current) => ({
+        ...current,
+        status: "ready",
+        matches: result.matches,
+        selectedIndex: result.matches.length > 0 ? 0 : -1,
+        truncated: result.truncated,
+      }));
+      if (result.matches[0]) void revealSearchMatch(result.matches[0]);
+    } catch (error) {
+      setChangesSearch((current) => ({
+        ...current,
+        status: "error",
+        matches: [],
+        selectedIndex: -1,
+        error: error instanceof Error ? error.message : t("workspace.git.diff.search.failed"),
+      }));
+    }
+  }, [changesSearch.query, onSearch, revealSearchMatch, t]);
+  const handleSearchQueryChange = useCallback((query: string) => {
+    setChangesSearch((current) => ({ ...current, query, status: "idle" }));
+  }, []);
+  const handleSearchSubmit = useCallback(() => {
+    void submitChangesSearch();
+  }, [submitChangesSearch]);
+
   useEffect(() => {
-    if (!focusPath) {
+    if (!isWeb || !keyboardEnabled || !onSearch) return;
+    const handleSearchKeyDown = (event: KeyboardEvent) => {
+      if (event.isComposing || event.metaKey || event.ctrlKey || event.altKey) return;
+      const target = event.target instanceof Element ? event.target : null;
+      const editing = Boolean(
+        target?.closest(
+          "input, textarea, select, [contenteditable='true'], [data-testid='file-source-editor']",
+        ),
+      );
+      if (!changesSearch.open) {
+        if (event.key !== "/" || editing) return;
+        event.preventDefault();
+        setChangesSearch({ ...CLOSED_CHANGES_SEARCH, open: true });
+        requestAnimationFrame(() => searchInputRef.current?.focus());
+        return;
+      }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setChangesSearch(CLOSED_CHANGES_SEARCH);
+        focusDiffScrollSurface();
+        return;
+      }
+      if (editing) return;
+      if (event.key === "n") {
+        event.preventDefault();
+        selectSearchMatch(changesSearch.selectedIndex + 1);
+      } else if (event.key === "N") {
+        event.preventDefault();
+        selectSearchMatch(changesSearch.selectedIndex - 1);
+      }
+    };
+    window.addEventListener("keydown", handleSearchKeyDown);
+    return () => window.removeEventListener("keydown", handleSearchKeyDown);
+  }, [
+    changesSearch.open,
+    changesSearch.selectedIndex,
+    focusDiffScrollSurface,
+    keyboardEnabled,
+    onSearch,
+    selectSearchMatch,
+  ]);
+
+  useEffect(() => {
+    if (!isWeb || !keyboardEnabled || !changesLsp?.enabled) return;
+    const surface = diffReviewSurfaceRef.current;
+    if (!(surface instanceof HTMLElement)) return;
+    let hoverTimer: ReturnType<typeof setTimeout> | null = null;
+    let hoverSequence = 0;
+    let lastTarget: ChangesLspTarget | null = null;
+    const clearHoverTimer = () => {
+      if (hoverTimer) clearTimeout(hoverTimer);
+      hoverTimer = null;
+    };
+    const requestHover = (target: ChangesLspTarget) => {
+      clearHoverTimer();
+      lastTarget = target;
+      const sequence = ++hoverSequence;
+      hoverTimer = setTimeout(() => {
+        hoverTimer = null;
+        void (async () => {
+          const value = await changesLsp.hover(target.filePath, target.lineNumber, target.column);
+          if (sequence !== hoverSequence) return;
+          const surfaceBounds = surface.getBoundingClientRect();
+          setLspHover(
+            value
+              ? {
+                  text: value,
+                  clientX: target.clientX - surfaceBounds.left,
+                  clientY: target.clientY - surfaceBounds.top,
+                }
+              : null,
+          );
+        })();
+      }, 350);
+    };
+    const handleMouseMove = (event: MouseEvent) => {
+      const target = resolveChangesLspTarget(event);
+      if (!target) {
+        clearHoverTimer();
+        lastTarget = null;
+        setLspHover(null);
+        return;
+      }
+      const unchanged =
+        lastTarget?.filePath === target.filePath &&
+        lastTarget.lineNumber === target.lineNumber &&
+        lastTarget.column === target.column;
+      if (!unchanged) requestHover(target);
+    };
+    const handleClick = (event: MouseEvent) => {
+      if (!(event.metaKey || event.ctrlKey) || event.button !== 0) return;
+      const target = resolveChangesLspTarget(event);
+      if (!target) return;
+      event.preventDefault();
+      void changesLsp.definition(target.filePath, target.lineNumber, target.column);
+    };
+    const handleContextMenu = (event: MouseEvent) => {
+      const showContextMenu = window.paseoDesktop?.menu?.showContextMenu;
+      const target = resolveChangesLspTarget(event);
+      if (!target || typeof showContextMenu !== "function") return;
+      event.preventDefault();
+      void showContextMenu({ kind: "editor-lsp" }).then((action) => {
+        if (action === "go-to-definition") {
+          return changesLsp.definition(target.filePath, target.lineNumber, target.column);
+        }
+        return undefined;
+      });
+    };
+    const handleMouseLeave = () => setLspHover(null);
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "F12" || !lastTarget || !surface.contains(document.activeElement)) return;
+      event.preventDefault();
+      void changesLsp.definition(lastTarget.filePath, lastTarget.lineNumber, lastTarget.column);
+    };
+    surface.addEventListener("mousemove", handleMouseMove);
+    surface.addEventListener("click", handleClick);
+    surface.addEventListener("contextmenu", handleContextMenu);
+    surface.addEventListener("mouseleave", handleMouseLeave);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      hoverSequence += 1;
+      clearHoverTimer();
+      surface.removeEventListener("mousemove", handleMouseMove);
+      surface.removeEventListener("click", handleClick);
+      surface.removeEventListener("contextmenu", handleContextMenu);
+      surface.removeEventListener("mouseleave", handleMouseLeave);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [changesLsp, keyboardEnabled]);
+
+  const handleFocusChanges = useCallback((): boolean => {
+    onActivate?.();
+    const target =
+      selectedLine ??
+      orderedReviewLines.find((line) => !fileReviews?.reviewedLineIds.has(line.id)) ??
+      orderedReviewLines[0] ??
+      null;
+    if (target) {
+      setReviewFileExpanded(target.target.filePath, true);
+      setSelectedLineId(target.id);
+      requestAnimationFrame(focusDiffScrollSurface);
+      return true;
+    }
+    const firstFile = files[0];
+    if (!firstFile) return false;
+    setReviewFileExpanded(firstFile.path, true);
+    diffListRef.current?.scrollToOffset({
+      offset: computeHeaderOffset(firstFile.path),
+      animated: false,
+    });
+    requestAnimationFrame(focusDiffScrollSurface);
+    return true;
+  }, [
+    computeHeaderOffset,
+    fileReviews,
+    files,
+    focusDiffScrollSurface,
+    orderedReviewLines,
+    selectedLine,
+    setReviewFileExpanded,
+    onActivate,
+  ]);
+
+  useKeyboardActionHandler({
+    handlerId: focusChangesHandlerIdRef.current,
+    actions: ["changes.focus"],
+    enabled: focusShortcutEnabled,
+    priority: 250,
+    handle: handleFocusChanges,
+  });
+
+  useEffect(() => {
+    if (!selectedLineId) return;
+    if (!orderedReviewLines.some((line) => line.id === selectedLineId)) {
+      setSelectedLineId(null);
+      setLastAutoApprovedLine(null);
+    }
+  }, [orderedReviewLines, selectedLineId]);
+
+  useEffect(() => {
+    if (!isWeb || !keyboardEnabled || !selectedLine) return;
+    setReviewFileExpanded(selectedLine.target.filePath, true);
+    let frame: number | null = null;
+    let remainingAttempts = 12;
+    let revealedFileHeader = false;
+    const revealSelectedLine = () => {
+      const escape = globalThis.CSS?.escape ?? ((value: string) => value.replace(/["\\]/g, "\\$&"));
+      const element = document.querySelector<HTMLElement>(
+        `[data-paseito-review-target-key="${escape(selectedLine.target.key)}"][data-paseito-review-selected="true"]`,
+      );
+      if (element) {
+        revealReviewElement({
+          element,
+          file: files.find((file) => file.path === selectedLine.target.filePath),
+          line: selectedLine,
+          escapeSelector: escape,
+          focus: focusDiffScrollSurface,
+        });
+        return;
+      }
+      if (!revealedFileHeader) {
+        revealedFileHeader = true;
+        diffListRef.current?.scrollToOffset({
+          offset: computeHeaderOffset(selectedLine.target.filePath),
+          animated: false,
+        });
+      }
+      if (remainingAttempts > 0) {
+        remainingAttempts -= 1;
+        frame = requestAnimationFrame(revealSelectedLine);
+      }
+    };
+    frame = requestAnimationFrame(revealSelectedLine);
+    return () => {
+      if (frame !== null) cancelAnimationFrame(frame);
+    };
+    // Revealing belongs to a new selection, not to every render that recreates
+    // the selected line or its surrounding review state. Inline editors change
+    // row height and review state; rerunning here would recenter the old
+    // checkbox selection and steal focus from the new editor.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [keyboardEnabled, selectedLineId]);
+
+  const handleEditSelectedLine = useCallback(() => {
+    if (!selectedLine) return;
+    if (onEditLine && selectedLine.target.editLineNumber) onEditLine(selectedLine);
+    else toast.show(t("workspace.git.diff.editLineUnavailable"));
+  }, [onEditLine, selectedLine, t, toast]);
+
+  const handleUndoAutoApproval = useCallback(() => {
+    if (!fileReviews || !lastAutoApprovedLine) return;
+    if (fileReviews.reviewedLineIds.has(lastAutoApprovedLine.id)) {
+      fileReviews.toggleLine(lastAutoApprovedLine);
+    }
+    setReviewFileExpanded(lastAutoApprovedLine.target.filePath, true);
+    setSelectedLineId(lastAutoApprovedLine.id);
+    setLastAutoApprovedLine(null);
+  }, [fileReviews, lastAutoApprovedLine, setReviewFileExpanded]);
+
+  const handleMoveReviewSelection = useCallback(
+    (direction: "up" | "down") => {
+      if (!selectedLine || !fileReviews) return;
+      const wasReviewed = fileReviews.reviewedLineIds.has(selectedLine.id);
+      if (!wasReviewed) {
+        fileReviews.markLine(selectedLine);
+        setLastAutoApprovedLine(selectedLine);
+      }
+      const projectedReviewed = new Set(fileReviews.reviewedLineIds);
+      projectedReviewed.add(selectedLine.id);
+      const next = findNextUncheckedLine({
+        lines: orderedReviewLines,
+        selectedLineId: selectedLine.id,
+        reviewedLineIds: projectedReviewed,
+        direction,
+      });
+      const progress = fileReviews.lineProgressByPath.get(selectedLine.target.filePath);
+      if (!wasReviewed && progress && progress.reviewed + 1 === progress.total) {
+        setReviewFileExpanded(selectedLine.target.filePath, false);
+      }
+      if (next) {
+        setReviewFileExpanded(next.target.filePath, true);
+        setSelectedLineId(next.id);
+        return;
+      }
+      setSelectedLineId(null);
+      toast.show(t("workspace.git.diff.noUncheckedLines"));
+    },
+    [fileReviews, orderedReviewLines, selectedLine, setReviewFileExpanded, t, toast],
+  );
+
+  const handleExpandAdjacentContext = useCallback(
+    (direction: "above" | "below") => {
+      if (!selectedLine || !onExpandContext) return;
+      const file = files.find((candidate) => candidate.path === selectedLine.target.filePath);
+      const lineNumber = selectedLine.target.newLineNumber ?? selectedLine.target.editLineNumber;
+      if (!file || !lineNumber) return;
+      const regions = file.hunks.flatMap((hunk) =>
+        hunk.lines.flatMap((line) => {
+          const region = parseDiffContextMarker(line.content);
+          return region ? [region] : [];
+        }),
+      );
+      const region = findAdjacentHiddenContext({ regions, lineNumber, direction });
+      if (region) handleManualExpandContext(file.path, region, "all");
+    },
+    [files, handleManualExpandContext, onExpandContext, selectedLine],
+  );
+
+  useEffect(() => {
+    if (!isWeb || !keyboardEnabled || !selectedLine || !fileReviews) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.isComposing || event.metaKey || event.ctrlKey || event.altKey) return;
+      const target = event.target instanceof Element ? event.target : null;
+      if (
+        target?.closest(
+          "input, textarea, select, [contenteditable='true'], [data-testid='file-source-editor']",
+        )
+      ) {
+        return;
+      }
+      const action = getLineReviewKeyboardAction(event.key);
+      if (!action) return;
+      event.preventDefault();
+      if (action === "clear") {
+        setSelectedLineId(null);
+        setLastAutoApprovedLine(null);
+      } else if (action === "toggle") handleToggleReviewLine(selectedLine);
+      else if (action === "edit") handleEditSelectedLine();
+      else if (action === "undo") handleUndoAutoApproval();
+      else if (action === "expand-below") handleExpandAdjacentContext("below");
+      else if (action === "expand-above") handleExpandAdjacentContext("above");
+      else handleMoveReviewSelection(action === "move-down" ? "down" : "up");
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [
+    fileReviews,
+    handleEditSelectedLine,
+    handleExpandAdjacentContext,
+    handleMoveReviewSelection,
+    handleToggleReviewLine,
+    handleUndoAutoApproval,
+    keyboardEnabled,
+    selectedLine,
+  ]);
+
+  useEffect(() => {
+    if (!focusPath || focusLineStart) {
       return;
     }
     const focusRequestKey = `${focusRequestId ?? "initial"}:${focusPath}`;
@@ -2273,6 +4007,7 @@ export function SharedDiffView({ files, displayPreferences, mode }: SharedDiffVi
         offset: computeHeaderOffset(focusPath),
         animated: false,
       });
+      focusDiffScrollSurface();
       consumedFocusRequestRef.current = focusRequestKey;
       pendingFocusRequestRef.current = null;
     });
@@ -2282,7 +4017,96 @@ export function SharedDiffView({ files, displayPreferences, mode }: SharedDiffVi
         pendingFocusRequestRef.current = null;
       }
     };
-  }, [computeHeaderOffset, flatItems, focusPath, focusRequestId]);
+  }, [
+    computeHeaderOffset,
+    flatItems,
+    focusDiffScrollSurface,
+    focusLineStart,
+    focusPath,
+    focusRequestId,
+  ]);
+
+  useEffect(() => {
+    if (!isWeb || !focusPath || !focusLineStart) {
+      return;
+    }
+    const focusRequestKey = `${focusRequestId ?? "initial"}:${focusPath}:${focusLineStart}`;
+    if (
+      consumedFocusRequestRef.current === focusRequestKey ||
+      pendingFocusRequestRef.current === focusRequestKey
+    ) {
+      return;
+    }
+    const hasTargetFile = flatItems.some(
+      (item) => item.type === "header" && item.file.path === focusPath,
+    );
+    if (!hasTargetFile) {
+      return;
+    }
+
+    setReviewFileExpanded(focusPath, true);
+    pendingFocusRequestRef.current = focusRequestKey;
+    diffListRef.current?.scrollToOffset({
+      offset: computeHeaderOffset(focusPath),
+      animated: false,
+    });
+
+    let frame: number | null = null;
+    let remainingAttempts = 20;
+    const revealLine = () => {
+      const escape = globalThis.CSS?.escape ?? ((value: string) => value.replace(/["\\]/g, "\\$&"));
+      const element = document.querySelector<HTMLElement>(
+        `[data-paseito-diff-file="${escape(focusPath)}"][data-paseito-diff-current-line="${focusLineStart}"]`,
+      );
+      const scrollElement = element?.closest<HTMLElement>('[data-testid="git-diff-scroll"]');
+      if (element && scrollElement instanceof HTMLElement) {
+        const viewportBounds = scrollElement.getBoundingClientRect();
+        const lineBounds = element.getBoundingClientRect();
+        const headerHeight =
+          headerHeightByPathRef.current[focusPath] ?? defaultHeaderHeightRef.current;
+        const targetOffset = scrollElement.scrollTop + lineBounds.top - viewportBounds.top;
+        scrollElement.scrollTop = Math.max(0, targetOffset - headerHeight - 12);
+        if (
+          !wrapLines &&
+          focusColumn &&
+          !revealDiffNavigationColumn(element, focusColumn, codeFontSize, scrollElement) &&
+          remainingAttempts > 0
+        ) {
+          remainingAttempts -= 1;
+          frame = requestAnimationFrame(revealLine);
+          return;
+        }
+        focusDiffScrollSurface();
+        consumedFocusRequestRef.current = focusRequestKey;
+        pendingFocusRequestRef.current = null;
+        return;
+      }
+      if (remainingAttempts > 0) {
+        remainingAttempts -= 1;
+        frame = requestAnimationFrame(revealLine);
+      } else if (pendingFocusRequestRef.current === focusRequestKey) {
+        pendingFocusRequestRef.current = null;
+      }
+    };
+    frame = requestAnimationFrame(revealLine);
+    return () => {
+      if (frame !== null) cancelAnimationFrame(frame);
+      if (pendingFocusRequestRef.current === focusRequestKey) {
+        pendingFocusRequestRef.current = null;
+      }
+    };
+  }, [
+    codeFontSize,
+    computeHeaderOffset,
+    flatItems,
+    focusColumn,
+    focusDiffScrollSurface,
+    focusLineStart,
+    focusPath,
+    focusRequestId,
+    setReviewFileExpanded,
+    wrapLines,
+  ]);
 
   const handleToggleExpanded = useCallback(
     (path: string) => {
@@ -2310,14 +4134,38 @@ export function SharedDiffView({ files, displayPreferences, mode }: SharedDiffVi
         });
       }
 
-      mode.onExpandedPathsChange(
-        nextExpanded
-          ? [...expandedPaths, path]
-          : Array.from(expandedPaths).filter((expandedPath) => expandedPath !== path),
-      );
+      const updateExpandedPaths = () =>
+        mode.onExpandedPathsChange(
+          nextExpanded
+            ? [...expandedPaths, path]
+            : Array.from(expandedPaths).filter((expandedPath) => expandedPath !== path),
+        );
+      if (nextExpanded) runManualExpansion(updateExpandedPaths);
+      else updateExpandedPaths();
     },
-    [computeHeaderOffset, expandedPaths, mode],
+    [computeHeaderOffset, expandedPaths, mode, runManualExpansion],
   );
+
+  const handleToggleReviewed = useCallback(
+    (path: string) => {
+      if (mode.kind === "commit" || !fileReviews) return;
+      const isNowReviewed = fileReviews.toggle(path);
+      const updateExpandedPaths = () =>
+        mode.onExpandedPathsChange(
+          isNowReviewed
+            ? collapseReviewedFile(expandedPaths, path)
+            : expandUnreviewedFile(expandedPaths, path),
+        );
+      if (isNowReviewed) updateExpandedPaths();
+      else runManualExpansion(updateExpandedPaths);
+    },
+    [expandedPaths, fileReviews, mode, runManualExpansion],
+  );
+
+  useEffect(() => {
+    if (mode.kind === "commit" || !fileReviews || fileReviews.invalidatedPaths.length === 0) return;
+    mode.onExpandedPathsChange(expandInvalidatedFiles(expandedPaths, fileReviews.invalidatedPaths));
+  }, [expandedPaths, fileReviews, mode]);
 
   const handleToggleFolder = useCallback(
     (dirPath: string) => {
@@ -2343,13 +4191,16 @@ export function SharedDiffView({ files, displayPreferences, mode }: SharedDiffVi
         }
       }
 
-      mode.onCollapsedFoldersChange(
-        isCurrentlyCollapsed
-          ? Array.from(effectiveCollapsedFolders).filter((path) => path !== dirPath)
-          : [...effectiveCollapsedFolders, dirPath],
-      );
+      const updateCollapsedFolders = () =>
+        mode.onCollapsedFoldersChange(
+          isCurrentlyCollapsed
+            ? Array.from(effectiveCollapsedFolders).filter((path) => path !== dirPath)
+            : [...effectiveCollapsedFolders, dirPath],
+        );
+      if (isCurrentlyCollapsed) runManualExpansion(updateCollapsedFolders);
+      else updateCollapsedFolders();
     },
-    [computeItemOffset, effectiveCollapsedFolders, mode],
+    [computeItemOffset, effectiveCollapsedFolders, mode, runManualExpansion],
   );
 
   const handleCollapseFolder = useCallback(
@@ -2434,6 +4285,10 @@ export function SharedDiffView({ files, displayPreferences, mode }: SharedDiffVi
             onDuplicate={onDuplicate}
             onRevert={onRevert}
             onHeaderHeightChange={handleHeaderHeightChange}
+            fileReviews={fileReviews}
+            onToggleReviewed={fileReviews ? handleToggleReviewed : undefined}
+            onExpandFile={onExpandFile ? handleManualExpandFile : undefined}
+            isExpandingFile={expandingFilePaths.has(item.file.path)}
             testID={`diff-file-${item.fileIndex}`}
           />
         );
@@ -2446,6 +4301,11 @@ export function SharedDiffView({ files, displayPreferences, mode }: SharedDiffVi
           codeFontSize={codeFontSize}
           textMetricsStyle={textMetricsStyle}
           reviewActions={reviewActions}
+          lineReview={lineReviewPresentation}
+          navigation={
+            navigationHighlight?.filePath === item.file.path ? navigationHighlight : undefined
+          }
+          onExpandContext={onExpandContext ? handleManualExpandContext : undefined}
           onBodyHeightChange={handleBodyHeightChange}
           testID={`diff-file-${item.fileIndex}-body`}
         />
@@ -2460,8 +4320,14 @@ export function SharedDiffView({ files, displayPreferences, mode }: SharedDiffVi
       handleSelectPath,
       handleToggleExpanded,
       handleToggleFolder,
+      handleToggleReviewed,
+      handleManualExpandContext,
+      handleManualExpandFile,
       layout,
       reviewActions,
+      lineReviewPresentation,
+      navigationHighlight,
+      fileReviews,
       workspaceFileDragScope,
       textMetricsStyle,
       viewMode,
@@ -2478,6 +4344,9 @@ export function SharedDiffView({ files, displayPreferences, mode }: SharedDiffVi
       onDuplicate,
       onRevert,
       selectedPath,
+      onExpandContext,
+      onExpandFile,
+      expandingFilePaths,
     ],
   );
 
@@ -2507,6 +4376,9 @@ export function SharedDiffView({ files, displayPreferences, mode }: SharedDiffVi
       viewMode,
       wrapLines,
       reviewActions,
+      lineReviewPresentation,
+      navigationHighlight,
+      fileReviews,
       workspaceFileDragScope,
     }),
     [
@@ -2515,6 +4387,9 @@ export function SharedDiffView({ files, displayPreferences, mode }: SharedDiffVi
       heightVersion,
       layout,
       reviewActions,
+      lineReviewPresentation,
+      navigationHighlight,
+      fileReviews,
       typographyKey,
       viewMode,
       workspaceFileDragScope,
@@ -2523,7 +4398,11 @@ export function SharedDiffView({ files, displayPreferences, mode }: SharedDiffVi
   );
 
   return (
-    <View style={styles.scrollContainer}>
+    <View
+      ref={diffReviewSurfaceRef}
+      style={styles.diffReviewSurface}
+      dataSet={DIFF_REVIEW_SURFACE_DATASET}
+    >
       <FlatList
         ref={diffListRef}
         data={flatItems}
@@ -2533,19 +4412,63 @@ export function SharedDiffView({ files, displayPreferences, mode }: SharedDiffVi
         stickyHeaderIndices={stickyHeaderIndices}
         extraData={flatExtraData}
         style={styles.scrollView}
-        contentContainerStyle={styles.contentContainer}
+        contentContainerStyle={diffListContentStyle}
         testID="git-diff-scroll"
+        tabIndex={-1}
         onLayout={handleDiffListLayout}
         onScroll={handleDiffListScroll}
         onContentSizeChange={scrollbar.onContentSizeChange}
         scrollEventThrottle={16}
-        showsVerticalScrollIndicator={!scrollbar.enabled}
+        showsVerticalScrollIndicator
         removeClippedSubviews={false}
         initialNumToRender={12}
         maxToRenderPerBatch={12}
         windowSize={10}
       />
       {scrollbar.overlay}
+      {changesSearch.open ? (
+        <View style={styles.changesSearchBar} testID="changes-search-bar">
+          <Text style={styles.changesSearchPrompt}>/</Text>
+          <TextInput
+            ref={searchInputRef}
+            autoCapitalize="none"
+            autoCorrect={false}
+            onChangeText={handleSearchQueryChange}
+            onSubmitEditing={handleSearchSubmit}
+            placeholder={t("workspace.git.diff.search.placeholder")}
+            placeholderTextColor={styles.changesSearchPlaceholder.color}
+            style={styles.changesSearchInput}
+            testID="changes-search-input"
+            value={changesSearch.query}
+          />
+          <Text style={styles.changesSearchStatus} testID="changes-search-status">
+            {getChangesSearchStatusLabel(changesSearch, t)}
+          </Text>
+        </View>
+      ) : null}
+      {lspHover ? (
+        <View
+          pointerEvents="none"
+          style={[
+            styles.changesLspHover,
+            inlineUnistylesStyle({ left: lspHover.clientX + 12, top: lspHover.clientY + 16 }),
+          ]}
+          testID="changes-lsp-hover"
+        >
+          <Text style={styles.changesLspHoverText}>{lspHover.text}</Text>
+        </View>
+      ) : null}
+      {selectedLine && !reviewActions?.editor && !reviewActions?.suggestionEditor ? (
+        <View
+          style={styles.lineReviewShortcutHint}
+          accessibilityLiveRegion="polite"
+          pointerEvents="none"
+        >
+          <Text style={styles.lineReviewShortcutHintText}>
+            {t("workspace.git.diff.lineReviewShortcuts")}
+          </Text>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -2762,6 +4685,16 @@ function useChangesTreeState({
     },
     [setCollapsedFolders, workspaceStateKey],
   );
+  const expandFilePaths = useCallback(
+    (paths: string[]) => {
+      if (!workspaceStateKey) return;
+      setExpandedPaths(workspaceStateKey, paths);
+      if (viewMode !== "tree") return;
+      const nextCollapsedFolders = revealFileAncestorFolders(stableCollapsedFolders, paths);
+      setCollapsedFolders(workspaceStateKey, nextCollapsedFolders);
+    },
+    [setCollapsedFolders, setExpandedPaths, stableCollapsedFolders, viewMode, workspaceStateKey],
+  );
 
   return {
     expandedPaths: changesTabOpen ? EMPTY_PATH_LIST : stableExpandedPaths,
@@ -2769,6 +4702,7 @@ function useChangesTreeState({
     allExpanded,
     toggleViewMode,
     toggleExpandAll,
+    expandFilePaths,
     updateExpandedPaths,
     updateCollapsedFolders,
   };
@@ -2840,6 +4774,81 @@ function useDiffTabNavigation({
   };
 }
 
+function DiffComparisonControls({
+  diffMode,
+  committedDescription,
+  showCompactBaseSelector,
+  serverId,
+  cwd,
+  currentBranchName,
+  baseSelection,
+  onSelectComparisonBase,
+  onSelectUncommitted,
+  onSelectBase,
+}: {
+  diffMode: "uncommitted" | "base";
+  committedDescription?: string;
+  showCompactBaseSelector: boolean;
+  serverId: string;
+  cwd: string;
+  currentBranchName: string | null;
+  baseSelection: ReturnType<typeof useWorkingDiff>["baseSelection"];
+  onSelectComparisonBase: (baseRef: string | null) => Promise<void>;
+  onSelectUncommitted: () => void;
+  onSelectBase: () => void;
+}) {
+  return (
+    <View style={styles.diffComparisonControls}>
+      <DiffModeMenu
+        diffMode={diffMode}
+        committedDescription={committedDescription}
+        onSelectUncommitted={onSelectUncommitted}
+        onSelectBase={onSelectBase}
+      />
+      <ChangesBaseSelectorPlacement
+        visible={showCompactBaseSelector}
+        serverId={serverId}
+        cwd={cwd}
+        currentBranchName={currentBranchName}
+        baseSelection={baseSelection}
+        onSelect={onSelectComparisonBase}
+      />
+    </View>
+  );
+}
+
+function ChangesBaseSelectorPlacement({
+  visible,
+  serverId,
+  cwd,
+  currentBranchName,
+  baseSelection,
+  onSelect,
+}: {
+  visible: boolean;
+  serverId: string;
+  cwd: string;
+  currentBranchName: string | null;
+  baseSelection: ReturnType<typeof useWorkingDiff>["baseSelection"];
+  onSelect: (baseRef: string | null) => Promise<void>;
+}) {
+  if (!visible || !currentBranchName) {
+    return null;
+  }
+  return (
+    <ChangesBaseSelector
+      serverId={serverId}
+      cwd={cwd}
+      currentBranch={currentBranchName}
+      recordedBaseRef={baseSelection.recordedBaseRef}
+      selectedBaseRef={baseSelection.selectedBaseRef}
+      effectiveBaseRef={baseSelection.effectiveBaseRef}
+      supported={baseSelection.supported}
+      onSelect={onSelect}
+    />
+  );
+}
+
 export function GitDiffPane({
   serverId,
   workspaceId,
@@ -2851,7 +4860,7 @@ export function GitDiffPane({
   const { settings: appSettings } = useAppSettings();
   const { t } = useTranslation();
   const isMobile = useIsCompactFormFactor();
-  const canUseSplitLayout = isWeb && !isMobile;
+  const canUseSplitLayout = supportsSplitDiffLayout(isMobile);
   const { preferences: changesPreferences, updatePreferences: updateChangesPreferences } =
     useChangesPreferences();
   const wrapLines = changesPreferences.wrapLines;
@@ -2899,6 +4908,11 @@ export function GitDiffPane({
     openCommit: handleCommitPress,
     onChangesFilePress,
   } = useDiffTabNavigation({ serverId, workspaceId, cwd, isMobile });
+  const workspaceKey = useMemo(
+    () => buildWorkspaceTabPersistenceKey({ serverId, workspaceId: workspaceId ?? cwd }),
+    [cwd, serverId, workspaceId],
+  );
+  const inlineNavigation = useInlineChangesNavigationTarget();
   const refreshSupported = useSessionStore(
     (s) => s.sessions[serverId]?.serverInfo?.features?.checkoutRefresh === true,
   );
@@ -2906,6 +4920,9 @@ export function GitDiffPane({
   // COMPAT(fsEntryDuplicate): added in v0.3.0, remove gate after 2027-02-09.
   const fsEntryDuplicateEnabled = useSessionStore(
     (state) => state.sessions[serverId]?.serverInfo?.features?.fsEntryDuplicate === true,
+  );
+  const fileEditingSupported = useSessionStore(
+    (s) => s.sessions[serverId]?.serverInfo?.features?.workspaceFileEditing === true,
   );
   const runRefresh = useCheckoutGitActionsStore((s) => s.refresh);
   const isRefreshing =
@@ -2928,23 +4945,79 @@ export function GitDiffPane({
     notGit,
     statusErrorMessage,
     baseRef,
+    comparisonBaseRef,
+    baseSelection,
     currentBranchName,
     diffMode,
     selectUncommitted: handleSelectUncommitted,
     selectBase: handleSelectBase,
     files,
+    sourceFiles,
     diffPayloadError,
     diffTooLarge,
     isDiffLoading,
     reviewActions,
-    reviewAttachment,
+    reviewDraftKey,
+    contextExpansion,
+    contextExpansionSupported,
+    fileReviews,
   } = useWorkingDiff({
     serverId,
     workspaceId: workspaceId ?? undefined,
     cwd,
     ignoreWhitespace: changesPreferences.hideWhitespace,
     enabled: enabled !== false,
+    requestedNavigationLine: inlineNavigation.requestedLine,
   });
+  usePublishInlineChangesNavigation({
+    workspaceKey,
+    enabled,
+    changesTabOpen,
+    files: sourceFiles,
+    isLoading: isDiffLoading,
+    contextExpansionSupported,
+    navigate: inlineNavigation.navigate,
+  });
+  const reviewAttachment = useReviewAttachmentSnapshot({
+    key: reviewDraftKey,
+    diffFiles: files,
+    cwd,
+    mode: diffMode,
+    baseRef,
+  });
+  useEffect(() => {
+    const error = reviewActions.suggestionRangeError;
+    if (!error) return;
+    let messageKey:
+      | "review.suggestion.rangeInvalid"
+      | "review.suggestion.rangeHidden"
+      | "review.suggestion.rangeTooLarge" = "review.suggestion.rangeInvalid";
+    if (error === "hidden-lines") {
+      messageKey = "review.suggestion.rangeHidden";
+    } else if (error === "too-large") {
+      messageKey = "review.suggestion.rangeTooLarge";
+    }
+    toast.error(t(messageKey));
+    reviewActions.onClearSuggestionRangeError();
+  }, [reviewActions, reviewActions.suggestionRangeError, t, toast]);
+  const handleExpandContext = useCallback(
+    (filePath: string, region: DiffContextRegion, direction: "up" | "down" | "all") =>
+      contextExpansion.expand(filePath, region, direction).catch((error) => {
+        toast.error(
+          error instanceof Error ? error.message : t("workspace.git.diff.context.failedToExpand"),
+        );
+      }),
+    [contextExpansion, t, toast],
+  );
+  const handleExpandFile = useCallback(
+    (filePath: string) =>
+      contextExpansion.expandFile(filePath).catch((error) => {
+        toast.error(
+          error instanceof Error ? error.message : t("workspace.git.diff.context.failedToExpand"),
+        );
+      }),
+    [contextExpansion, t, toast],
+  );
   usePublishWorkingDiffAttachment({
     serverId,
     workspaceId: workspaceId ?? undefined,
@@ -2994,6 +5067,21 @@ export function GitDiffPane({
     changesTabOpen,
     onViewModeChange: handleViewModeChange,
   });
+  const handleToggleAllFileReviews = useCallback(() => {
+    const allReviewed =
+      fileReviews.reviewableCount > 0 && fileReviews.reviewedCount === fileReviews.reviewableCount;
+    if (allReviewed) {
+      fileReviews.clearAll();
+      return;
+    }
+    fileReviews.markAll();
+    changesTree.updateExpandedPaths([]);
+  }, [changesTree, fileReviews]);
+  const handleExpandUnreviewedFiles = useCallback(() => {
+    const filePaths = files.map((file) => file.path);
+    const unreviewedPaths = expandOnlyUnreviewedFiles(filePaths, fileReviews.reviewedPaths);
+    changesTree.expandFilePaths(unreviewedPaths);
+  }, [changesTree, fileReviews.reviewedPaths, files]);
   const sharedDisplayPreferences = useMemo(
     () => ({
       layout: effectiveLayout,
@@ -3057,6 +5145,30 @@ export function GitDiffPane({
     [client, cwd, t, toast],
   );
   const onRevertPath = useDiscardChangesAction({ serverId, cwd, diffMode });
+  const handleEditLine = useCallback(
+    (line: ReviewableChangedLine) => {
+      const lineStart = line.target.editLineNumber;
+      if (!lineStart) return;
+      onOpenFile?.(line.target.filePath, { lineStart, openMode: "source" });
+    },
+    [onOpenFile],
+  );
+  const handleOpenLspDefinition = useCallback(
+    (location: { path: string; lineStart: number; lineEnd: number }) => {
+      onOpenFile?.(location.path, { ...location, openMode: "source" });
+    },
+    [onOpenFile],
+  );
+  const changesLsp = useChangesLsp({
+    serverId,
+    cwd,
+    active: enabled !== false && !changesTabOpen,
+    loadSource: contextExpansion.loadSource,
+    onOpenDefinition: handleOpenLspDefinition,
+  });
+  const handleToggleChangesLsp = useCallback(() => {
+    changesLsp.setEnabled(!changesLsp.preferenceEnabled);
+  }, [changesLsp]);
   const workingTreeMode = useMemo(
     () => ({
       kind: "working_tree" as const,
@@ -3064,6 +5176,11 @@ export function GitDiffPane({
       expandedPaths: changesTree.expandedPaths,
       collapsedFolders: changesTree.collapsedFolders,
       reviewActions,
+      fileReviews,
+      keyboardEnabled: enabled !== false && !changesTabOpen,
+      focusShortcutEnabled: enabled !== false && !changesTabOpen,
+      ...inlineNavigation.focus,
+      onEditLine: resolveEditLineHandler(onOpenFile, fileEditingSupported, handleEditLine),
       onFilePress: onChangesFilePress,
       workspaceFileDragScope: workspaceId ? { serverId, workspaceId } : undefined,
       onOpenFile,
@@ -3075,18 +5192,29 @@ export function GitDiffPane({
       onDownload: handleDownloadPath,
       onDuplicate: fsEntryDuplicateEnabled ? handleDuplicatePath : undefined,
       onRevert: onRevertPath,
+      onExpandContext: contextExpansionSupported ? handleExpandContext : undefined,
+      onExpandFile: contextExpansionSupported ? handleExpandFile : undefined,
+      expandingFilePaths: contextExpansion.expandingFilePaths,
+      onSearch: contextExpansionSupported ? contextExpansion.search : undefined,
+      lsp: changesLsp,
       onExpandedPathsChange: changesTree.updateExpandedPaths,
       onCollapsedFoldersChange: changesTree.updateCollapsedFolders,
     }),
     [
+      enabled,
+      changesTabOpen,
+      inlineNavigation.focus,
       viewMode,
       changesTree.expandedPaths,
       changesTree.collapsedFolders,
       reviewActions,
+      fileReviews,
+      fileEditingSupported,
       onChangesFilePress,
       serverId,
       workspaceId,
       onOpenFile,
+      handleEditLine,
       onAddToChat,
       handleCopyPath,
       handleCopyRelativePath,
@@ -3096,6 +5224,12 @@ export function GitDiffPane({
       fileManagerTarget,
       fsEntryDuplicateEnabled,
       onRevertPath,
+      contextExpansionSupported,
+      handleExpandContext,
+      handleExpandFile,
+      contextExpansion.expandingFilePaths,
+      contextExpansion.search,
+      changesLsp,
       changesTree.updateExpandedPaths,
       changesTree.updateCollapsedFolders,
     ],
@@ -3127,7 +5261,15 @@ export function GitDiffPane({
       againstBase: (label) => t("workspace.git.diff.emptyAgainstBase", { baseRef: label }),
     },
   );
-
+  const handleSelectComparisonBase = useCallback(
+    (nextBaseRef: string | null) =>
+      applyChangesBaseSelection({
+        baseRef: nextBaseRef,
+        setOverride: baseSelection.setOverride,
+        showCommitted: handleSelectBase,
+      }),
+    [baseSelection.setOverride, handleSelectBase],
+  );
   const bodyContent: ReactElement = (
     <DiffBodyContent
       isStatusLoading={isStatusLoading}
@@ -3158,14 +5300,24 @@ export function GitDiffPane({
     >
       {isGit && (currentBranchName || isMobile) ? (
         <View style={styles.header} testID="changes-header">
-          <BranchSwitcher
-            currentBranchName={currentBranchName}
-            serverId={serverId}
-            workspaceId={workspaceId ?? cwd}
-            workspaceDirectory={cwd}
-            isGitCheckout={isGit}
-            testID="changes-branch-switcher"
-          />
+          <View style={styles.headerSelectors}>
+            <BranchSwitcher
+              currentBranchName={currentBranchName}
+              serverId={serverId}
+              workspaceId={workspaceId ?? cwd}
+              workspaceDirectory={cwd}
+              isGitCheckout={isGit}
+              testID="changes-branch-switcher"
+            />
+            <ChangesBaseSelectorPlacement
+              visible={!isMobile}
+              serverId={serverId}
+              cwd={cwd}
+              currentBranchName={currentBranchName}
+              baseSelection={baseSelection}
+              onSelect={handleSelectComparisonBase}
+            />
+          </View>
           {isMobile ? <GitActionsSplitButton gitActions={gitActions} /> : null}
         </View>
       ) : null}
@@ -3173,9 +5325,15 @@ export function GitDiffPane({
       {isGit ? (
         <View style={styles.diffStatusContainer}>
           <View style={styles.diffStatusInner}>
-            <DiffModeMenu
+            <DiffComparisonControls
               diffMode={diffMode}
               committedDescription={committedDiffDescription}
+              showCompactBaseSelector={isMobile}
+              serverId={serverId}
+              cwd={cwd}
+              currentBranchName={currentBranchName}
+              baseSelection={baseSelection}
+              onSelectComparisonBase={handleSelectComparisonBase}
               onSelectUncommitted={handleSelectUncommitted}
               onSelectBase={handleSelectBase}
             />
@@ -3193,6 +5351,13 @@ export function GitDiffPane({
                   onToggle={handleToggleLayout}
                 />
               ) : null}
+              <FileReviewBulkToggle
+                fileReviews={fileReviews}
+                isMobile={isMobile}
+                visible={files.length > 0}
+                testID="changes-toggle-file-reviews"
+                onToggle={handleToggleAllFileReviews}
+              />
               {files.length > 0 ? (
                 <DiffViewModeToggle
                   viewMode={viewMode}
@@ -3204,9 +5369,12 @@ export function GitDiffPane({
               {files.length > 0 && !changesTabOpen ? (
                 <DiffFilesToolbar
                   allFileDiffsExpanded={changesTree.allExpanded}
+                  canExpandUnreviewed={fileReviews.available}
                   isMobile={isMobile}
+                  expandUnreviewedTestID="changes-expand-unreviewed-files"
                   expandAllToggleStyle={expandAllToggleStyle}
                   onToggleExpandAll={changesTree.toggleExpandAll}
+                  onExpandUnreviewed={handleExpandUnreviewedFiles}
                 />
               ) : null}
               <DiffOptionsMenu
@@ -3217,9 +5385,12 @@ export function GitDiffPane({
                 overflowToggleStyle={overflowToggleStyle}
                 refreshSupported={refreshSupported}
                 wrapLines={wrapLines}
+                lspSupported={changesLsp.supported}
+                lspEnabled={changesLsp.preferenceEnabled}
                 onRefresh={handleRefresh}
                 onToggleHideWhitespace={handleToggleHideWhitespace}
                 onToggleWrapLines={handleToggleWrapLines}
+                onToggleLsp={handleToggleChangesLsp}
               />
             </View>
           </View>
@@ -3236,12 +5407,48 @@ export function GitDiffPane({
 
       <View style={styles.diffContainer}>{bodyContent}</View>
 
-      <CommitsSection serverId={serverId} cwd={cwd} onCommitPress={handleCommitPress} />
+      <CommitsSection
+        serverId={serverId}
+        cwd={cwd}
+        baseRef={comparisonBaseRef}
+        onCommitPress={handleCommitPress}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create((theme) => ({
+  contextControl: {
+    minHeight: theme.lineHeight.diff,
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: theme.spacing[2],
+    backgroundColor: theme.colors.surface2,
+  },
+  contextControlButton: {
+    width: 24,
+    height: DIFF_CONTEXT_CONTROL_HEIGHT,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: theme.borderRadius.base,
+  },
+  contextControlLabelButton: {
+    minHeight: DIFF_CONTEXT_CONTROL_HEIGHT,
+    paddingHorizontal: theme.spacing[2],
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: theme.borderRadius.base,
+  },
+  contextControlButtonText: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
+  },
+  contextControlText: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.xs,
+  },
   container: {
     flex: 1,
     minHeight: 0,
@@ -3256,6 +5463,13 @@ const styles = StyleSheet.create((theme) => ({
     borderBottomWidth: 1,
     borderBottomColor: theme.colors.border,
   },
+  headerSelectors: {
+    minWidth: 0,
+    flexShrink: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
+  },
   diffStatusContainer: {
     height: WORKSPACE_SECONDARY_HEADER_HEIGHT,
     borderBottomWidth: 1,
@@ -3267,6 +5481,13 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     justifyContent: "space-between",
     paddingRight: theme.spacing[3],
+  },
+  diffComparisonControls: {
+    minWidth: 0,
+    flexShrink: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[1],
   },
   diffModeTrigger: {
     flexDirection: "row",
@@ -3373,10 +5594,80 @@ const styles = StyleSheet.create((theme) => ({
   scrollView: {
     flex: 1,
   },
-  scrollContainer: {
+  diffReviewSurface: {
     flex: 1,
     minHeight: 0,
     position: "relative",
+  },
+  changesSearchBar: {
+    position: "absolute",
+    left: theme.spacing[3],
+    right: theme.spacing[3],
+    bottom: theme.spacing[3],
+    zIndex: 20,
+    minHeight: 36,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
+    paddingHorizontal: theme.spacing[3],
+    borderWidth: theme.borderWidth[1],
+    borderColor: theme.colors.border,
+    borderRadius: theme.borderRadius.md,
+    backgroundColor: theme.colors.surface3,
+  },
+  changesSearchPrompt: {
+    color: theme.colors.foreground,
+    fontFamily: theme.fontFamily.mono,
+    fontSize: theme.fontSize.sm,
+  },
+  changesSearchInput: {
+    flex: 1,
+    minWidth: 0,
+    color: theme.colors.foreground,
+    fontFamily: theme.fontFamily.mono,
+    fontSize: theme.fontSize.sm,
+    paddingVertical: theme.spacing[2],
+  },
+  changesSearchPlaceholder: {
+    color: theme.colors.foregroundMuted,
+  },
+  changesSearchStatus: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.xs,
+  },
+  changesLspHover: {
+    position: "absolute",
+    zIndex: 30,
+    maxWidth: 560,
+    maxHeight: 280,
+    paddingHorizontal: theme.spacing[3],
+    paddingVertical: theme.spacing[2],
+    borderWidth: theme.borderWidth[1],
+    borderColor: theme.colors.border,
+    borderRadius: theme.borderRadius.md,
+    backgroundColor: theme.colors.surface3,
+  },
+  changesLspHoverText: {
+    color: theme.colors.foreground,
+    fontFamily: theme.fontFamily.mono,
+    fontSize: theme.fontSize.xs,
+  },
+  lineReviewShortcutHint: {
+    position: "absolute",
+    left: theme.spacing[3],
+    right: theme.spacing[3],
+    bottom: theme.spacing[3],
+    alignItems: "center",
+  },
+  lineReviewShortcutHintText: {
+    color: theme.colors.foreground,
+    backgroundColor: theme.colors.surface3,
+    borderColor: theme.colors.border,
+    borderWidth: theme.borderWidth[1],
+    borderRadius: theme.borderRadius.md,
+    paddingHorizontal: theme.spacing[3],
+    paddingVertical: theme.spacing[2],
+    fontSize: theme.fontSize.xs,
   },
   contentContainer: {
     paddingBottom: theme.spacing[8],
@@ -3463,6 +5754,62 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     gap: theme.spacing[1],
     flexShrink: 0,
+  },
+  fileReviewButton: {
+    width: 24,
+    height: 24,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: theme.borderRadius.base,
+  },
+  fileReviewControl: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[1],
+  },
+  lineReviewButton: {
+    width: 22,
+    minWidth: 22,
+    height: "100%",
+    alignItems: "center",
+    justifyContent: "center",
+    position: "relative",
+  },
+  lineReviewFocusMarker: {
+    position: "absolute",
+    left: 1,
+    width: 3,
+    height: 10,
+    borderRadius: 2,
+    backgroundColor: theme.colors.accent,
+  },
+  lineReviewGutterContent: {
+    width: "100%",
+    flexDirection: "row",
+    alignItems: "stretch",
+  },
+  lineReviewGutterSlot: {
+    width: LINE_REVIEW_GUTTER_WIDTH,
+    minWidth: LINE_REVIEW_GUTTER_WIDTH,
+    alignItems: "stretch",
+    justifyContent: "center",
+  },
+  selectedReviewLine: {
+    borderLeftWidth: 2,
+    borderLeftColor: theme.colors.accent,
+    backgroundColor: theme.colors.surface3,
+  },
+  diffNavigationHighlight: {
+    borderLeftWidth: 2,
+    borderLeftColor: theme.colors.accentBright,
+    backgroundColor: theme.colors.surface3,
+  },
+  fileReviewButtonDisabled: {
+    opacity: 0.45,
+  },
+  fileReviewProgress: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.xs,
   },
   fileIcon: {
     width: WORKSPACE_TREE_ICON_SIZE,
@@ -3584,7 +5931,8 @@ const styles = StyleSheet.create((theme) => ({
     fontFamily: theme.fontFamily.mono,
   },
   lineNumberText: {
-    width: "100%",
+    flex: 1,
+    minWidth: 0,
     textAlign: "right",
     paddingRight: theme.spacing[2],
     color: theme.colors.foregroundMuted,
@@ -3622,6 +5970,9 @@ const styles = StyleSheet.create((theme) => ({
   },
   contextLineContainer: {
     backgroundColor: theme.colors.surface1,
+  },
+  suggestionSelectionLine: {
+    backgroundColor: "rgba(10, 132, 255, 0.22)",
   },
   contextLineText: {
     color: theme.colors.foregroundMuted,

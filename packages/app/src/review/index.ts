@@ -7,6 +7,8 @@ export {
   resetReviewDraftStore,
   useClearReviewDraft,
   useReviewAttachmentSnapshot,
+  useReviewDraftComments,
+  useReviewDraftSuggestions,
   useResolvedDiffMode,
   useSetDiffModeOverride,
   addReviewDraftComment,
@@ -17,6 +19,7 @@ export {
   type ReviewDraftComment,
   type ReviewDraftMode,
   type ReviewDraftSide,
+  type ReviewDraftSuggestion,
 } from "./store";
 
 export {
@@ -33,3 +36,20 @@ export {
   type InlineReviewActions,
   type InlineReviewEditorState,
 } from "./surface";
+
+export {
+  buildFileReviewScopeKey,
+  useFileReviews,
+  type FileReviewActions,
+  type FileReviewRecord,
+  type FileReviewSnapshot,
+  type FileLineReviewProgress,
+} from "./file-review";
+
+export {
+  buildChangedLineFingerprint,
+  buildReviewableChangedFile,
+  buildReviewableChangedFiles,
+  type ReviewableChangedFile,
+  type ReviewableChangedLine,
+} from "./line-review";
