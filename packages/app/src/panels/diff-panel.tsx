@@ -21,6 +21,7 @@ import type { WorkspaceTabTarget } from "@/workspace-tabs/model";
 import { defaultChangesState, changesStateSchema } from "@/panels/changes/state";
 import { usePanelState } from "@/panels/use-panel-state";
 import { RenderProfile } from "@/utils/render-profiler";
+import type { WorkspaceFileOpenOptions } from "@/workspace/file-open";
 
 const ThemedFileDiff = withUnistyles(FileDiff);
 const ThemedGitCommitHorizontal = withUnistyles(GitCommitHorizontal);
@@ -100,8 +101,11 @@ function ChangesPanel() {
   const isTree = target.kind === "changes_tree";
 
   const handleOpenFile = useCallback(
-    (path: string) =>
-      openPreferredTarget({ kind: "file", path }, isTree ? "explorerChanges" : "diffFiles"),
+    (path: string, options: WorkspaceFileOpenOptions = {}) =>
+      openPreferredTarget(
+        { kind: "file", path, ...options },
+        isTree ? "explorerChanges" : "diffFiles",
+      ),
     [isTree, openPreferredTarget],
   );
 

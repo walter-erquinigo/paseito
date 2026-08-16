@@ -415,6 +415,9 @@ describe("checkout git utilities", () => {
         isDeleted: false,
         additions: 1,
         deletions: 0,
+        oldLineCount: 0,
+        newLineCount: 1,
+        contentRevision: "ce013625030ba8dba906f756967f9e9ca394464a",
         hunks: [
           {
             oldStart: 0,
@@ -1556,6 +1559,7 @@ const x = 1;
     const entry = diff.structured?.find((file) => file.path === "tracked-blob.bin");
     expect(entry).toBeTruthy();
     expect(entry?.status).toBe("binary");
+    expect(entry?.contentRevision).toMatch(/^[a-f0-9]{40,64}$/);
     expect(diff.diff).toContain("# tracked-blob.bin: binary diff omitted");
   });
 
@@ -1571,6 +1575,7 @@ const x = 1;
     const entry = diff.structured?.find((file) => file.path === "blob.bin");
     expect(entry).toBeTruthy();
     expect(entry?.status).toBe("binary");
+    expect(entry?.contentRevision).toMatch(/^[a-f0-9]{40,64}$/);
     expect(diff.diff).toContain("# blob.bin: binary diff omitted");
   });
 
@@ -1586,6 +1591,7 @@ const x = 1;
     const entry = diff.structured?.find((file) => file.path === "untracked-large.txt");
     expect(entry).toBeTruthy();
     expect(entry?.status).toBe("too_large");
+    expect(entry?.contentRevision).toMatch(/^[a-f0-9]{40,64}$/);
     expect(diff.diff).toContain("# untracked-large.txt: diff too large omitted");
   });
 
@@ -2354,6 +2360,11 @@ const x = 1;
     await expect(resolveBranchCheckout(repoDir, "feature/shared")).resolves.toEqual({
       kind: "local",
       name: "feature/shared",
+    });
+    await expect(resolveBranchCheckout(repoDir, "origin/feature/shared")).resolves.toEqual({
+      kind: "remote-only",
+      name: "feature/shared",
+      remoteRef: "origin/feature/shared",
     });
     await expect(resolveBranchCheckout(repoDir, "feature/unknown")).resolves.toEqual({
       kind: "not-found",
@@ -3565,7 +3576,8 @@ const x = 1;
     expect(baseDiff.diff).not.toContain("file.txt");
   });
 
-  it("names both refs when a requested base ref does not match the stored one", async () => {
+  it("allows a read-only diff override without changing the stored base", async () => {
+    execFileSync("git", ["branch", "other"], { cwd: repoDir });
     const worktree = await createLegacyWorktreeForTest({
       branchName: "mismatch-feature",
       cwd: repoDir,
@@ -3574,9 +3586,14 @@ const x = 1;
       paseoHome,
     });
 
-    await expect(
-      getCheckoutDiff(worktree.worktreePath, { mode: "base", baseRef: "other" }, { paseoHome }),
-    ).rejects.toThrow("Base ref mismatch: stored refs/heads/main, requested other");
+    const diff = await getCheckoutDiff(
+      worktree.worktreePath,
+      { mode: "base", baseRef: "other" },
+      { paseoHome },
+    );
+    expect(diff.diff).toBe("");
+    const status = await getCheckoutStatus(worktree.worktreePath, { paseoHome });
+    expect(status.baseRef).toBe("main");
   });
 
   it("excludes dirty working tree changes from Paseo worktree base diffs", async () => {
@@ -3746,6 +3763,10 @@ const x = 1;
   });
 
   describe("isPaseoWorktreePath", () => {
+    it("matches Unix .paseito/worktrees/ paths", () => {
+      expect(isPaseoWorktreePath("/home/user/.paseito/worktrees/feature")).toBe(true);
+    });
+
     it("matches Unix .paseo/worktrees/ paths", () => {
       expect(isPaseoWorktreePath("/home/user/.paseo/worktrees/feature")).toBe(true);
     });
