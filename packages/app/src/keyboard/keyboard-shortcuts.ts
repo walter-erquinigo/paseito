@@ -244,6 +244,7 @@ const SHORTCUT_HELP_LABEL_KEYS: Record<string, string> = {
   "toggle-focus": "settings.shortcuts.help.toggleFocusMode",
   "cycle-theme": "settings.shortcuts.help.cycleTheme",
   "focus-message-input": "settings.shortcuts.help.focusMessageInput",
+  "focus-changes": "settings.shortcuts.help.focusChanges",
   "cycle-agent-mode": "settings.shortcuts.help.cycleAgentMode",
   "voice-toggle": "settings.shortcuts.help.toggleVoiceMode",
   "dictation-toggle": "settings.shortcuts.help.startStopDictation",
@@ -1073,6 +1074,17 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
   },
 
   // --- Message input ---
+  {
+    id: "changes-focus-cmd-semicolon-mac",
+    action: "changes.focus",
+    combo: "Cmd+;",
+    when: { mac: true, commandCenter: false },
+    help: {
+      id: "focus-changes",
+      section: "navigation",
+      label: "Focus Changes",
+    },
+  },
   {
     id: "message-input-focus-cmd-l-mac",
     action: "message-input.action",

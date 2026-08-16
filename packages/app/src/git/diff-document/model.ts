@@ -7,7 +7,10 @@ import {
   type SplitDiffDisplayLine,
 } from "@/utils/diff-layout";
 import { compactHighlightTokens } from "@/utils/diff-rendering";
-import { getInlineReviewThreadState, getSplitInlineReviewThreadState } from "@/review/geometry";
+import {
+  getInlineReviewThreadState,
+  getSplitInlineReviewThreadState,
+} from "@/review/inline-review";
 import { advancesFor } from "./text-measurement";
 import type {
   BuildDiffDocumentModelInput,
