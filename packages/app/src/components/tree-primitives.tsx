@@ -1,4 +1,5 @@
-import { View } from "react-native";
+import { useMemo } from "react";
+import { View, type ViewStyle } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { ChevronRight } from "lucide-react-native";
 import { SPACING, type Theme } from "@/styles/theme";
@@ -23,6 +24,13 @@ export const WORKSPACE_FILE_ROW_TRAILING_PADDING = SPACING[4] + 2;
 /** Left padding for a row in either workspace tree. */
 export function treeRowPaddingLeft(depth: number): number {
   return SPACING[3] + depth * TREE_INDENT_PER_LEVEL;
+}
+
+/** Reserved indentation column for trees whose data has no explicit guide state. */
+export function TreeIndentGuides({ depth }: { depth: number }) {
+  const style = useMemo<ViewStyle>(() => ({ width: depth * TREE_INDENT_PER_LEVEL }), [depth]);
+  if (depth <= 0) return null;
+  return <View pointerEvents="none" style={style} />;
 }
 
 const foregroundExtraMutedIconColorMapping = (theme: Theme) => ({
