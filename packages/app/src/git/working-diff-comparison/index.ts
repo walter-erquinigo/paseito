@@ -24,14 +24,20 @@ const useWorkingDiffComparisonStore = create<WorkingDiffComparisonStore>((set) =
 }));
 
 export function useWorkingDiffComparison(
-  input: WorkingDiffCheckoutIdentity & { isDirty: boolean },
+  input: WorkingDiffCheckoutIdentity & { isDirty: boolean; hasCommittedChanges: boolean },
 ): {
   comparison: WorkingDiffComparison;
   selectComparison: (comparison: WorkingDiffComparison) => void;
 } {
-  const { serverId, workspaceId, cwd, isDirty } = input;
+  const { serverId, workspaceId, cwd, isDirty, hasCommittedChanges } = input;
   const comparison = useWorkingDiffComparisonStore((state) =>
-    resolveWorkingDiffComparisonFromState(state, { serverId, workspaceId, cwd, isDirty }),
+    resolveWorkingDiffComparisonFromState(state, {
+      serverId,
+      workspaceId,
+      cwd,
+      isDirty,
+      hasCommittedChanges,
+    }),
   );
   const select = useWorkingDiffComparisonStore((state) => state.select);
   const selectComparison = useCallback(
@@ -52,7 +58,7 @@ export function selectWorkingDiffComparison(
 }
 
 export function resolveWorkingDiffComparison(
-  input: WorkingDiffCheckoutIdentity & { isDirty: boolean },
+  input: WorkingDiffCheckoutIdentity & { isDirty: boolean; hasCommittedChanges: boolean },
 ): WorkingDiffComparison {
   return resolveWorkingDiffComparisonFromState(useWorkingDiffComparisonStore.getState(), input);
 }

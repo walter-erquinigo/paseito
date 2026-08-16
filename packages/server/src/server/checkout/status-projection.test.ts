@@ -3,11 +3,54 @@ import { describe, expect, test } from "vitest";
 import { CheckoutPrStatusSchema } from "@getpaseo/protocol/messages";
 import type { WorkspaceGitRuntimeSnapshot } from "../workspace-git-service.js";
 import {
+  buildCheckoutStatusPayloadFromSnapshot,
   buildCheckoutPrStatusPayloadFromSnapshot,
   normalizeCheckoutPrStatusPayload,
 } from "./status-projection.js";
 
 describe("checkout status projection", () => {
+  test("projects Stack-Parent metadata onto checkout status", () => {
+    const snapshot = {
+      git: {
+        isGit: true,
+        repoRoot: "/repo",
+        mainRepoRoot: null,
+        currentBranch: "feature",
+        isDirty: false,
+        baseRef: "main",
+        aheadBehind: { ahead: 1, behind: 0 },
+        upstreamRef: null,
+        aheadOfOrigin: null,
+        behindOfOrigin: null,
+        hasRemote: true,
+        remoteUrl: "git@example.com:repo.git",
+        isPaseoOwnedWorktree: false,
+        diffStat: null,
+        stackParent: {
+          commitSha: "abc123",
+          state: "missing",
+          declaredRef: "missing-parent",
+        },
+      },
+      forge: {
+        featuresEnabled: false,
+        authState: "unknown",
+        error: null,
+        pullRequest: null,
+      },
+    } as WorkspaceGitRuntimeSnapshot;
+
+    expect(
+      buildCheckoutStatusPayloadFromSnapshot({ cwd: "/repo", requestId: "status", snapshot }),
+    ).toMatchObject({
+      stackParent: {
+        commitSha: "abc123",
+        state: "missing",
+        declaredRef: "missing-parent",
+      },
+    });
+  });
+
   test("includes repository identity fields on the PR status wire payload", () => {
     const payload = normalizeCheckoutPrStatusPayload(
       {

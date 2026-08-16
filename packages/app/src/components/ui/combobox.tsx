@@ -134,6 +134,8 @@ export interface ComboboxProps {
   footer?: ReactNode;
   /** When true, selecting an option does not close the picker (multi-select mode). */
   keepOpenOnSelect?: boolean;
+  /** Reveal the active desktop option without moving focus away from search. */
+  scrollActiveOptionIntoView?: boolean;
   anchorRef: React.RefObject<View | null>;
   children?: ReactNode;
 }
@@ -289,6 +291,7 @@ export function ComboboxItem({
     () => [styles.comboboxItemContent, description && styles.comboboxItemContentInline],
     [description],
   );
+  const dataSet = useMemo(() => ({ comboboxActive: active ? "true" : "false" }), [active]);
 
   return (
     <Pressable
@@ -298,6 +301,7 @@ export function ComboboxItem({
       style={itemPressableStyle}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel ?? label}
+      dataSet={dataSet}
     >
       {leadingContent}
       <View style={itemContentStyle}>
@@ -338,22 +342,68 @@ interface OptionRowProps {
   active: boolean;
   onSelect: (id: string) => void;
   renderOption: RenderOptionFn | undefined;
+  scrollActiveOptionIntoView: boolean;
 }
 
-function OptionRow({ option, selected, active, onSelect, renderOption }: OptionRowProps) {
-  const handlePress = useCallback(() => onSelect(option.id), [onSelect, option.id]);
-  if (renderOption) {
-    return <View>{renderOption({ option, selected, active, onPress: handlePress })}</View>;
+function revealWebComboboxOption(row: HTMLElement): void {
+  let viewport = row.parentElement;
+  while (viewport) {
+    const overflowY = getComputedStyle(viewport).overflowY;
+    if (
+      (overflowY === "auto" || overflowY === "scroll") &&
+      viewport.scrollHeight > viewport.clientHeight
+    ) {
+      const rowBounds = row.getBoundingClientRect();
+      const viewportBounds = viewport.getBoundingClientRect();
+      if (rowBounds.top < viewportBounds.top) {
+        viewport.scrollTop -= viewportBounds.top - rowBounds.top;
+      } else if (rowBounds.bottom > viewportBounds.bottom) {
+        viewport.scrollTop += rowBounds.bottom - viewportBounds.bottom;
+      }
+      return;
+    }
+    viewport = viewport.parentElement;
   }
+}
+
+function OptionRow({
+  option,
+  selected,
+  active,
+  onSelect,
+  renderOption,
+  scrollActiveOptionIntoView,
+}: OptionRowProps) {
+  const rowRef = useRef<View>(null);
+  const handlePress = useCallback(() => onSelect(option.id), [onSelect, option.id]);
+
+  useEffect(() => {
+    if (!IS_WEB || !active || !scrollActiveOptionIntoView) return;
+    const row = rowRef.current as unknown as HTMLElement | null;
+    if (!row) return;
+    const frame = requestAnimationFrame(() => revealWebComboboxOption(row));
+    const postLayoutTimer = setTimeout(() => revealWebComboboxOption(row), 100);
+    return () => {
+      cancelAnimationFrame(frame);
+      clearTimeout(postLayoutTimer);
+    };
+  }, [active, option.id, scrollActiveOptionIntoView]);
+
   return (
-    <ComboboxItem
-      label={option.label}
-      description={option.description}
-      kind={option.kind}
-      selected={selected}
-      active={active}
-      onPress={handlePress}
-    />
+    <View ref={rowRef} collapsable={false}>
+      {renderOption ? (
+        renderOption({ option, selected, active, onPress: handlePress })
+      ) : (
+        <ComboboxItem
+          label={option.label}
+          description={option.description}
+          kind={option.kind}
+          selected={selected}
+          active={active}
+          onPress={handlePress}
+        />
+      )}
+    </View>
   );
 }
 
@@ -364,6 +414,7 @@ interface OptionsListProps {
   emptyText: string;
   onSelect: (id: string) => void;
   renderOption: RenderOptionFn | undefined;
+  scrollActiveOptionIntoView?: boolean;
 }
 
 function OptionsList({
@@ -373,6 +424,7 @@ function OptionsList({
   emptyText,
   onSelect,
   renderOption,
+  scrollActiveOptionIntoView,
 }: OptionsListProps): ReactElement {
   if (options.length === 0) {
     return <ComboboxEmpty>{emptyText}</ComboboxEmpty>;
@@ -387,6 +439,7 @@ function OptionsList({
           active={index === activeIndex}
           onSelect={onSelect}
           renderOption={renderOption}
+          scrollActiveOptionIntoView={Boolean(scrollActiveOptionIntoView)}
         />
       ))}
     </>
@@ -1069,6 +1122,7 @@ interface DesktopBodyProps {
   emptyText: string;
   handleSelect: (id: string) => void;
   renderOption: RenderOptionFn | undefined;
+  scrollActiveOptionIntoView: boolean;
   hasChildren: boolean;
   childrenScrollEnabled: boolean;
   children: ReactNode;
@@ -1122,6 +1176,7 @@ function DesktopComboboxOptionsBody(props: {
   emptyText: string;
   handleSelect: (id: string) => void;
   renderOption: RenderOptionFn | undefined;
+  scrollActiveOptionIntoView: boolean;
 }): ReactElement {
   const list = (
     <OptionsList
@@ -1131,6 +1186,7 @@ function DesktopComboboxOptionsBody(props: {
       emptyText={props.emptyText}
       onSelect={props.handleSelect}
       renderOption={props.renderOption}
+      scrollActiveOptionIntoView={props.scrollActiveOptionIntoView}
     />
   );
 
@@ -1247,6 +1303,7 @@ function DesktopComboboxBody(props: DesktopBodyProps): ReactElement {
               emptyText={props.emptyText}
               handleSelect={props.handleSelect}
               renderOption={props.renderOption}
+              scrollActiveOptionIntoView={props.scrollActiveOptionIntoView}
             />
           )}
           {props.footer ? <View style={styles.footer}>{props.footer}</View> : null}
@@ -1302,6 +1359,7 @@ export function Combobox({
   stickyHeader,
   footer,
   keepOpenOnSelect = false,
+  scrollActiveOptionIntoView,
   anchorRef,
   children,
 }: ComboboxProps): ReactElement | null {
@@ -1638,6 +1696,7 @@ export function Combobox({
       emptyText={resolvedEmptyText}
       handleSelect={handleSelect}
       renderOption={renderOption}
+      scrollActiveOptionIntoView={Boolean(scrollActiveOptionIntoView)}
       hasChildren={hasChildren}
       childrenScrollEnabled={desktopChildrenScrollEnabled}
     >

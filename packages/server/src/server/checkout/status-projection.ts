@@ -68,6 +68,7 @@ export function buildCheckoutStatusPayloadFromSnapshot({
       hasRemote: snapshot.git.hasRemote,
       remoteUrl: snapshot.git.remoteUrl,
       isPaseoOwnedWorktree: true,
+      stackParent: snapshot.git.stackParent ?? null,
       error: null,
       requestId,
     };
@@ -88,6 +89,7 @@ export function buildCheckoutStatusPayloadFromSnapshot({
     hasRemote: snapshot.git.hasRemote,
     remoteUrl: snapshot.git.remoteUrl,
     isPaseoOwnedWorktree: false,
+    stackParent: snapshot.git.stackParent ?? null,
     error: null,
     requestId,
   };

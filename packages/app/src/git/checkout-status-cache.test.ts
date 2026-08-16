@@ -125,8 +125,22 @@ describe("fetchCheckoutStatus", () => {
 
     await fetchCheckoutStatus({ client, serverId, cwd });
 
-    expect(resolveWorkingDiffComparison({ serverId, cwd, isDirty: false })).toBe("base");
-    expect(resolveWorkingDiffComparison({ serverId, cwd, isDirty: true })).toBe("uncommitted");
+    expect(
+      resolveWorkingDiffComparison({
+        serverId,
+        cwd,
+        isDirty: false,
+        hasCommittedChanges: false,
+      }),
+    ).toBe("base");
+    expect(
+      resolveWorkingDiffComparison({
+        serverId,
+        cwd,
+        isDirty: true,
+        hasCommittedChanges: false,
+      }),
+    ).toBe("uncommitted");
   });
 });
 
@@ -250,7 +264,14 @@ describe("applyCheckoutStatusUpdateFromEvent", () => {
       message: checkoutStatusUpdate(checkoutStatus({ isDirty: true })),
     });
 
-    expect(resolveWorkingDiffComparison({ serverId, cwd, isDirty: true })).toBe("uncommitted");
+    expect(
+      resolveWorkingDiffComparison({
+        serverId,
+        cwd,
+        isDirty: true,
+        hasCommittedChanges: false,
+      }),
+    ).toBe("uncommitted");
   });
 
   it("keeps a manual working-diff comparison while the pushed dirty state still matches", () => {
@@ -263,7 +284,14 @@ describe("applyCheckoutStatusUpdateFromEvent", () => {
       message: checkoutStatusUpdate(checkoutStatus({ isDirty: true })),
     });
 
-    expect(resolveWorkingDiffComparison({ serverId, cwd, isDirty: true })).toBe("base");
+    expect(
+      resolveWorkingDiffComparison({
+        serverId,
+        cwd,
+        isDirty: true,
+        hasCommittedChanges: false,
+      }),
+    ).toBe("base");
   });
 
   it("invalidates PR detail queries when the prStatus changes, ignoring the volatile requestId", () => {

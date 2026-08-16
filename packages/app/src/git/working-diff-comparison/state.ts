@@ -52,7 +52,7 @@ export function selectWorkingDiffComparisonInState(
 
 export function resolveWorkingDiffComparisonFromState(
   state: WorkingDiffComparisonState,
-  input: WorkingDiffCheckoutIdentity & { isDirty: boolean },
+  input: WorkingDiffCheckoutIdentity & { isDirty: boolean; hasCommittedChanges: boolean },
 ): WorkingDiffComparison {
   const override = state.overrides[workingDiffComparisonKey(input)];
   // Status can render before boundary expiry runs, so resolution must also mask a stale
@@ -60,6 +60,7 @@ export function resolveWorkingDiffComparisonFromState(
   if (override?.isDirtyAtSelection === input.isDirty) {
     return override.comparison;
   }
+  if (input.hasCommittedChanges) return "base";
   return input.isDirty ? "uncommitted" : "base";
 }
 

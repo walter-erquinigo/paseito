@@ -375,7 +375,7 @@ test "$(jq -r .source.releaseTag "$extract/paseito-daemon/manifest.json")" = "$r
 daemon_version="$(jq -r .daemonVersion "$extract/paseito-daemon/manifest.json")"
 test -n "$daemon_version"
 test "$(jq -r .feature "$extract/paseito-daemon/manifest.json")" = changesBaseSelector
-test "$(jq -r '.features // [.feature] | contains(["changesContextExpansion", "reviewSuggestionsV1", "fileReviewV1", "workspaceLsp", "workspaceLspClangd", "workspaceFileSearch", "checkoutDiffSearch", "checkoutCommitAmend"])' "$extract/paseito-daemon/manifest.json")" = true
+test "$(jq -r '.features // [.feature] | contains(["changesStackParentBase", "changesContextExpansion", "reviewSuggestionsV1", "fileReviewV1", "workspaceLsp", "workspaceLspClangd", "workspaceFileSearch", "checkoutDiffSearch", "checkoutCommitAmend"])' "$extract/paseito-daemon/manifest.json")" = true
 test -x "$extract/paseito-daemon/$entry"
 verify_runtime "$extract/paseito-daemon" "$expected_runtime_integrity"
 if test -e "$release"; then
@@ -383,7 +383,7 @@ if test -e "$release"; then
   test "$(jq -r .version "$release/manifest.json")" = "$version"
   test "$(jq -r .daemonVersion "$release/manifest.json")" = "$daemon_version"
   test "$(jq -r .feature "$release/manifest.json")" = changesBaseSelector
-  test "$(jq -r '.features // [.feature] | contains(["changesContextExpansion", "reviewSuggestionsV1", "fileReviewV1", "workspaceLsp", "workspaceLspClangd", "workspaceFileSearch", "checkoutDiffSearch", "checkoutCommitAmend"])' "$release/manifest.json")" = true
+  test "$(jq -r '.features // [.feature] | contains(["changesStackParentBase", "changesContextExpansion", "reviewSuggestionsV1", "fileReviewV1", "workspaceLsp", "workspaceLspClangd", "workspaceFileSearch", "checkoutDiffSearch", "checkoutCommitAmend"])' "$release/manifest.json")" = true
   test -x "$release/$entry"
   verify_runtime "$release" "$expected_runtime_integrity"
 else
