@@ -831,6 +831,7 @@ function PrimaryAction({
   if (kind === "send") return <SendButtonTooltip {...sendButtonProps} />;
   return null;
 }
+
 interface ToggleRealtimeVoiceContext {
   voice:
     | {
@@ -937,6 +938,7 @@ function sendMessageImpl(ctx: SendMessageContext): void {
     attachments: ctx.attachments,
     cwd: ctx.cwd,
     forceSend: ctx.isAgentRunning || undefined,
+    activeTurnBehavior: ctx.isAgentRunning ? "steer" : undefined,
   });
   // When the host preserves and locks the composer (e.g. new-workspace creation),
   // the text stays put — collapsing the height would clip it. Keep it grown.

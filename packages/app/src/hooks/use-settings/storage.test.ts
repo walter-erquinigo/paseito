@@ -10,6 +10,7 @@ import {
   DEFAULT_UI_BASE_FONT_SIZE,
   defaultUiBaseFontSize,
   defaultContentFontSize,
+  QUEUE_DEFAULT_MIGRATION_KEY,
   loadAppSettingsFromStorage,
   loadSettingsFromStorage,
   parseClampedFontSize,
@@ -42,43 +43,29 @@ function makeDeps(
 }
 
 describe("loadAppSettingsFromStorage", () => {
-  it("preserves a persisted steer send behavior", async () => {
-    const deps = makeDeps({
-      storage: createInMemoryKeyValueStorage({
-        "@paseo:app-settings": JSON.stringify({ sendBehavior: "steer" }),
-      }),
+  it("moves the legacy interrupt default to queue exactly once", async () => {
+    const storage = createInMemoryKeyValueStorage({
+      [APP_SETTINGS_KEY]: JSON.stringify({ sendBehavior: "interrupt" }),
     });
+    const deps = makeDeps({ storage });
+
+    const migrated = await loadAppSettingsFromStorage(deps);
+    expect(migrated.sendBehavior).toBe("queue");
+    expect(storage.entries.get(QUEUE_DEFAULT_MIGRATION_KEY)).toBe("1");
+
+    storage.entries.set(APP_SETTINGS_KEY, JSON.stringify({ sendBehavior: "steer" }));
     expect((await loadAppSettingsFromStorage(deps)).sendBehavior).toBe("steer");
   });
-  it("migrates a stored interrupt to steer and persists it", async () => {
+
+  it("preserves a stored steer choice after the migration marker exists", async () => {
     const deps = makeDeps({
       storage: createInMemoryKeyValueStorage({
-        [APP_SETTINGS_KEY]: JSON.stringify({ sendBehavior: "interrupt" }),
+        [APP_SETTINGS_KEY]: JSON.stringify({ sendBehavior: "steer" }),
+        [QUEUE_DEFAULT_MIGRATION_KEY]: "1",
       }),
     });
 
-    const result = await loadAppSettingsFromStorage(deps);
-
-    expect(result.sendBehavior).toBe("steer");
-    expect(JSON.parse(deps.storage.entries.get(APP_SETTINGS_KEY) ?? "{}").sendBehavior).toBe(
-      "steer",
-    );
-  });
-
-  it("keeps an interrupt the user picked after the migration ran", async () => {
-    const deps = makeDeps({
-      storage: createInMemoryKeyValueStorage({
-        [APP_SETTINGS_KEY]: JSON.stringify({ sendBehavior: "interrupt" }),
-      }),
-    });
-    await loadAppSettingsFromStorage(deps);
-    await saveAppSettings({
-      queryClient: new QueryClient(),
-      updates: { sendBehavior: "interrupt" },
-      deps,
-    });
-
-    expect((await loadAppSettingsFromStorage(deps)).sendBehavior).toBe("interrupt");
+    expect((await loadAppSettingsFromStorage(deps)).sendBehavior).toBe("steer");
   });
 
   it("defaults theme to auto when storage is empty", async () => {

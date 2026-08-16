@@ -28,8 +28,8 @@ import { migrateAppSettings } from "./migrations";
 
 export { APP_SETTINGS_KEY } from "./keys";
 export const APP_SETTINGS_QUERY_KEY = ["app-settings"];
-
 export type SendBehavior = ActiveTurnBehavior | "queue";
+export const QUEUE_DEFAULT_MIGRATION_KEY = "@paseito:queue-default-migration-v1";
 export type ReleaseChannel = "stable" | "beta";
 export type ServiceUrlBehavior = "ask" | "in-app" | "external";
 export type WorkspaceTitleSource = "title" | "branch";
@@ -162,7 +162,7 @@ export const DEFAULT_CLIENT_SETTINGS: AppSettings = {
   theme: DEFAULT_THEME_PREFERENCE,
   pluginThemeId: null,
   language: "system",
-  sendBehavior: "steer",
+  sendBehavior: "queue",
   serviceUrlBehavior: "ask",
   terminalScrollbackLines: DEFAULT_TERMINAL_SCROLLBACK_LINES,
   useLegacyTerminalRenderer: false,
@@ -226,10 +226,21 @@ export async function saveAppSettings(input: {
 export async function loadAppSettingsFromStorage(deps: SettingsDeps): Promise<AppSettings> {
   try {
     const read = await readAppSettings(deps);
-    if (read.needsWrite) {
-      await deps.storage.setItem(APP_SETTINGS_KEY, JSON.stringify(read.settings));
+    const queueDefaultMigrationComplete =
+      (await deps.storage.getItem(QUEUE_DEFAULT_MIGRATION_KEY)) === "1";
+    const stored = await readValidatedJson(deps.storage, APP_SETTINGS_KEY, StoredAppSettingsSchema);
+    const settings = await migrateAppSettings(read.settings, deps.storage);
+    const next =
+      !queueDefaultMigrationComplete && stored?.sendBehavior === "interrupt"
+        ? { ...settings, sendBehavior: "queue" as const }
+        : settings;
+    if (read.needsWrite || next !== settings) {
+      await deps.storage.setItem(APP_SETTINGS_KEY, JSON.stringify(next));
     }
-    return await migrateAppSettings(read.settings, deps.storage);
+    if (!queueDefaultMigrationComplete) {
+      await deps.storage.setItem(QUEUE_DEFAULT_MIGRATION_KEY, "1");
+    }
+    return next;
   } catch (error) {
     console.error("[AppSettings] Failed to load settings:", error);
     throw error;
@@ -351,6 +362,11 @@ function pickBooleanAppSettings(stored: StoredAppSettings): Partial<AppSettings>
   return result;
 }
 
+function parseSendBehavior(value: unknown): SendBehavior | null {
+  if (value === "interrupt" || value === "steer" || value === "queue") return value;
+  return null;
+}
+
 /**
  * The settings whose stored value only has to be a member of a fixed set. Grouped like the
  * boolean settings are: the numeric and font settings need real parsing and clamping, these
@@ -360,13 +376,6 @@ function pickEnumAppSettings(stored: StoredAppSettings): Partial<AppSettings> {
   const result: Partial<AppSettings> = {};
   if (typeof stored.theme === "string" && VALID_THEMES.has(stored.theme)) {
     result.theme = stored.theme;
-  }
-  if (
-    stored.sendBehavior === "interrupt" ||
-    stored.sendBehavior === "steer" ||
-    stored.sendBehavior === "queue"
-  ) {
-    result.sendBehavior = stored.sendBehavior;
   }
   if (
     typeof stored.serviceUrlBehavior === "string" &&
@@ -397,6 +406,10 @@ function pickAppSettings(stored: StoredAppSettings): Partial<AppSettings> {
   Object.assign(result, pickEnumAppSettings(stored));
   if (typeof stored.pluginThemeId === "string") {
     result.pluginThemeId = stored.pluginThemeId;
+  }
+  const sendBehavior = parseSendBehavior(stored.sendBehavior);
+  if (sendBehavior !== null) {
+    result.sendBehavior = sendBehavior;
   }
   if (stored.sidebarRowItems !== undefined) {
     result.sidebarRowItems = parseSidebarRowItems(stored.sidebarRowItems);
