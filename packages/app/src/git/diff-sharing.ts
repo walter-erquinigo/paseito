@@ -49,17 +49,7 @@ export function shareCommitFileDiff(
 
 function equalFile(left: ParsedDiffFile, right: ParsedDiffFile): boolean {
   if (left === right) return true;
-  if (
-    left.path !== right.path ||
-    left.oldPath !== right.oldPath ||
-    left.status !== right.status ||
-    left.isNew !== right.isNew ||
-    left.isDeleted !== right.isDeleted ||
-    left.additions !== right.additions ||
-    left.deletions !== right.deletions ||
-    left.hunks.length !== right.hunks.length
-  )
-    return false;
+  if (!equalFileMetadata(left, right) || left.hunks.length !== right.hunks.length) return false;
   for (let h = 0; h < left.hunks.length; h++) {
     const a = left.hunks[h]!;
     const b = right.hunks[h]!;
@@ -75,6 +65,21 @@ function equalFile(left: ParsedDiffFile, right: ParsedDiffFile): boolean {
     if (!equalLines(a.lines, b.lines)) return false;
   }
   return true;
+}
+
+function equalFileMetadata(left: ParsedDiffFile, right: ParsedDiffFile): boolean {
+  return (
+    left.path === right.path &&
+    left.oldPath === right.oldPath &&
+    left.status === right.status &&
+    left.isNew === right.isNew &&
+    left.isDeleted === right.isDeleted &&
+    left.additions === right.additions &&
+    left.deletions === right.deletions &&
+    left.oldLineCount === right.oldLineCount &&
+    left.newLineCount === right.newLineCount &&
+    left.revision === right.revision
+  );
 }
 
 function equalLines(

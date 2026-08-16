@@ -53,6 +53,15 @@ const fileChanges = {
   deletions: (value) => {
     value.deletions = 2;
   },
+  oldLineCount: (value) => {
+    value.oldLineCount = 2;
+  },
+  newLineCount: (value) => {
+    value.newLineCount = 2;
+  },
+  revision: (value) => {
+    value.revision = "revision";
+  },
   hunks: (value) => {
     value.hunks = [];
   },

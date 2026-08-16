@@ -1,7 +1,12 @@
 import { memo, useCallback } from "react";
+import { Text, View } from "react-native";
+import { StyleSheet } from "react-native-unistyles";
+import { ListChevronsUpDown } from "lucide-react-native";
+import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { buildDiffContextRegions } from "@/git/diff-context-expansion";
 import { FileHeader } from "@/git/file-header";
-import type { DiffFileSection } from "./types";
-import type { DiffDocumentProps } from "./types";
+import type { DiffDocumentProps, DiffFileSection } from "./types";
 
 interface DocumentFileHeaderProps {
   file: DiffFileSection;
@@ -11,6 +16,7 @@ interface DocumentFileHeaderProps {
   onSelectPath: (path: string) => void;
   canvasRendered?: boolean;
   onActiveChange?: (active: boolean) => void;
+  onFocusDocument?: () => void;
 }
 
 export const DocumentFileHeader = memo(function DocumentFileHeader({
@@ -21,41 +27,117 @@ export const DocumentFileHeader = memo(function DocumentFileHeader({
   onSelectPath,
   canvasRendered = false,
   onActiveChange,
+  onFocusDocument,
 }: DocumentFileHeaderProps) {
+  if (mode.kind === "commit") {
+    return (
+      <FileHeader
+        file={file.file}
+        bodyVisible={!file.isCollapsed}
+        isSelected={selectedPath === file.path}
+        interactive={false}
+        onActivate={onToggleFile}
+        onSelect={onSelectPath}
+        testID={`diff-file-${file.fileIndex}`}
+        canvasRendered={canvasRendered}
+        onActiveChange={onActiveChange}
+      />
+    );
+  }
+  return (
+    <WorkingDocumentFileHeader
+      file={file}
+      selectedPath={selectedPath}
+      mode={mode}
+      onToggleFile={onToggleFile}
+      onSelectPath={onSelectPath}
+      canvasRendered={canvasRendered}
+      onActiveChange={onActiveChange}
+      onFocusDocument={onFocusDocument}
+    />
+  );
+}, documentFileHeaderPropsEqual);
+
+function WorkingDocumentFileHeader({
+  file,
+  selectedPath,
+  mode,
+  onToggleFile,
+  onSelectPath,
+  canvasRendered = false,
+  onActiveChange,
+  onFocusDocument,
+}: DocumentFileHeaderProps & { mode: Extract<DiffDocumentProps["mode"], { kind: "working" }> }) {
   const activate = useCallback(
     (path: string) => {
-      if (mode.kind !== "working") return;
       mode.onFilePress?.(path);
       onToggleFile(path);
     },
     [mode, onToggleFile],
   );
-  const working = mode.kind === "working" ? mode : null;
+  const onExpandFile = mode.onExpandFile;
+  const expandFile = useCallback(async () => {
+    await onExpandFile?.(file.path);
+    onFocusDocument?.();
+  }, [file.path, onExpandFile, onFocusDocument]);
   return (
-    <FileHeader
-      file={file.file}
-      bodyVisible={!file.isCollapsed}
-      isSelected={selectedPath === file.path}
-      interactive={mode.kind === "working"}
-      workspaceFileDragScope={working?.workspaceFileDragScope}
-      onActivate={activate}
-      onSelect={onSelectPath}
-      onOpenFile={working?.onOpenFile}
-      onOpenToSide={working?.onOpenToSide}
-      onAddToChat={working?.onAddToChat}
-      onCopyPath={working?.onCopyPath}
-      onCopyRelativePath={working?.onCopyRelativePath}
-      onReveal={working?.onReveal}
-      revealTargetName={working?.revealTargetName}
-      onDownload={working?.onDownload}
-      onDuplicate={working?.onDuplicate}
-      onRevert={working?.onRevert}
-      testID={`diff-file-${file.fileIndex}`}
-      canvasRendered={canvasRendered}
-      onActiveChange={onActiveChange}
-    />
+    <View style={styles.root}>
+      <FileHeader
+        file={file.file}
+        bodyVisible={!file.isCollapsed}
+        isSelected={selectedPath === file.path}
+        interactive
+        workspaceFileDragScope={mode.workspaceFileDragScope}
+        onActivate={activate}
+        onSelect={onSelectPath}
+        onOpenFile={mode.onOpenFile}
+        onOpenToSide={mode.onOpenToSide}
+        onAddToChat={mode.onAddToChat}
+        onCopyPath={mode.onCopyPath}
+        onCopyRelativePath={mode.onCopyRelativePath}
+        onReveal={mode.onReveal}
+        revealTargetName={mode.revealTargetName}
+        onDownload={mode.onDownload}
+        onDuplicate={mode.onDuplicate}
+        onRevert={mode.onRevert}
+        testID={`diff-file-${file.fileIndex}`}
+        canvasRendered={canvasRendered}
+        onActiveChange={onActiveChange}
+      />
+      {onExpandFile && buildDiffContextRegions(file.file).length > 0 ? (
+        <Tooltip delayDuration={300} enabledOnDesktop enabledOnMobile={false}>
+          <TooltipTrigger asChild>
+            <Button
+              accessibilityLabel={`Show entire ${file.path} file`}
+              leftIcon={ListChevronsUpDown}
+              onPress={expandFile}
+              size="xs"
+              style={styles.expandFileControl}
+              testID={`diff-file-${file.fileIndex}-expand-file`}
+              variant="ghost"
+            />
+          </TooltipTrigger>
+          <TooltipContent side="bottom">
+            <Text style={styles.tooltipText}>Show entire file</Text>
+          </TooltipContent>
+        </Tooltip>
+      ) : null}
+    </View>
   );
-}, documentFileHeaderPropsEqual);
+}
+
+const styles = StyleSheet.create((theme) => ({
+  root: { position: "relative" },
+  expandFileControl: {
+    position: "absolute",
+    right: 8,
+    top: 1,
+    width: 28,
+    paddingHorizontal: 0,
+    zIndex: 8,
+  },
+  tooltipText: { color: theme.colors.foreground, fontSize: theme.fontSize.sm },
+}));
 
 function documentFileHeaderPropsEqual(
   previous: DocumentFileHeaderProps,
@@ -75,7 +157,9 @@ function documentFileHeaderPropsEqual(
     previous.mode.revealTargetName === next.mode.revealTargetName &&
     previous.mode.onDownload === next.mode.onDownload &&
     previous.mode.onDuplicate === next.mode.onDuplicate &&
-    previous.mode.onRevert === next.mode.onRevert
+    previous.mode.onRevert === next.mode.onRevert &&
+    previous.mode.onExpandFile === next.mode.onExpandFile &&
+    previous.onFocusDocument === next.onFocusDocument
   );
 }
 

@@ -8,6 +8,8 @@ import {
 } from "@/utils/diff-layout";
 import { compactHighlightTokens } from "@/utils/diff-rendering";
 import { getInlineReviewThreadState, getSplitInlineReviewThreadState } from "@/review/geometry";
+import { parseDiffContextMarker } from "@/git/diff-context-expansion";
+import { DIFF_CONTEXT_CONTROL_HEIGHT } from "./context-control-model";
 import { advancesFor } from "./text-measurement";
 import type {
   BuildDiffDocumentModelInput,
@@ -271,10 +273,7 @@ function appendNewFileRows(candidate: {
         );
       }
     }
-    const textHeight = Math.max(
-      candidate.input.typography.lineHeight,
-      ...cells.map((cell) => (cell?.fragments.length ?? 1) * candidate.input.typography.lineHeight),
-    );
+    const textHeight = textHeightForCells(cells, candidate.input.typography.lineHeight);
     const height = textHeight + line.reviewHeight;
     candidate.rows.push({
       kind: "line",
@@ -436,9 +435,16 @@ function geometryLines(
     return {
       cells,
       reviewHeight,
-      height: input.typography.lineHeight + reviewHeight,
+      height: textHeightForCells(cells, input.typography.lineHeight) + reviewHeight,
     };
   });
+}
+
+function textHeightForCells(cells: DiffLineRow["cells"], lineHeight: number): number {
+  if (cells.some((cell) => cell && parseDiffContextMarker(cell.content) !== null)) {
+    return Math.max(lineHeight, DIFF_CONTEXT_CONTROL_HEIGHT);
+  }
+  return Math.max(lineHeight, ...cells.map((cell) => (cell?.fragments.length ?? 1) * lineHeight));
 }
 
 function intersectsMaterializationWindow(
@@ -524,8 +530,9 @@ function measureCell(input: {
   availableWidth: number;
   input: BuildDiffDocumentModelInput;
 }): DiffCell {
+  const displayContent = parseDiffContextMarker(input.source.content) ? "" : input.source.content;
   const fragments = measureFragments({
-    text: input.source.content,
+    text: displayContent,
     availableWidth: input.availableWidth,
     wrapLines: input.input.wrapLines,
     lineHeight: input.input.typography.lineHeight,
