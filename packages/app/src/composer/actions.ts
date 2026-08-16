@@ -12,7 +12,12 @@ import {
   splitComposerAttachmentsForSubmit,
   type ComposerAttachmentSubmitFormat,
 } from "@/composer/attachments/submit";
-import { createUserMessage, generateMessageId, type UserMessageItem } from "@/types/stream";
+import {
+  createUserMessage,
+  generateMessageId,
+  type UserMessageDeliveryHint,
+  type UserMessageItem,
+} from "@/types/stream";
 import type { MessageSubmissionRejectionOutcome } from "@/composer/submission/model";
 import type { PickedImageAttachmentInput } from "@/hooks/image-attachment-picker";
 import { i18n } from "@/i18n/i18next";
@@ -48,6 +53,7 @@ export interface ComposerSendClient {
     text: string,
     options: {
       messageId: string;
+      activeRunBehavior?: "replace" | "steer";
       images: Array<{ data: string; mimeType: string }>;
       attachments: ReturnType<typeof splitComposerAttachmentsForSubmit>["attachments"];
     },
@@ -176,6 +182,8 @@ export interface DispatchComposerAgentMessageInput {
     images: AttachmentMetadata[],
   ) => Promise<Array<{ data: string; mimeType: string }> | undefined>;
   submission: MessageSubmissionWriter;
+  activeRunBehavior?: "replace" | "steer";
+  deliveryHint?: UserMessageDeliveryHint;
 }
 
 export async function dispatchComposerAgentMessage(
@@ -191,12 +199,14 @@ export async function dispatchComposerAgentMessage(
     timestamp: new Date(),
     images: wirePayload.images,
     attachments: wirePayload.attachments,
+    deliveryHint: input.deliveryHint,
   });
   input.submission.begin(input.agentId, userMessage);
   try {
     const imagesData = await input.encodeImages(wirePayload.images);
     await input.client.sendAgentMessage(input.agentId, input.text, {
       messageId: clientMessageId,
+      ...(input.activeRunBehavior ? { activeRunBehavior: input.activeRunBehavior } : {}),
       images: imagesData ?? [],
       attachments: wirePayload.attachments,
     });
@@ -283,7 +293,9 @@ export type SendQueuedComposerMessageNowResult =
 export async function sendQueuedComposerMessageNow(
   input: SendQueuedComposerMessageNowInput,
 ): Promise<SendQueuedComposerMessageNowResult> {
-  const item = input.queue.read(input.agentId).find((q) => q.id === input.messageId);
+  const originalQueue = input.queue.read(input.agentId);
+  const originalIndex = originalQueue.findIndex((q) => q.id === input.messageId);
+  const item = originalQueue[originalIndex];
   if (!item) return { status: "missing" };
   input.queue.write((prev) => {
     const next = new Map(prev);
@@ -299,7 +311,13 @@ export async function sendQueuedComposerMessageNow(
   } catch (error) {
     input.queue.write((prev) => {
       const next = new Map(prev);
-      next.set(input.agentId, [item, ...(prev.get(input.agentId) ?? [])]);
+      const current = prev.get(input.agentId) ?? [];
+      const insertionIndex = Math.min(originalIndex, current.length);
+      next.set(input.agentId, [
+        ...current.slice(0, insertionIndex),
+        item,
+        ...current.slice(insertionIndex),
+      ]);
       return next;
     });
     return {

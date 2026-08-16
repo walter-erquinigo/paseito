@@ -7,6 +7,7 @@ import {
   DEFAULT_CLIENT_SETTINGS,
   DEFAULT_CODE_FONT_SIZE,
   DEFAULT_UI_FONT_SIZE,
+  QUEUE_DEFAULT_MIGRATION_KEY,
   loadAppSettingsFromStorage,
   loadSettingsFromStorage,
   parseClampedFontSize,
@@ -35,6 +36,31 @@ function makeDeps(
 }
 
 describe("loadAppSettingsFromStorage", () => {
+  it("moves the legacy interrupt default to queue exactly once", async () => {
+    const storage = createInMemoryKeyValueStorage({
+      [APP_SETTINGS_KEY]: JSON.stringify({ sendBehavior: "interrupt" }),
+    });
+    const deps = makeDeps({ storage });
+
+    const migrated = await loadAppSettingsFromStorage(deps);
+    expect(migrated.sendBehavior).toBe("queue");
+    expect(storage.entries.get(QUEUE_DEFAULT_MIGRATION_KEY)).toBe("1");
+
+    storage.entries.set(APP_SETTINGS_KEY, JSON.stringify({ sendBehavior: "steer" }));
+    expect((await loadAppSettingsFromStorage(deps)).sendBehavior).toBe("steer");
+  });
+
+  it("preserves a stored steer choice after the migration marker exists", async () => {
+    const deps = makeDeps({
+      storage: createInMemoryKeyValueStorage({
+        [APP_SETTINGS_KEY]: JSON.stringify({ sendBehavior: "steer" }),
+        [QUEUE_DEFAULT_MIGRATION_KEY]: "1",
+      }),
+    });
+
+    expect((await loadAppSettingsFromStorage(deps)).sendBehavior).toBe("steer");
+  });
+
   it("defaults theme to auto when storage is empty", async () => {
     const deps = makeDeps();
 
