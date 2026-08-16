@@ -86,6 +86,27 @@ describe("classifyForResolution", () => {
     });
   });
 
+  it("preserves colon-delimited Markdown preview ranges and final columns", () => {
+    const path =
+      "/raid/werquinigo/llvm-solid-cherry-pick-dkg-25967/nvidia/dkg/tile_ir/compiler/include/tile_ir/Dialect/TileAS/IR/TileASEnums.td";
+
+    expect(
+      classifyForResolution({ href: `${path}:67-96:8`, sourceType: "file-preview" }, CONTEXT),
+    ).toEqual({
+      kind: "resolved",
+      value: {
+        kind: "file",
+        target: {
+          raw: `${path}:67-96:8`,
+          path,
+          lineStart: 67,
+          lineEnd: 96,
+          column: 8,
+        },
+      },
+    });
+  });
+
   it("flags basename inline-code as a daemon lookup keyed by suggestion query", () => {
     const result = classifyForResolution(
       { href: "file.ts:12", text: "file.ts:12", sourceType: "inline-code" },
