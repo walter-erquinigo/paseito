@@ -222,6 +222,8 @@
         "Share revision-safe LSP sessions with the editor and suppress stale buffers.",
         "Anchor LSP positions to current-side source text and pause Changes intelligence while the workspace is dirty.",
         "Preserve the exact terminal-newline form when rebuilding paged source for shared LSP sessions.",
+        "Keep each file's responsive LSP status inside the file-header action rail so it cannot overlap diff statistics or context rows.",
+        "Render structured LSP hover Markdown through the shared editor renderer and keep the hover inside the diff viewport.",
         "Search complete changed-file source on the daemon without transferring every file before results."
       ],
       "permanent": false,
@@ -233,7 +235,7 @@
         "Search is capability-gated, returns at most 10,000 smart-case matches, and sends no source-file corpus to the client.",
         "LSP hover, F12, Command/Ctrl-click and the Electron definition context menu operate only on current-side lines and share a reference-counted document session with the editor.",
         "LSP columns are measured from rendered source text in unified, wrapped and split layouts; review and line-number gutters, hunk controls, deleted-side lines and other chrome are ineligible.",
-        "Eligible non-deleted C/C++ and Python headers acquire visibility-scoped sessions and show off, connecting, provider, unavailable, error and retry states without format-on-save controls.",
+        "Eligible non-deleted C/C++ and Python headers acquire visibility-scoped sessions and show off, connecting, provider, unavailable, error and retry states inside the file-name row, using a label on wide panes and an accessible icon on narrow panes.",
         "An unsaved editor buffer that differs from the diff revision suppresses Changes LSP instead of replacing the editor's document version.",
         "Full-source reconstruction verifies terminal-newline candidates against the exact content revision before sharing a document session.",
         "Live workspace dirtiness releases every Changes lease, disables its global control and all navigation triggers, preserves the workspace preference, and resumes visible files when clean.",

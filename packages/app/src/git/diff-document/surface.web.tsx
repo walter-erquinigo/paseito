@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { ViewStyle } from "react-native";
+import type { WorkspaceLspHover } from "@getpaseo/protocol/messages";
 import { DomOverlayScrollbar } from "@/components/ui/overlay-scrollbar/dom-overlay-scrollbar";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { getInlineReviewThreadState, InlineReviewGutterCell, InlineReviewThread } from "@/review";
@@ -36,6 +37,11 @@ import type {
 } from "./types";
 import { useDiffDocumentWorkspaceCache } from "./workspace-cache";
 import type { ChangesSearchMatch } from "@/git/changes-search";
+import {
+  createLspHoverMarkdownDom,
+  hasLspHoverContent,
+} from "@/file-pane/editor/lsp-hover-markdown.web";
+import { positionLspHover } from "./lsp-hover-position";
 
 const DEFAULT_MONO_STACK = "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace";
 const RESIZE_SETTLE_DELAY_MS = 120;
@@ -210,9 +216,12 @@ export function DiffSurface(props: DiffSurfaceProps) {
     truncated: false,
     error: null,
   });
-  const [lspHover, setLspHover] = useState<{ text: string; left: number; top: number } | null>(
-    null,
-  );
+  const [lspHover, setLspHover] = useState<{
+    hover: WorkspaceLspHover;
+    anchorX: number;
+    anchorY: number;
+  } | null>(null);
+  const lspHoverDomRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const family = props.displayPreferences.monoFontFamily.trim() || DEFAULT_MONO_STACK;
   useLayoutEffect(() => {
@@ -278,9 +287,46 @@ export function DiffSurface(props: DiffSurfaceProps) {
   const expandContext = props.reviewPresentation?.onExpandContext;
   const searchStatusLabel = changesSearchStatusLabel(search);
   const lspHoverStyle = useMemo<React.CSSProperties | undefined>(
-    () => (lspHover ? { ...HOVER_STYLE, left: lspHover.left, top: lspHover.top } : undefined),
-    [lspHover],
+    () =>
+      lspHover
+        ? {
+            ...HOVER_STYLE,
+            ...positionLspHover({
+              anchorX: lspHover.anchorX,
+              anchorY: lspHover.anchorY,
+              viewportHeight: viewport.height,
+              viewportWidth: viewport.width,
+            }),
+          }
+        : undefined,
+    [lspHover, viewport.height, viewport.width],
   );
+  useLayoutEffect(() => {
+    const host = lspHoverDomRef.current;
+    if (!host || !lspHover) return;
+    const dom = createLspHoverMarkdownDom(lspHover.hover, {
+      ...props.hoverTheme,
+      codeFontSize: props.displayPreferences.codeFontSize,
+      monoFont: family,
+    });
+    const position = positionLspHover({
+      anchorX: lspHover.anchorX,
+      anchorY: lspHover.anchorY,
+      viewportHeight: viewport.height,
+      viewportWidth: viewport.width,
+    });
+    dom.style.maxHeight = `${position.maxHeight}px`;
+    dom.style.maxWidth = `${position.maxWidth}px`;
+    host.replaceChildren(dom);
+    return () => host.replaceChildren();
+  }, [
+    family,
+    lspHover,
+    props.displayPreferences.codeFontSize,
+    props.hoverTheme,
+    viewport.height,
+    viewport.width,
+  ]);
   const model = useMemo(() => {
     if (!loadedTypography || !measurement) {
       return emptyDiffDocumentModel({
@@ -773,20 +819,32 @@ export function DiffSurface(props: DiffSurfaceProps) {
   }, [props.mode.kind, search.open, search.selected, selectSearchMatch]);
   useEffect(() => {
     const root = rootRef.current;
+    const scroll = scrollRef.current;
     const lsp = workingMode?.lsp;
     if (!root || !lsp?.enabled) return;
     let timer: ReturnType<typeof setTimeout> | null = null;
     let last: ReturnType<typeof lspTargetAt> = null;
+    let requestSequence = 0;
     const clear = () => {
       if (timer) clearTimeout(timer);
       timer = null;
     };
+    const dismiss = () => {
+      requestSequence += 1;
+      clear();
+      last = null;
+      setLspHover(null);
+    };
     const move = (event: MouseEvent) => {
+      if (
+        event.target instanceof Element &&
+        event.target.closest('[data-testid="changes-lsp-hover"]')
+      ) {
+        return;
+      }
       const target = lspTargetAt(event);
       if (!target || !target.filePath) {
-        clear();
-        last = null;
-        setLspHover(null);
+        dismiss();
         return;
       }
       if (
@@ -797,15 +855,21 @@ export function DiffSurface(props: DiffSurfaceProps) {
         return;
       last = target;
       clear();
+      const sequence = ++requestSequence;
       timer = setTimeout(
         () =>
-          void lsp.hover(target.filePath!, target.lineNumber, target.column).then((text) => {
-            if (last === target && text) {
+          void lsp.hover(target.filePath!, target.lineNumber, target.column).then((hover) => {
+            if (
+              requestSequence === sequence &&
+              last === target &&
+              hover &&
+              hasLspHoverContent(hover)
+            ) {
               const box = root.getBoundingClientRect();
               setLspHover({
-                text,
-                left: target.clientX - box.left + 12,
-                top: target.clientY - box.top + 16,
+                hover,
+                anchorX: target.clientX - box.left,
+                anchorY: target.clientY - box.top,
               });
             }
             return undefined;
@@ -841,15 +905,17 @@ export function DiffSurface(props: DiffSurfaceProps) {
     root.addEventListener("mousemove", move);
     root.addEventListener("click", click);
     root.addEventListener("contextmenu", context);
-    root.addEventListener("mouseleave", () => setLspHover(null));
+    root.addEventListener("mouseleave", dismiss);
+    scroll?.addEventListener("scroll", dismiss);
     window.addEventListener("keydown", keys);
     return () => {
-      clear();
+      dismiss();
       root.removeEventListener("mousemove", move);
       root.removeEventListener("click", click);
       root.removeEventListener("contextmenu", context);
+      root.removeEventListener("mouseleave", dismiss);
+      scroll?.removeEventListener("scroll", dismiss);
       window.removeEventListener("keydown", keys);
-      setLspHover(null);
     };
   }, [lspTargetAt, workingMode?.lsp]);
   const pointerDown = useCallback(
@@ -1155,9 +1221,7 @@ export function DiffSurface(props: DiffSurfaceProps) {
         </div>
       ) : null}
       {lspHover ? (
-        <div style={lspHoverStyle} data-testid="changes-lsp-hover">
-          {lspHover.text}
-        </div>
+        <div ref={lspHoverDomRef} style={lspHoverStyle} data-testid="changes-lsp-hover" />
       ) : null}
       {props.reviewPresentation?.shortcutHint ? (
         <div aria-live="polite" data-testid="line-review-shortcut-hint" style={SHORTCUT_HINT_STYLE}>
@@ -1500,15 +1564,7 @@ const SEARCH_INPUT_STYLE: React.CSSProperties = {
 const HOVER_STYLE: React.CSSProperties = {
   position: "absolute",
   zIndex: 30,
-  maxWidth: 560,
-  whiteSpace: "pre-wrap",
-  pointerEvents: "none",
-  padding: 8,
-  borderRadius: 6,
-  background: "rgba(20,20,24,.96)",
-  color: "#eee",
-  fontFamily: "ui-monospace, monospace",
-  fontSize: 12,
+  pointerEvents: "auto",
 };
 const SHORTCUT_HINT_STYLE: React.CSSProperties = {
   position: "absolute",
