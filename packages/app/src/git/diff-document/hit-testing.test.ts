@@ -8,6 +8,7 @@ import {
 } from "./hit-testing";
 import { buildDiffDocumentModel } from "./model";
 import type { BuildDiffDocumentModelInput, DiffCell, DiffSelection } from "./types";
+import type { InlineReviewActions } from "@/review/inline-review";
 
 const measurer = { measure: (text: string) => Array.from(text).length * 10 };
 
@@ -207,9 +208,7 @@ function splitFile(): ParsedDiffFile {
   };
 }
 
-function reviewActionsForFirstAddition(): NonNullable<
-  BuildDiffDocumentModelInput["reviewActions"]
-> {
+function reviewActionsForFirstAddition(): InlineReviewActions {
   const target = {
     key: "src/a.ts:new:1",
     filePath: "src/a.ts",
@@ -224,12 +223,31 @@ function reviewActionsForFirstAddition(): NonNullable<
     content: "review me",
   };
   return {
+    canSuggest: true,
+    composerMode: "comment",
     commentsByTarget: new Map(),
-    editor: { target, commentId: null, body: "" },
+    editor: { targets: [target], commentId: null, body: "" },
+    suggestionsByTarget: new Map(),
+    suggestionEditor: null,
+    selectedRangeTargetKeys: new Set(),
+    suggestionRangeError: null,
     onStartComment() {},
     onCancelEditor() {},
     onSaveEditor() {},
     onEditComment() {},
     onDeleteComment() {},
+    onStartSuggestion() {},
+    onSwitchSuggestionToComment() {},
+    onBeginSuggestionDrag() {},
+    onUpdateSuggestionDrag() {},
+    onShiftSuggestionRange() {},
+    onPressReviewGutter() {},
+    onCancelSuggestionRange() {},
+    onClearSuggestionRangeError() {},
+    onCancelSuggestion() {},
+    onEditSuggestion() {},
+    onExtendSuggestion() {},
+    onSaveSuggestion() {},
+    onDeleteSuggestion() {},
   };
 }

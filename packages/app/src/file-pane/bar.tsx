@@ -8,6 +8,9 @@ import type { Theme } from "@/styles/theme";
 import { FileConflictAlert, type FileConflictAlertState } from "./conflict-alert";
 import type { FileEditorStatus } from "./editor/model";
 import { FileTreeToggle } from "./tree-toggle";
+import type { EditorLspSnapshot } from "./editor/lsp-session";
+import type { WorkspaceLspLanguage } from "./editor/lsp-preferences";
+import { LspStatusMenu } from "./lsp-status-menu";
 
 const ThemedSpinner = withUnistyles(LoadingSpinner);
 const spinnerMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
@@ -21,6 +24,7 @@ export function FilePanelBar({
   cursor,
   vimMode,
   conflict,
+  lsp,
 }: {
   size: number;
   lineCount?: number;
@@ -30,6 +34,16 @@ export function FilePanelBar({
   cursor?: { line: number; column: number };
   vimMode?: string | null;
   conflict?: FileConflictAlertState;
+  lsp?: {
+    enabled: boolean;
+    formatOnSave: boolean;
+    language: WorkspaceLspLanguage;
+    snapshot: EditorLspSnapshot;
+    standaloneClangdSupported: boolean;
+    onEnabledChange(enabled: boolean): void;
+    onFormatOnSaveChange(enabled: boolean): void;
+    onRetry(): void;
+  };
 }) {
   const { t } = useTranslation();
   const previewModes = [
@@ -110,6 +124,7 @@ export function FilePanelBar({
             />
           ) : null}
           <FileTreeToggle />
+          {lsp ? <LspStatusMenu {...lsp} /> : null}
         </View>
       </PaneContentToolbar>
       {conflict ? <FileConflictAlert state={conflict} /> : null}

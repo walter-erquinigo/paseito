@@ -78,7 +78,8 @@ function PanelState({
 
 function WorkingDiffPanel() {
   const { t } = useTranslation();
-  const { serverId, workspaceId, tabId, target, openFileInWorkspace } = usePaneContext();
+  const { serverId, workspaceId, tabId, target, focusCurrentTab, openFileInWorkspace } =
+    usePaneContext();
   const [changesState, setChangesState] = usePanelState(changesStateSchema, defaultChangesState);
   const cwd = useWorkspaceDirectory(serverId, workspaceId);
   const isActive = useRetainedPanelActive();
@@ -106,6 +107,11 @@ function WorkingDiffPanel() {
         modeScope={tabId}
         focusPath={target.focusPath}
         focusRequestId={target.focusRequestId}
+        focusLineStart={target.focusLineStart}
+        focusLineEnd={target.focusLineEnd}
+        focusColumn={target.focusColumn}
+        focusReveal={target.focusReveal}
+        onActivate={focusCurrentTab}
         onOpenFile={handleOpenFile}
         onAddToChat={canAddToChat ? addFile : undefined}
         state={changesState}
