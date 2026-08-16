@@ -87,8 +87,15 @@ function resolveChangesPresentation(
 
 function ChangesPanel() {
   const { t } = useTranslation();
-  const { serverId, workspaceId, tabId, target, openPreferredTarget, openTargetToSide } =
-    usePaneContext();
+  const {
+    serverId,
+    workspaceId,
+    tabId,
+    target,
+    focusCurrentTab,
+    openPreferredTarget,
+    openTargetToSide,
+  } = usePaneContext();
   const [changesState, setChangesState] = usePanelState(changesStateSchema, defaultChangesState);
   const { preferences } = useChangesPreferences();
   const cwd = useWorkspaceDirectory(serverId, workspaceId);
@@ -143,6 +150,11 @@ function ChangesPanel() {
           modeScope={tabId}
           focusPath={target.kind === "working_diff" ? target.focusPath : undefined}
           focusRequestId={target.kind === "working_diff" ? target.focusRequestId : undefined}
+          focusLineStart={target.kind === "working_diff" ? target.focusLineStart : undefined}
+          focusLineEnd={target.kind === "working_diff" ? target.focusLineEnd : undefined}
+          focusColumn={target.kind === "working_diff" ? target.focusColumn : undefined}
+          focusReveal={target.kind === "working_diff" ? target.focusReveal : undefined}
+          onActivate={focusCurrentTab}
           onSelectDiffFile={isTree ? handleSelectDiffFile : undefined}
           onOpenFile={handleOpenFile}
           onOpenToSide={isTree && openTargetToSide ? handleOpenDiffToSide : undefined}

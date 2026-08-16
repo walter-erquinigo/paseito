@@ -412,7 +412,7 @@ function ExplorerSidebarContent({
               serverId={serverId}
               workspaceId={workspaceId}
               workspaceRoot={workspaceRoot}
-              isOpen={isOpen}
+              isOpen={isOpen && resolvedTab === "changes"}
               onOpenFile={onOpenFile}
             />
           </RetainedPanel>

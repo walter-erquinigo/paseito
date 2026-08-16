@@ -286,6 +286,7 @@ instead of editing the list by hand.
   - Fix: Share revision-safe LSP sessions with the editor and suppress stale buffers.
   - Fix: Anchor LSP positions to current-side source text and pause Changes intelligence while the workspace is dirty.
   - Fix: Preserve the exact terminal-newline form when rebuilding paged source for shared LSP sessions.
+  - Fix: Keep each file's responsive LSP status inside the file-header action rail so it cannot overlap diff statistics or context rows.
   - Fix: Search complete changed-file source on the daemon without transferring every file before results.
 - `changes-file-tree-navigator` — Navigate large working diffs from a dedicated right-hand file tree in desktop Changes panes.
   - Fix: Keep repeated file selections monotonic and independent from manual diff scrolling.
