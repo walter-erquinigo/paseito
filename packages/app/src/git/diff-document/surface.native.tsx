@@ -3,7 +3,6 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { useTranslation } from "react-i18next";
 import {
   ScrollView,
-  Pressable,
   Text,
   StyleSheet,
   View,
@@ -26,6 +25,8 @@ import { useKeyboardShift } from "@/hooks/keyboard-shift-context";
 import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
 import { DocumentFileHeader } from "./document-file-header";
 import { parseDiffContextMarker } from "@/git/diff-context-expansion";
+import { DiffContextControl } from "./context-control";
+import { ReviewCheckbox } from "./review-checkbox";
 import { hitTestDiffBodyPoint } from "./native-hit-testing";
 import { retainDiffViewport } from "./viewport";
 import { HorizontalScroll } from "./horizontal-scroll.native";
@@ -575,7 +576,6 @@ function NativeLineReviewControl({
   left: number;
   height: number;
 }) {
-  const accessibilityState = useMemo(() => ({ checked: reviewed }), [reviewed]);
   const onPress = useCallback(() => {
     presentation.onSelectLine(changedLine);
     presentation.onToggleLine(changedLine);
@@ -596,16 +596,15 @@ function NativeLineReviewControl({
     [height, left, selected, top],
   );
   return (
-    <Pressable
-      accessibilityRole="checkbox"
-      accessibilityState={accessibilityState}
+    <ReviewCheckbox
       accessibilityLabel={reviewed ? "Mark line unreviewed" : "Mark line reviewed"}
+      alwaysVisible
       testID={`diff-line-review-${targetKey}`}
       onPress={onPress}
+      selected={selected}
+      state={reviewed ? "reviewed" : "unreviewed"}
       style={style}
-    >
-      <Text>✓</Text>
-    </Pressable>
+    />
   );
 }
 
@@ -622,41 +621,20 @@ function NativeContextControl({
   height: number;
   onExpand: NonNullable<Extract<DiffSurfaceProps["mode"], { kind: "working" }>["onExpandContext"]>;
 }) {
-  const expandUp = useCallback(
-    () => void onExpand(filePath, region, "up"),
-    [filePath, onExpand, region],
-  );
-  const expandDown = useCallback(
-    () => void onExpand(filePath, region, "down"),
-    [filePath, onExpand, region],
-  );
-  const expandAll = useCallback(
-    () => void onExpand(filePath, region, "all"),
-    [filePath, onExpand, region],
-  );
   return (
-    <View
+    <DiffContextControl
+      filePath={filePath}
+      region={region}
+      onExpand={onExpand}
       style={inlineUnistylesStyle<ViewStyle>({
         position: "absolute",
         top,
-        left: 22,
+        left: 0,
+        right: 0,
         height,
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 8,
         zIndex: 8,
       })}
-    >
-      <Pressable onPress={expandUp}>
-        <Text>↑ 20</Text>
-      </Pressable>
-      <Pressable onPress={expandDown}>
-        <Text>↓ 20</Text>
-      </Pressable>
-      <Pressable onPress={expandAll}>
-        <Text>Expand {Math.min(region.lineCount, 5000)}</Text>
-      </Pressable>
-    </View>
+    />
   );
 }
 

@@ -1,5 +1,5 @@
-import { memo, useCallback, useEffect, useMemo, useSyncExternalStore } from "react";
-import { Pressable, Text, View } from "react-native";
+import { memo, useCallback, useEffect, useSyncExternalStore } from "react";
+import { Text, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import { ListChevronsUpDown } from "lucide-react-native";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,8 @@ import { LspStatusMenu } from "@/file-pane/lsp-status-menu";
 import { lspLanguageForFile } from "@/file-pane/editor/lsp-preferences";
 import type { ChangesLspController } from "@/git/use-changes-lsp";
 import { buildDiffContextRegions } from "@/git/diff-context-expansion";
+import { ReviewCheckbox } from "./review-checkbox";
+import type { ReviewCheckboxState } from "./review-checkbox-model";
 
 interface DocumentFileHeaderProps {
   file: DiffFileSection;
@@ -119,18 +121,6 @@ function WorkingDocumentFileHeader({
   );
 }
 
-function fileReviewIndicator(reviewed: boolean, partiallyReviewed: boolean): "✓" | "−" | "○" {
-  if (reviewed) return "✓";
-  if (partiallyReviewed) return "−";
-  return "○";
-}
-
-function fileReviewCheckedState(reviewed: boolean, partiallyReviewed: boolean) {
-  if (reviewed) return true;
-  if (partiallyReviewed) return "mixed" as const;
-  return false;
-}
-
 function DocumentFileReviewControl({
   file,
   mode,
@@ -144,8 +134,9 @@ function DocumentFileReviewControl({
   const progress = reviews?.lineProgressByPath.get(file.path);
   const reviewed = reviews?.reviewedPaths.has(file.path) === true;
   const partiallyReviewed = Boolean(progress && progress.reviewed > 0);
-  const checked = fileReviewCheckedState(reviewed, partiallyReviewed);
-  const accessibilityState = useMemo(() => ({ checked }), [checked]);
+  let reviewState: ReviewCheckboxState = "unreviewed";
+  if (reviewed) reviewState = "reviewed";
+  else if (partiallyReviewed) reviewState = "mixed";
   const toggleReview = useCallback(
     (event: { stopPropagation?: () => void }) => {
       event.stopPropagation?.();
@@ -156,16 +147,14 @@ function DocumentFileReviewControl({
   );
   if (!reviews?.available || !file.file.contentRevision) return null;
   return (
-    <Pressable
-      accessibilityRole="checkbox"
-      accessibilityState={accessibilityState}
+    <ReviewCheckbox
       accessibilityLabel={reviewed ? "Mark file unreviewed" : "Mark file reviewed"}
+      alwaysVisible
       onPress={toggleReview}
+      state={reviewState}
       style={styles.reviewControl}
       testID={`diff-file-review-${file.path}`}
-    >
-      <Text style={styles.reviewText}>{fileReviewIndicator(reviewed, partiallyReviewed)}</Text>
-    </Pressable>
+    />
   );
 }
 
@@ -222,7 +211,6 @@ const styles = StyleSheet.create((theme) => ({
     zIndex: 8,
   },
   tooltipText: { color: theme.colors.foreground, fontSize: theme.fontSize.sm },
-  reviewText: { color: theme.colors.foregroundMuted, fontSize: 14, lineHeight: 18 },
 }));
 
 function documentFileHeaderPropsEqual(
