@@ -35,8 +35,8 @@ export function checkoutPrStatusQueryKey(serverId: string, cwd: string) {
   return ["checkoutPrStatus", serverId, cwd] as const;
 }
 
-export function checkoutCommitsQueryKey(serverId: string, cwd: string) {
-  return ["checkoutCommits", serverId, cwd] as const;
+export function checkoutCommitsQueryKey(serverId: string, cwd: string, baseRef?: string) {
+  return ["checkoutCommits", serverId, cwd, baseRef ?? ""] as const;
 }
 
 export function checkoutCommitFileDiffQueryKey(
@@ -63,7 +63,7 @@ export async function invalidateCheckoutGitQueriesForClient(
       predicate: checkoutQueryPredicate("checkoutPrStatus", identity),
     }),
     queryClient.invalidateQueries({
-      queryKey: checkoutCommitsQueryKey(identity.serverId, identity.cwd),
+      predicate: checkoutQueryPredicate("checkoutCommits", identity),
     }),
     queryClient.invalidateQueries({
       predicate: checkoutQueryPredicate(prPaneTimelineQueryKind, identity),
@@ -107,6 +107,29 @@ export async function invalidatePrPaneTimelineForCheckout(
       predicate: checkoutQueryPredicate(prPanePipelineQueryKind, identity),
     }),
   ]);
+}
+
+export async function invalidateCheckoutComparisonQueriesForClient(
+  queryClient: QueryClient,
+  identity: CheckoutQueryIdentity,
+) {
+  await Promise.all([
+    queryClient.invalidateQueries({
+      predicate: checkoutQueryPredicate("checkoutDiff", identity),
+    }),
+    queryClient.invalidateQueries({
+      predicate: checkoutQueryPredicate("checkoutCommits", identity),
+    }),
+  ]);
+}
+
+export function invalidateCheckoutCommitsQueriesForClient(
+  queryClient: QueryClient,
+  identity: CheckoutQueryIdentity,
+) {
+  return queryClient.invalidateQueries({
+    predicate: checkoutQueryPredicate("checkoutCommits", identity),
+  });
 }
 
 function checkoutQueryPredicate(

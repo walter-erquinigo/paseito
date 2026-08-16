@@ -12,6 +12,7 @@ import {
   useSetDiffModeOverride,
 } from "@/review";
 import { useCheckoutDiffQuery } from "@/git/use-diff-query";
+import { useChangesBaseSelection } from "@/git/use-changes-base-selection";
 import { useCheckoutStatusQuery } from "@/git/use-status-query";
 
 interface UseWorkingDiffOptions {
@@ -45,10 +46,19 @@ export function useWorkingDiff({
   const statusErrorMessage =
     status?.error?.message ??
     (isStatusError && statusError instanceof Error ? statusError.message : null);
-  const baseRef = gitStatus?.baseRef ?? undefined;
+  const recordedBaseRef = gitStatus?.baseRef ?? undefined;
   const hasUncommittedChanges = Boolean(gitStatus?.isDirty);
   const currentBranchName =
     gitStatus?.currentBranch && gitStatus.currentBranch !== "HEAD" ? gitStatus.currentBranch : null;
+  const baseSelection = useChangesBaseSelection({
+    serverId,
+    cwd,
+    repoRoot: gitStatus?.repoRoot,
+    currentBranch: currentBranchName,
+    recordedBaseRef,
+    stackParent: gitStatus?.stackParent,
+  });
+  const baseRef = baseSelection.effectiveBaseRef;
 
   const reviewDraftScopeKey = useMemo(
     () =>
@@ -127,6 +137,8 @@ export function useWorkingDiff({
     statusErrorMessage,
     baseRef,
     currentBranchName,
+    baseSelection,
+    hasUncommittedChanges,
     diffMode,
     selectUncommitted,
     selectBase,
