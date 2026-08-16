@@ -1,3 +1,4 @@
+import type { Locator } from "@playwright/test";
 import { expect, test, type Page } from "../support/fixtures";
 import { gotoAppShell } from "../support/helpers/app";
 import {
@@ -13,6 +14,15 @@ import {
   switchWorkspaceViaSidebar,
   waitForSidebarHydration,
 } from "../support/helpers/workspace-ui";
+
+async function isLocatorWithin(inner: Locator, outer: Locator): Promise<boolean> {
+  const [innerBounds, outerBounds] = await Promise.all([inner.boundingBox(), outer.boundingBox()]);
+  if (!innerBounds || !outerBounds) return false;
+  return (
+    innerBounds.y >= outerBounds.y - 1 &&
+    innerBounds.y + innerBounds.height <= outerBounds.y + outerBounds.height + 1
+  );
+}
 
 async function renameWorkspaceViaSidebar(
   page: Page,
@@ -127,6 +137,47 @@ test.describe("Branch switcher", () => {
           { timeout: 30_000 },
         )
         .toBe("dev");
+    } finally {
+      await workspace.cleanup();
+    }
+  });
+
+  test("opens with the selected branch active and revealed without stealing search focus", async ({
+    page,
+  }) => {
+    test.setTimeout(90_000);
+    const serverId = getServerId();
+    const preferredBranches = Array.from(
+      { length: 12 },
+      (_, index) => `werquinigo/branch-${String(index).padStart(2, "0")}`,
+    );
+    const workspace = await seedWorkspace({
+      repoPrefix: "branch-reveal-",
+      repo: { branches: ["main", ...preferredBranches] },
+    });
+
+    try {
+      await gotoAppShell(page);
+      await waitForSidebarHydration(page);
+      await switchWorkspaceViaSidebar({ page, serverId, workspaceId: workspace.workspaceId });
+      await openChangesPanel(page);
+      await expectWorkspaceBranch(page, "main");
+
+      await page
+        .getByTestId("changes-header")
+        .getByRole("button", { name: /Current branch: main\b/ })
+        .click();
+
+      const picker = page.getByTestId("combobox-desktop-container");
+      const search = page.getByPlaceholder("Filter branches...");
+      const selected = page.getByTestId("branch-switcher-option-main");
+      await expect(picker).toBeVisible({ timeout: 30_000 });
+      await expect(page.getByTestId("branch-switcher-option-werquinigo/branch-11")).toBeAttached({
+        timeout: 30_000,
+      });
+      await expect(search).toBeFocused();
+      await expect(selected).toHaveAttribute("data-combobox-active", "true");
+      await expect.poll(() => isLocatorWithin(selected, picker)).toBe(true);
     } finally {
       await workspace.cleanup();
     }
