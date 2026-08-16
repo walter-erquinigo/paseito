@@ -11,6 +11,8 @@ import {
   shouldApplyRelayoutScroll,
 } from "./model";
 import type { BuildDiffDocumentModelInput, TextMeasurer } from "./types";
+import { encodeDiffContextMarker } from "@/git/diff-context-expansion";
+import { DIFF_CONTEXT_CONTROL_HEIGHT } from "./context-control-model";
 
 const measurer: TextMeasurer = { measure: (text) => Array.from(text).length * 10 };
 
@@ -186,6 +188,30 @@ describe("diff document model", () => {
     expect(collapsed.files[0]?.bodyHeight).toBe(0);
     expect(collapsed.files[1]?.bodyHeight).toBeGreaterThan(0);
     expect(collapsed.height).toBeLessThan(expanded.height);
+  });
+
+  it("reserves a dedicated row without measuring synthetic hidden-context text", () => {
+    const contextFile = file();
+    contextFile.hunks = [
+      {
+        oldStart: 1,
+        oldCount: 0,
+        newStart: 1,
+        newCount: 0,
+        lines: [
+          {
+            type: "header",
+            content: encodeDiffContextMarker({ oldStart: 1, newStart: 1, lineCount: 103 }),
+          },
+        ],
+      },
+    ];
+    const model = buildDiffDocumentModel(input({ files: [contextFile], wrapLines: false }));
+    const row = model.rows[0];
+    expect(row?.kind).toBe("line");
+    expect(row?.height).toBe(DIFF_CONTEXT_CONTROL_HEIGHT);
+    expect(row?.kind === "line" ? row.cells[0]?.fragments[0]?.text : null).toBe("");
+    expect(model.files[0]?.contentWidth).toBe(model.viewportWidth);
   });
 
   it("reuses unchanged file measurements when collapse state changes", () => {
