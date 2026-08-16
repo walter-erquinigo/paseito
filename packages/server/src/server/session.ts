@@ -7685,9 +7685,11 @@ export class Session {
           agentId,
           prompt,
           messageId: msg.messageId,
-          activeTurnBehavior: msg.activeTurnBehavior ?? "interrupt",
+          // COMPAT(activeRunBehavior): Paseito v0.4 clients used this name; the current field
+          // wins whenever both are present. Remove after 2027-02-23.
+          activeTurnBehavior:
+            msg.activeTurnBehavior ?? (msg.activeRunBehavior === "steer" ? "steer" : "interrupt"),
           clearPendingPermissions: true,
-          activeRunBehavior: msg.activeRunBehavior,
           logger: this.sessionLogger,
         });
         if (result.disposition === "turn_started") {

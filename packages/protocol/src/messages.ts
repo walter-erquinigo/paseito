@@ -1414,6 +1414,8 @@ export const SendAgentMessageRequestSchema = z.object({
   text: z.string(),
   messageId: z.string().optional(), // Client-provided ID for deduplication
   activeTurnBehavior: ActiveTurnBehaviorSchema.optional(),
+  // COMPAT(activeRunBehavior): accepted from Paseito v0.4 clients, remove after 2027-02-23.
+  activeRunBehavior: z.enum(["replace", "steer"]).optional(),
   images: z.array(ImageAttachmentSchema).optional(),
   attachments: AgentAttachmentsSchema,
 });

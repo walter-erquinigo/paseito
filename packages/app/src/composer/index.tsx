@@ -103,12 +103,14 @@ import {
 import { resolveAgentControlsMode } from "@/composer/agent-controls/mode";
 import { resolveComposerInputMode, type ComposerInputMode } from "@/composer/input-mode";
 import { resolveActiveSendBehavior } from "./input/state";
+import type { ActiveTurnBehavior } from "@getpaseo/protocol/messages";
 import { useKeyboardActionHandler } from "@/hooks/use-keyboard-action-handler";
 import type { KeyboardActionDefinition } from "@/keyboard/keyboard-action-dispatcher";
 import type { MessageInputKeyboardActionKind } from "@/keyboard/actions";
 import { submitAgentInput } from "@/composer/submit";
 import { createMessageSubmissionWriter } from "@/composer/submission/writer";
 import { ComposerKeyboardScopeProvider, useComposerKeyboardScope } from "@/composer/keyboard-scope";
+import { createComposerQueueWriter, useComposerQueueStore } from "@/composer/queue-store";
 import { useAppSettings } from "@/hooks/use-settings";
 import { RenderProfile } from "@/utils/render-profiler";
 import { AfterPaintPublication } from "@/composer/after-paint-publication";
@@ -265,6 +267,7 @@ function buildAgentStateSelector(serverId: string, agentId: string) {
       totalCostUsd: agent?.lastUsage?.totalCostUsd ?? null,
       model: agent?.model ?? null,
       provider: agent?.provider ?? null,
+      supportsSteering: agent?.capabilities.supportsSteering === true,
     };
   };
 }
@@ -374,11 +377,18 @@ interface RenderQueueTrackArgs {
   handleSendQueuedNow: (id: string) => Promise<void>;
   editLabel: string;
   sendNowLabel: string;
+  steerHint: string;
 }
 
 function renderQueueTrack(args: RenderQueueTrackArgs): ReactElement | null {
-  const { queuedMessages, handleEditQueuedMessage, handleSendQueuedNow, editLabel, sendNowLabel } =
-    args;
+  const {
+    queuedMessages,
+    handleEditQueuedMessage,
+    handleSendQueuedNow,
+    editLabel,
+    sendNowLabel,
+    steerHint,
+  } = args;
   if (queuedMessages.length === 0) return null;
   return (
     <View style={styles.queueTrack}>
@@ -390,6 +400,7 @@ function renderQueueTrack(args: RenderQueueTrackArgs): ReactElement | null {
           onSendNow={handleSendQueuedNow}
           editLabel={editLabel}
           sendNowLabel={sendNowLabel}
+          steerHint={steerHint}
         />
       ))}
     </View>
@@ -662,6 +673,7 @@ interface QueuedMessageRowProps {
   onSendNow: (id: string) => void;
   editLabel: string;
   sendNowLabel: string;
+  steerHint: string;
 }
 
 function QueuedMessageRow({
@@ -670,6 +682,7 @@ function QueuedMessageRow({
   onSendNow,
   editLabel,
   sendNowLabel,
+  steerHint,
 }: QueuedMessageRowProps) {
   const handleEdit = useCallback(() => {
     onEdit(item.id);
@@ -691,14 +704,21 @@ function QueuedMessageRow({
         >
           <ThemedPencil size={ICON_SIZE.sm} uniProps={iconForegroundMapping} />
         </Pressable>
-        <Pressable
-          onPress={handleSendNow}
-          style={[styles.queueActionButton, styles.queueSendButton]}
-          accessibilityLabel={sendNowLabel}
-          accessibilityRole="button"
-        >
-          <ThemedArrowUp size={ICON_SIZE.sm} uniProps={iconAccentForegroundMapping} />
-        </Pressable>
+        <Tooltip delayDuration={0} enabledOnDesktop enabledOnMobile={false}>
+          <TooltipTrigger
+            onPress={handleSendNow}
+            style={[styles.queueActionButton, styles.queueSteerButton]}
+            accessibilityLabel={sendNowLabel}
+            accessibilityHint={steerHint}
+            accessibilityRole="button"
+          >
+            <ThemedArrowUp size={ICON_SIZE.sm} uniProps={iconAccentForegroundMapping} />
+            <Text style={styles.queueSteerText}>{sendNowLabel}</Text>
+          </TooltipTrigger>
+          <TooltipContent side="top" align="center" offset={8}>
+            <Text style={styles.tooltipText}>{steerHint}</Text>
+          </TooltipContent>
+        </Tooltip>
       </View>
     </View>
   );
@@ -1206,12 +1226,10 @@ function ComposerContentImpl({
 
   const agentState = useSessionStore(useShallow(buildAgentStateSelector(serverId, agentId)));
 
-  const queuedMessagesRaw = useSessionStore((state) =>
-    state.sessions[serverId]?.queuedMessages?.get(agentId),
+  const queuedMessagesRaw = useComposerQueueStore(
+    (state) => state.queuesByServer[serverId]?.[agentId],
   );
   const queuedMessages = queuedMessagesRaw ?? EMPTY_ARRAY;
-
-  const setQueuedMessages = useSessionStore((state) => state.setQueuedMessages);
 
   const isCompactFormFactor = useIsCompactFormFactor();
   const isCompactLayout = resolveCompactLayout(isCompactLayoutOverride, isCompactFormFactor);
@@ -1388,7 +1406,7 @@ function ComposerContentImpl({
         agentId: string,
         text: string,
         attachments: ComposerAttachment[],
-        activeTurnBehavior: "interrupt" | "steer",
+        activeTurnBehavior: ActiveTurnBehavior,
       ) => Promise<void>)
     | null
   >(null);
@@ -1442,10 +1460,20 @@ function ComposerContentImpl({
   }, [focusInput, onFocusInput]);
 
   const submitMessage = useCallback(
-    async (text: string, submitAttachments: ComposerAttachment[]) => {
+    async (
+      text: string,
+      submitAttachments: ComposerAttachment[],
+      activeTurnBehavior?: ActiveTurnBehavior,
+    ) => {
       onMessageSent?.();
       if (onSubmitMessageRef.current) {
-        await onSubmitMessageRef.current({ text, attachments: submitAttachments, cwd });
+        await onSubmitMessageRef.current({
+          text,
+          attachments: submitAttachments,
+          cwd,
+          activeTurnBehavior,
+          forceSend: activeTurnBehavior ? true : undefined,
+        });
         return;
       }
       if (!sendAgentMessageRef.current) {
@@ -1455,7 +1483,7 @@ function ComposerContentImpl({
         agentIdRef.current,
         text,
         submitAttachments,
-        appSettings.sendBehavior === "steer" ? "steer" : "interrupt",
+        activeTurnBehavior ?? (appSettings.sendBehavior === "steer" ? "steer" : "interrupt"),
       );
     },
     [appSettings.sendBehavior, cwd, onMessageSent, t],
@@ -1470,7 +1498,7 @@ function ComposerContentImpl({
       targetAgentId: string,
       text: string,
       sendAttachments: ComposerAttachment[],
-      activeTurnBehavior: "interrupt" | "steer",
+      activeTurnBehavior: ActiveTurnBehavior,
     ) => {
       if (!client) {
         throw new Error(t("workspace.terminal.hostDisconnected"));
@@ -1493,6 +1521,7 @@ function ComposerContentImpl({
                 targetAgentId,
               ).turnId ?? undefined)
             : undefined,
+        deliveryHint: activeTurnBehavior === "steer" ? "steering" : undefined,
       });
       onAttentionPromptSend?.();
     };
@@ -1525,13 +1554,7 @@ function ComposerContentImpl({
   );
   const hasAgent = agentState.status !== null;
 
-  const queueWriter = useMemo<QueueWriter>(
-    () => ({
-      read: (id) => useSessionStore.getState().sessions[serverId]?.queuedMessages?.get(id) ?? [],
-      write: (updater) => setQueuedMessages(serverId, updater),
-    }),
-    [serverId, setQueuedMessages],
-  );
+  const queueWriter = useMemo<QueueWriter>(() => createComposerQueueWriter(serverId), [serverId]);
 
   const queueMessage = useCallback(
     (queuedMessage: string, queuedAttachments: ComposerAttachment[]) => {
@@ -1563,6 +1586,7 @@ function ComposerContentImpl({
       outgoingMessage: string,
       outgoingAttachments: ComposerAttachment[],
       forceSend?: boolean,
+      activeTurnBehavior?: ActiveTurnBehavior,
     ) => {
       const result = await submitAgentInput({
         message: outgoingMessage,
@@ -1582,7 +1606,7 @@ function ComposerContentImpl({
           if (submitBehavior !== "preserve-and-lock") {
             beginSubmit(submitAttachments);
           }
-          await submitMessage(submitText, submitAttachments);
+          await submitMessage(submitText, submitAttachments, activeTurnBehavior);
         },
         clearDraft,
         setUserInput: replaceUserInput,
@@ -1637,7 +1661,12 @@ function ComposerContentImpl({
       if (blurOnSubmit) {
         messageInputRef.current?.blur();
       }
-      void sendMessageWithContent(payload.text, outgoingAttachments, payload.forceSend);
+      void sendMessageWithContent(
+        payload.text,
+        outgoingAttachments,
+        payload.forceSend,
+        payload.activeTurnBehavior,
+      );
     },
     [
       attachments,
@@ -1861,13 +1890,14 @@ function ComposerContentImpl({
   const handleSendQueuedNow = useCallback(
     async (id: string) => {
       if (!sendAgentMessageRef.current && !onSubmitMessageRef.current) return;
-      // Reuse the regular send path; server-side send atomically interrupts any active run.
+      // Explicit steering redirects active work. Providers without native steering
+      // preserve the daemon's replacement fallback.
       const result = await sendQueuedComposerMessageNow({
         agentId,
         messageId: id,
         queue: queueWriter,
         submitMessage: ({ text, attachments: queuedAttachments }) =>
-          submitMessage(text, queuedAttachments),
+          submitMessage(text, queuedAttachments, "steer"),
         failedToSendMessage: t("composer.errors.failedToSend"),
       });
       if (result.status === "failed") {
@@ -2250,9 +2280,12 @@ function ComposerContentImpl({
         handleEditQueuedMessage,
         handleSendQueuedNow,
         editLabel: t("composer.attachments.editQueuedMessage"),
-        sendNowLabel: t("composer.attachments.sendQueuedMessageNow"),
+        sendNowLabel: t("composer.queue.steer"),
+        steerHint: agentState.supportsSteering
+          ? t("composer.queue.steerHint")
+          : t("composer.queue.replaceFallbackHint"),
       }),
-    [handleEditQueuedMessage, handleSendQueuedNow, queuedMessages, t],
+    [agentState.supportsSteering, handleEditQueuedMessage, handleSendQueuedNow, queuedMessages, t],
   );
 
   const messageInputContainerRef = useRef<View>(null);
@@ -2534,8 +2567,17 @@ const styles = StyleSheet.create((theme: Theme) => ({
     justifyContent: "center",
     backgroundColor: theme.colors.surface2,
   },
-  queueSendButton: {
+  queueSteerButton: {
+    width: "auto",
+    paddingHorizontal: theme.spacing[3],
+    flexDirection: "row",
+    gap: theme.spacing[1],
     backgroundColor: theme.colors.accent,
+  },
+  queueSteerText: {
+    color: theme.colors.accentForeground,
+    fontSize: theme.fontSize.sm,
+    fontWeight: "600",
   },
   sendErrorText: {
     color: theme.colors.palette.red[500],
