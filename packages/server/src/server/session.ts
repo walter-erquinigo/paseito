@@ -167,6 +167,7 @@ import {
 import { ScheduleSession } from "./session/schedule/schedule-session.js";
 import { ProviderCatalogSession } from "./session/provider/provider-catalog-session.js";
 import { WorkspaceFilesSession } from "./session/files/workspace-files-session.js";
+import { WorkspaceLspSession } from "./session/lsp/workspace-lsp-session.js";
 import { AgentConfigSession } from "./session/agent-config/agent-config-session.js";
 import { ProjectConfigSession } from "./session/project-config/project-config-session.js";
 import { DaemonSession, type DaemonRuntimeConfig } from "./session/daemon/daemon-session.js";
@@ -202,6 +203,7 @@ import {
 } from "./session/agent-updates/agent-updates-service.js";
 import { expandTilde } from "../utils/path.js";
 import {
+  invalidateWorkspaceFileSearch,
   searchDirectoryEntries,
   WORKSPACE_SEARCH_HIDDEN_DIRECTORIES,
 } from "../utils/directory-suggestions.js";
@@ -701,6 +703,11 @@ export class Session {
   } | null = null;
   private projectSyncEnabled = false;
   private readonly workspaceUpdateTails = new Map<string, Promise<void>>();
+  private readonly workspaceFileSearchGenerations = new Map<string, number>();
+  private readonly workspaceFileSearchGitState = new Map<
+    string,
+    { branch: string | null; fingerprint: string }
+  >();
   private clientActivity: {
     deviceType: "web" | "mobile";
     focusedAgentId: string | null;
@@ -730,6 +737,7 @@ export class Session {
   private readonly scheduleSession: ScheduleSession;
   private readonly providerCatalogSession: ProviderCatalogSession;
   private readonly workspaceFilesSession: WorkspaceFilesSession;
+  private readonly workspaceLspSession: WorkspaceLspSession;
   private readonly agentConfigSession: AgentConfigSession;
   private readonly projectConfigSession: ProjectConfigSession;
   private readonly daemonSession: DaemonSession;
@@ -828,6 +836,13 @@ export class Session {
       paseoHome,
       logger: this.sessionLogger,
     });
+    this.workspaceLspSession = new WorkspaceLspSession(
+      {
+        emit: (message) => this.emit(message),
+      },
+      undefined,
+      this.sessionLogger,
+    );
     this.agentManager = agentManager;
     this.agentStorage = agentStorage;
     this.projectRegistry = projectRegistry;
@@ -867,6 +882,7 @@ export class Session {
         handleWorkspaceGitBranchSnapshot: (cwd, branchName) =>
           this.workspaceGitObserver.handleBranchSnapshot(cwd, branchName),
         renameCurrentBranch: (cwd, branch) => this.renameCurrentBranch(cwd, branch),
+        invalidateWorkspaceFileSearch: (cwd) => invalidateWorkspaceFileSearch(cwd, "hard"),
       },
       gitMutation: this.gitMutation,
       workspaceGitService: this.workspaceGitService,
@@ -892,7 +908,10 @@ export class Session {
       emitWorkspaceUpdateForCwd: (cwd) => this.emitWorkspaceUpdateForCwd(cwd),
       emitWorkspaceUpdateForWorkspaceId: (workspaceId) =>
         this.emitWorkspaceUpdateForWorkspaceId(workspaceId),
-      emitStatusUpdate: (cwd, snapshot) => this.checkoutSession.emitStatusUpdate(cwd, snapshot),
+      emitStatusUpdate: (cwd, snapshot) => {
+        this.refreshWorkspaceFileSearchIndex(cwd, snapshot);
+        this.checkoutSession.emitStatusUpdate(cwd, snapshot);
+      },
       onBranchChanged,
       logger: this.sessionLogger,
     });
@@ -2337,12 +2356,18 @@ export class Session {
       case "unsubscribe_checkout_diff_request":
         this.checkoutSession.handleUnsubscribeDiffRequest(msg);
         return undefined;
+      case "checkout.diff.get_context.request":
+        return this.checkoutSession.handleDiffGetContextRequest(msg);
+      case "checkout.diff.search.request":
+        return this.checkoutSession.handleDiffSearchRequest(msg);
       case "checkout_switch_branch_request":
         return this.checkoutSession.handleCheckoutSwitchBranchRequest(msg);
       case "checkout.rename_branch.request":
         return this.checkoutSession.handleCheckoutRenameBranchRequest(msg);
       case "checkout_commit_request":
         return this.checkoutSession.handleCheckoutCommitRequest(msg);
+      case "checkout.commit.amend.request":
+        return this.checkoutSession.handleCheckoutCommitAmendRequest(msg);
       case "checkout_merge_request":
         return this.checkoutSession.handleCheckoutMergeRequest(msg);
       case "checkout_merge_from_base_request":
@@ -2470,6 +2495,8 @@ export class Session {
         return this.workspaceFilesSession.handleFileEntryDuplicateRequest(msg);
       case "fs.entry.delete.request":
         return this.workspaceFilesSession.handleFileEntryDeleteRequest(msg);
+      case "workspace.lsp.request":
+        return this.workspaceLspSession.handleRequest(msg);
       case "project_icon_request":
         return this.workspaceFilesSession.handleProjectIconRequest(msg);
       case "project.icon.get.request":
@@ -4170,13 +4197,29 @@ export class Session {
   }
 
   private async handleDirectorySuggestionsRequest(msg: DirectorySuggestionsRequest): Promise<void> {
-    const { query, limit, requestId, cwd, includeFiles, includeDirectories, matchMode } = msg;
+    const {
+      query,
+      limit,
+      requestId,
+      cwd,
+      includeFiles,
+      includeDirectories,
+      matchMode,
+      prepareOnly,
+    } = msg;
 
     try {
       const workspaceCwd = cwd?.trim();
       const searchesWorkspace = Boolean(workspaceCwd);
+      const workspaceRoot = workspaceCwd ? expandTilde(workspaceCwd) : null;
+      const isCancelled = this.registerWorkspaceFileSearchRequest({
+        workspaceRoot,
+        includeFiles,
+        includeDirectories,
+        matchMode,
+      });
       const entries = await searchDirectoryEntries({
-        root: workspaceCwd ? expandTilde(workspaceCwd) : (process.env.HOME ?? homedir()),
+        root: workspaceRoot ?? process.env.HOME ?? homedir(),
         query,
         pathFormat: searchesWorkspace ? "relative" : "absolute",
         pathQueryPolicy: searchesWorkspace ? "slashes" : "rooted",
@@ -4191,6 +4234,8 @@ export class Session {
         includeDirectories,
         matchMode,
         limit,
+        prepareOnly,
+        isCancelled,
       });
       const directories = entries
         .filter((entry) => entry.kind === "directory")
@@ -4215,6 +4260,42 @@ export class Session {
         },
       });
     }
+  }
+
+  private registerWorkspaceFileSearchRequest(options: {
+    workspaceRoot: string | null;
+    includeFiles: boolean | undefined;
+    includeDirectories: boolean | undefined;
+    matchMode: "fuzzy" | "suffix" | undefined;
+  }): (() => boolean) | undefined {
+    const { workspaceRoot, includeFiles, includeDirectories, matchMode } = options;
+    if (
+      !workspaceRoot ||
+      includeFiles !== true ||
+      includeDirectories !== false ||
+      (matchMode ?? "fuzzy") !== "fuzzy"
+    ) {
+      return undefined;
+    }
+    const generation = (this.workspaceFileSearchGenerations.get(workspaceRoot) ?? 0) + 1;
+    this.workspaceFileSearchGenerations.set(workspaceRoot, generation);
+    return () => this.workspaceFileSearchGenerations.get(workspaceRoot) !== generation;
+  }
+
+  private refreshWorkspaceFileSearchIndex(
+    cwd: string,
+    snapshot: WorkspaceGitRuntimeSnapshot,
+  ): void {
+    const branch = snapshot.git.currentBranch;
+    const fingerprint = JSON.stringify({
+      branch,
+      dirty: snapshot.git.isDirty,
+      diffStat: snapshot.git.diffStat,
+    });
+    const previous = this.workspaceFileSearchGitState.get(cwd);
+    this.workspaceFileSearchGitState.set(cwd, { branch, fingerprint });
+    if (!previous || previous.fingerprint === fingerprint) return;
+    void invalidateWorkspaceFileSearch(cwd, previous.branch === branch ? "soft" : "hard");
   }
 
   private async handlePaseoWorktreeListRequest(
@@ -7196,6 +7277,7 @@ export class Session {
           messageId: msg.messageId,
           activeTurnBehavior: msg.activeTurnBehavior ?? "interrupt",
           clearPendingPermissions: true,
+          activeRunBehavior: msg.activeRunBehavior,
           logger: this.sessionLogger,
         });
       } catch (error) {
@@ -7469,6 +7551,7 @@ export class Session {
 
     this.workspaceGitObserver.dispose();
     this.workspaceFilesSession.dispose();
+    this.workspaceLspSession.dispose();
   }
 }
 

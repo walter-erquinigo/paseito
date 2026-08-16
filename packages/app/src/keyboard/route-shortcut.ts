@@ -69,6 +69,7 @@ const PASSTHROUGH_DISPATCH: Record<string, KeyboardActionDefinition> = {
     scope: "workspace",
   },
   "view.toggle.focus": { id: "workspace.focus.toggle", scope: "workspace" },
+  "changes.focus": { id: "changes.focus", scope: "workspace" },
 };
 
 const SIMPLE_CALLBACKS: Record<string, ShortcutCallbackName> = {
