@@ -13,12 +13,13 @@ export interface InlinePathTarget {
   path: string;
   lineStart?: number;
   lineEnd?: number;
+  column?: number;
 }
 
 const FILE_PROTOCOL = "file:";
-const INLINE_LINE_FRAGMENT = /^L([0-9]+)(?:C[0-9]+)?(?:-L?([0-9]+)(?:C[0-9]+)?)?$/i;
-const INLINE_COLON_LINE_SUFFIX = /^(.+?):([0-9]+)(?::[0-9]+)?(?:-([0-9]+)(?::[0-9]+)?)?$/;
-const INLINE_PAREN_LINE_SUFFIX = /^(.+?)\(([0-9]+)(?:,[0-9]+)?(?:-([0-9]+)(?:,[0-9]+)?)?\)$/;
+const INLINE_LINE_FRAGMENT = /^L([0-9]+)(?:C([0-9]+))?(?:-L?([0-9]+)(?:C[0-9]+)?)?$/i;
+const INLINE_COLON_LINE_SUFFIX = /^(.+?):([0-9]+)(?:-([0-9]+))?(?::([0-9]+))?$/;
+const INLINE_PAREN_LINE_SUFFIX = /^(.+?)\(([0-9]+)(?:,([0-9]+))?(?:-([0-9]+)(?:,[0-9]+)?)?\)$/;
 const INLINE_WORD_LINE_SUFFIX = /^(.+?)\s+lines?\s+([0-9]+)(?:-([0-9]+))?$/i;
 const ASSISTANT_FILE_EXTENSIONS = new Set([
   "astro",
@@ -114,15 +115,26 @@ function normalizePathToken(value: string): string | null {
   return trimmed.replace(/\\/g, "/");
 }
 
-function parseLineFragment(value: string): Pick<InlinePathTarget, "lineStart" | "lineEnd"> | null {
+type InlinePathPosition = Pick<InlinePathTarget, "lineStart" | "lineEnd" | "column">;
+
+function normalizePositiveInteger(value: string | undefined): number | undefined {
+  if (!value) {
+    return undefined;
+  }
+  const parsed = parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+}
+
+function parseLineFragment(value: string): InlinePathPosition | null {
   const rawFragment = value.startsWith("#") ? value.slice(1) : value;
   if (!rawFragment) {
     return { lineStart: undefined, lineEnd: undefined };
   }
 
   const lineMatch = rawFragment.match(INLINE_LINE_FRAGMENT);
-  const lineStart = lineMatch?.[1] ? parseInt(lineMatch[1], 10) : undefined;
-  const lineEnd = lineMatch?.[2] ? parseInt(lineMatch[2], 10) : undefined;
+  const lineStart = normalizePositiveInteger(lineMatch?.[1]);
+  const column = normalizePositiveInteger(lineMatch?.[2]);
+  const lineEnd = normalizePositiveInteger(lineMatch?.[3]);
 
   if (
     (lineStart !== undefined && (!Number.isFinite(lineStart) || lineStart <= 0)) ||
@@ -132,7 +144,7 @@ function parseLineFragment(value: string): Pick<InlinePathTarget, "lineStart" | 
     return null;
   }
 
-  return { lineStart, lineEnd };
+  return { lineStart, lineEnd, ...(column ? { column } : {}) };
 }
 
 /**
@@ -140,7 +152,7 @@ function parseLineFragment(value: string): Pick<InlinePathTarget, "lineStart" | 
  *
  * Supported:
  * - `filename:linenumber`
- * - `filename:linenumber:columnnumber` as a line target
+ * - `filename:linenumber:columnnumber`
  * - `filename:lineStart-lineEnd`
  *
  * Not supported (by design):
@@ -154,15 +166,12 @@ export function parseInlinePathToken(value: string): InlinePathTarget | null {
     return null;
   }
 
-  const match =
-    trimmed.match(INLINE_COLON_LINE_SUFFIX) ??
-    trimmed.match(INLINE_PAREN_LINE_SUFFIX) ??
-    trimmed.match(INLINE_WORD_LINE_SUFFIX);
-  if (!match) {
+  const suffix = matchInlinePathSuffix(trimmed);
+  if (!suffix) {
     return null;
   }
 
-  const basePathRaw = match[1]?.trim();
+  const basePathRaw = suffix.match[1]?.trim();
   if (!basePathRaw) {
     return null;
   }
@@ -177,26 +186,60 @@ export function parseInlinePathToken(value: string): InlinePathTarget | null {
     return null;
   }
 
-  const lineStart = parseInt(match[2], 10);
-  if (!Number.isFinite(lineStart) || lineStart <= 0) {
+  const position = parseInlinePathPosition(suffix);
+  if (!position) {
     return null;
-  }
-
-  const lineEnd = match[3] ? parseInt(match[3], 10) : undefined;
-  if (lineEnd !== undefined) {
-    if (!Number.isFinite(lineEnd) || lineEnd <= 0) {
-      return null;
-    }
-    if (lineEnd < lineStart) {
-      return null;
-    }
   }
 
   return {
     raw: rawValue,
     path: normalizedPath,
+    ...position,
+  };
+}
+
+type InlinePathSuffixKind = "colon" | "paren" | "word";
+
+interface InlinePathSuffixMatch {
+  kind: InlinePathSuffixKind;
+  match: RegExpMatchArray;
+}
+
+function matchInlinePathSuffix(value: string): InlinePathSuffixMatch | null {
+  const colonMatch = value.match(INLINE_COLON_LINE_SUFFIX);
+  if (colonMatch) return { kind: "colon", match: colonMatch };
+  const parenMatch = value.match(INLINE_PAREN_LINE_SUFFIX);
+  if (parenMatch) return { kind: "paren", match: parenMatch };
+  const wordMatch = value.match(INLINE_WORD_LINE_SUFFIX);
+  return wordMatch ? { kind: "word", match: wordMatch } : null;
+}
+
+function parseInlinePathPosition(suffix: InlinePathSuffixMatch): InlinePathPosition | null {
+  const lineStart = normalizePositiveInteger(suffix.match[2]);
+  if (!lineStart) return null;
+
+  let columnRaw: string | undefined;
+  let lineEndRaw: string | undefined;
+  if (suffix.kind === "colon") {
+    lineEndRaw = suffix.match[3];
+    columnRaw = suffix.match[4];
+  } else if (suffix.kind === "paren") {
+    columnRaw = suffix.match[3];
+    lineEndRaw = suffix.match[4];
+  } else {
+    lineEndRaw = suffix.match[3];
+  }
+
+  const column = normalizePositiveInteger(columnRaw);
+  const lineEnd = normalizePositiveInteger(lineEndRaw);
+  if ((columnRaw && !column) || (lineEndRaw && !lineEnd) || (lineEnd && lineEnd < lineStart)) {
+    return null;
+  }
+
+  return {
     lineStart,
     lineEnd,
+    ...(column ? { column } : {}),
   };
 }
 
@@ -367,6 +410,14 @@ export function parseAssistantFileLink(
   };
 }
 
+export function parseMarkdownPreviewFileLink(
+  value: string,
+  options: Pick<AssistantHrefParseOptions, "workspaceRoot"> = {},
+): InlinePathTarget | null {
+  const target = parseAssistantFileLink(safeDecodeURIComponent(value), options);
+  return target ? { ...target, raw: value } : null;
+}
+
 export function isFileLookingAssistantToken(value: string): boolean {
   const normalized = normalizePathToken(value);
   if (
@@ -420,9 +471,7 @@ function parseWorkspaceRelativeFileLink(
   };
 }
 
-function parseLocalPathParts(
-  value: string,
-): { path: string; lines: Pick<InlinePathTarget, "lineStart" | "lineEnd"> } | null {
+function parseLocalPathParts(value: string): { path: string; lines: InlinePathPosition } | null {
   const normalized = normalizePathToken(value);
   if (!normalized || normalized.includes("?")) {
     return null;
@@ -447,6 +496,7 @@ function parseLocalPathParts(
       lines: {
         lineStart: inlinePathTarget.lineStart,
         lineEnd: inlinePathTarget.lineEnd,
+        column: inlinePathTarget.column,
       },
     };
   }

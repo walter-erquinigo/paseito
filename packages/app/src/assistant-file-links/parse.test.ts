@@ -5,6 +5,7 @@ import {
   parseAssistantFileLink,
   parseFileProtocolUrl,
   parseInlinePathToken,
+  parseMarkdownPreviewFileLink,
 } from "./parse";
 
 describe("parseInlinePathToken", () => {
@@ -37,6 +38,7 @@ describe("parseInlinePathToken", () => {
       path: "src/app.ts",
       lineStart: 12,
       lineEnd: undefined,
+      column: 4,
     });
   });
 
@@ -46,6 +48,7 @@ describe("parseInlinePathToken", () => {
       path: "src/app.ts",
       lineStart: 12,
       lineEnd: undefined,
+      column: 4,
     });
   });
 
@@ -80,6 +83,7 @@ describe("parseFileProtocolUrl", () => {
       path: "/Users/test/project/src/app.tsx",
       lineStart: 81,
       lineEnd: 83,
+      column: 5,
     });
   });
 
@@ -104,6 +108,111 @@ describe("parseFileProtocolUrl", () => {
   it("rejects non-file URLs and invalid ranges", () => {
     expect(parseFileProtocolUrl("https://example.com/test.ts#L10")).toBeNull();
     expect(parseFileProtocolUrl("file:///Users/test/project/src/app.tsx#L20-L12")).toBeNull();
+  });
+});
+
+describe("parseMarkdownPreviewFileLink", () => {
+  it("parses dash suffixes as line ranges and only final colon suffixes as columns", () => {
+    const path =
+      "/raid/werquinigo/llvm-solid-cherry-pick-dkg-25967/nvidia/dkg/tile_ir/compiler/include/tile_ir/Dialect/TileAS/IR/TileASEnums.td";
+
+    expect(parseMarkdownPreviewFileLink(`${path}:67-96`)).toEqual({
+      raw: `${path}:67-96`,
+      path,
+      lineStart: 67,
+      lineEnd: 96,
+    });
+    expect(parseMarkdownPreviewFileLink(`${path}:67-96:8`)).toEqual({
+      raw: `${path}:67-96:8`,
+      path,
+      lineStart: 67,
+      lineEnd: 96,
+      column: 8,
+    });
+  });
+
+  it("resolves a bare workspace-relative filename with an explicit column suffix", () => {
+    expect(
+      parseMarkdownPreviewFileLink("missing.ts:9:2", {
+        workspaceRoot: "/Users/test/project",
+      }),
+    ).toMatchObject({
+      path: "/Users/test/project/missing.ts",
+      lineStart: 9,
+      column: 2,
+    });
+  });
+
+  const workspaceRoot = "/Users/test/project";
+
+  it("uses the same dash range syntax for previews and assistant links", () => {
+    expect(parseInlinePathToken("src/app.ts:10-14")).toEqual({
+      raw: "src/app.ts:10-14",
+      path: "src/app.ts",
+      lineStart: 10,
+      lineEnd: 14,
+    });
+    expect(parseMarkdownPreviewFileLink("src/app.ts:10-14", { workspaceRoot })).toEqual({
+      raw: "src/app.ts:10-14",
+      path: "/Users/test/project/src/app.ts",
+      lineStart: 10,
+      lineEnd: 14,
+    });
+  });
+
+  it("preserves explicit line ranges and all supported column spellings", () => {
+    expect(parseMarkdownPreviewFileLink("src/app.ts#L10-L14", { workspaceRoot })).toMatchObject({
+      lineStart: 10,
+      lineEnd: 14,
+    });
+    expect(parseMarkdownPreviewFileLink("src/app.ts lines 10-14", { workspaceRoot })).toMatchObject(
+      { lineStart: 10, lineEnd: 14 },
+    );
+    expect(parseMarkdownPreviewFileLink("src/app.ts:10:4", { workspaceRoot })).toMatchObject({
+      lineStart: 10,
+      lineEnd: undefined,
+      column: 4,
+    });
+    expect(parseMarkdownPreviewFileLink("src/app.ts:10-14:4", { workspaceRoot })).toMatchObject({
+      lineStart: 10,
+      lineEnd: 14,
+      column: 4,
+    });
+    expect(parseMarkdownPreviewFileLink("src/app.ts(10,4)", { workspaceRoot })).toMatchObject({
+      lineStart: 10,
+      lineEnd: undefined,
+      column: 4,
+    });
+    expect(parseMarkdownPreviewFileLink("src/app.ts#L10C4", { workspaceRoot })).toMatchObject({
+      lineStart: 10,
+      lineEnd: undefined,
+      column: 4,
+    });
+  });
+
+  it("resolves relative paths exactly and preserves absolute paths outside the workspace", () => {
+    expect(parseMarkdownPreviewFileLink("src/app.ts:7-12", { workspaceRoot })).toMatchObject({
+      path: "/Users/test/project/src/app.ts",
+      lineStart: 7,
+      lineEnd: 12,
+    });
+    expect(parseMarkdownPreviewFileLink("/tmp/outside.ts:7:2", { workspaceRoot })).toMatchObject({
+      path: "/tmp/outside.ts",
+      lineStart: 7,
+      column: 2,
+    });
+    expect(parseMarkdownPreviewFileLink("src/my%20file.ts:8:3", { workspaceRoot })).toMatchObject({
+      raw: "src/my%20file.ts:8:3",
+      path: "/Users/test/project/src/my file.ts",
+      lineStart: 8,
+      column: 3,
+    });
+  });
+
+  it("keeps web URLs external", () => {
+    expect(
+      parseMarkdownPreviewFileLink("https://example.com/app.ts:10-4", { workspaceRoot }),
+    ).toBeNull();
   });
 });
 

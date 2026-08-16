@@ -2,8 +2,25 @@ import { app, Menu, BrowserWindow, ipcMain } from "electron";
 import { getActivePaseoBrowserWebContentsForHostWindow } from "./browser-webviews/index.js";
 
 interface ShowContextMenuInput {
-  kind?: "terminal";
+  kind?: "terminal" | "editor-lsp";
   hasSelection?: boolean;
+}
+
+export function buildEditorLspContextMenuTemplate(input: {
+  onGoToDefinition(): void;
+}): Electron.MenuItemConstructorOptions[] {
+  return [
+    {
+      label: "Go to Definition / Declaration",
+      click: input.onGoToDefinition,
+    },
+    { type: "separator" },
+    { role: "cut" },
+    { role: "copy" },
+    { role: "paste" },
+    { type: "separator" },
+    { role: "selectAll" },
+  ];
 }
 
 interface ApplicationMenuOptions {
@@ -199,11 +216,31 @@ export function setupApplicationMenu(options: ApplicationMenuOptions): void {
   ipcMain.handle("paseo:menu:showContextMenu", (event, input?: ShowContextMenuInput) => {
     const win = BrowserWindow.fromWebContents(event.sender);
     if (!win) {
-      return;
+      return null;
+    }
+
+    if (input?.kind === "editor-lsp") {
+      return new Promise<"go-to-definition" | null>((resolve) => {
+        let selected = false;
+        const contextMenu = Menu.buildFromTemplate(
+          buildEditorLspContextMenuTemplate({
+            onGoToDefinition: () => {
+              selected = true;
+              resolve("go-to-definition");
+            },
+          }),
+        );
+        contextMenu.popup({
+          window: win,
+          callback: () => {
+            if (!selected) resolve(null);
+          },
+        });
+      });
     }
 
     if (input?.kind !== "terminal") {
-      return;
+      return null;
     }
 
     const contextMenu = Menu.buildFromTemplate([
@@ -226,6 +263,7 @@ export function setupApplicationMenu(options: ApplicationMenuOptions): void {
     ]);
 
     contextMenu.popup({ window: win });
+    return null;
   });
 
   // Disable the zoom accelerators while capturing a shortcut so combos like

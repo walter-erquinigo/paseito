@@ -1,11 +1,20 @@
 import { useMemo } from "react";
 import { Text, View } from "react-native";
+import type { MarkdownIt, RenderRules } from "react-native-markdown-display";
 import { StyleSheet } from "react-native-unistyles";
 import { MarkdownRenderer } from "@/components/markdown/renderer";
 import { MAX_CONTENT_WIDTH } from "@/constants/layout";
 import { parseMarkdownPreviewDocument } from "./document";
 
-export function FileMarkdownPreview({ source }: { source: string }) {
+export function FileMarkdownPreview({
+  source,
+  markdownit,
+  rules,
+}: {
+  source: string;
+  markdownit?: MarkdownIt;
+  rules?: RenderRules;
+}) {
   const document = useMemo(() => parseMarkdownPreviewDocument(source), [source]);
 
   return (
@@ -32,7 +41,7 @@ export function FileMarkdownPreview({ source }: { source: string }) {
             ))}
           </View>
         ) : null}
-        <MarkdownRenderer text={document.body} />
+        <MarkdownRenderer text={document.body} markdownit={markdownit} rules={rules} />
       </View>
     </View>
   );

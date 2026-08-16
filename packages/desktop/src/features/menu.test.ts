@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { reloadActiveBrowserOrWindow } from "./menu.js";
+import { buildEditorLspContextMenuTemplate, reloadActiveBrowserOrWindow } from "./menu.js";
 
 class FakeWebContents {
   public readonly reloads: string[] = [];
@@ -66,5 +66,32 @@ describe("reloadActiveBrowserOrWindow", () => {
     expect(browserReloads.firstBrowser.reloads).toEqual([]);
     expect(browserReloads.secondBrowser.reloads).toEqual(["force-reload"]);
     expect(browserReloads.secondWindow.webContents.reloads).toEqual([]);
+  });
+});
+
+describe("editor LSP context menu", () => {
+  it("keeps native edit actions and invokes definition navigation", () => {
+    const actions: string[] = [];
+    const template = buildEditorLspContextMenuTemplate({
+      onGoToDefinition: () => actions.push("definition"),
+    });
+
+    expect(
+      template.map((item) =>
+        "label" in item && item.label ? item.label : (item.role ?? item.type),
+      ),
+    ).toEqual([
+      "Go to Definition / Declaration",
+      "separator",
+      "cut",
+      "copy",
+      "paste",
+      "separator",
+      "selectAll",
+    ]);
+    const definition = template[0];
+    if (typeof definition?.click !== "function") throw new Error("definition action is missing");
+    definition.click({} as Electron.MenuItem, undefined, {} as Electron.KeyboardEvent);
+    expect(actions).toEqual(["definition"]);
   });
 });

@@ -10,16 +10,33 @@ import React, {
 } from "react";
 import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
 import type { WorkspaceLspLocation } from "@getpaseo/protocol/messages";
-import { ScrollView as RNScrollView, Text, View } from "react-native";
+import {
+  ScrollView as RNScrollView,
+  Text,
+  View,
+  type StyleProp,
+  type TextStyle,
+} from "react-native";
+import { type ASTNode, type MarkdownIt, type RenderRules } from "react-native-markdown-display";
 import { StyleSheet, UnistylesRuntime, withUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
+import { createSharedMarkdownRules, type MarkdownStyles } from "@/components/markdown/renderer";
+import {
+  AssistantFileLinkResolverProvider,
+  AssistantMarkdownLink,
+  type InlinePathTarget,
+} from "@/assistant-file-links";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { useSessionStore, type ExplorerFile } from "@/stores/session-store";
 import { filePreviewRenderKind } from "@/components/file-pane-render-mode";
 import { useAttachmentPreviewUrl } from "@/attachments/use-attachment-preview-url";
 import { getFileNameFromPath } from "@/attachments/utils";
 import { resolveFilePreviewReadTarget } from "@/file-explorer/preview-target";
-import { resolveWorkspaceFilePaths, type WorkspaceFileLocation } from "@/workspace/file-open";
+import {
+  resolveWorkspaceFilePaths,
+  type OpenFileDisposition,
+  type WorkspaceFileLocation,
+} from "@/workspace/file-open";
 import { useRetainedPanelActive } from "@/components/retained-panel";
 import { useAppActivelyVisible } from "@/hooks/use-app-visible";
 import { isFileQueryEnabled } from "@/components/file-pane-enabled";
@@ -42,9 +59,11 @@ import { usePublishPanelInstanceAttributes } from "@/panels/panel-instance-attri
 import type { Theme } from "@/styles/theme";
 import { ZoomableImage } from "@/components/zoomable-viewport/image";
 import { usePaneContext } from "@/panels/pane-context";
+import { useToast } from "@/contexts/toast-context";
 import type { EditorLspSnapshot } from "./editor/lsp-session";
 import { acquireEditorLspSession } from "./editor/lsp-session-pool";
 import { lspLanguageForFile, useWorkspaceLspPreferences } from "./editor/lsp-preferences";
+import { createMarkdownFilePreviewParser } from "./markdown-file-links";
 
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
 const foregroundMutedColorMapping = (theme: Theme) => ({
@@ -59,6 +78,8 @@ interface FilePreviewBodyProps {
   location: WorkspaceFileLocation;
   navigationRevision: number;
   imagePreviewUri: string | null;
+  markdownParser: ReturnType<typeof MarkdownIt>;
+  markdownRules: RenderRules;
 }
 
 type TextExplorerFile = ExplorerFile & { kind: "text" };
@@ -143,6 +164,8 @@ function FilePreviewBody({
   location,
   navigationRevision,
   imagePreviewUri,
+  markdownParser,
+  markdownRules,
 }: FilePreviewBodyProps) {
   const { t } = useTranslation();
   const filePath = location.path;
@@ -190,7 +213,11 @@ function FilePreviewBody({
             style={styles.previewContent}
             showsVerticalScrollIndicator
           >
-            <FileMarkdownPreview source={preview.content ?? ""} />
+            <FileMarkdownPreview
+              source={preview.content ?? ""}
+              markdownit={markdownParser}
+              rules={markdownRules}
+            />
           </RNScrollView>
         </View>
       );
@@ -239,6 +266,7 @@ export function FilePane({
   navigationRevision: number;
 }) {
   const { t } = useTranslation();
+  const toast = useToast();
   const { openFileInWorkspace } = usePaneContext();
   const isMobile = useIsCompactFormFactor();
   const [previewMode, setPreviewMode] = useState<"preview" | "source">("preview");
@@ -257,6 +285,11 @@ export function FilePane({
     (state) => state.sessions[serverId]?.serverInfo?.features?.workspaceLspClangd === true,
   );
   const normalizedWorkspaceRoot = useMemo(() => workspaceRoot.trim(), [workspaceRoot]);
+  const markdownParser = useMemo(
+    () => createMarkdownFilePreviewParser(normalizedWorkspaceRoot),
+    [normalizedWorkspaceRoot],
+  );
+  const markdownRules = useMemo(() => createMarkdownFilePreviewRules(), []);
   const normalizedFilePath = useMemo(() => trimNonEmpty(location.path), [location.path]);
   const readTarget = useMemo(
     () =>
@@ -314,32 +347,133 @@ export function FilePane({
     previewLifecycle.status === "read_pending" ||
     previewLifecycle.status === "preparing";
 
-  return (
-    <FilePanePresentation
-      serverId={serverId}
-      client={client}
-      readTarget={readTarget}
-      preview={preview}
-      liveFile={liveFile.model}
-      onRetryRead={liveFile.refresh}
-      retryingRead={liveFile.isRetrying}
-      retryLabel={t("common.actions.retry")}
-      filename={getFileNameFromPath(location.path) ?? location.path}
-      previewMode={canTogglePreviewMode ? previewMode : undefined}
-      onPreviewModeChange={canTogglePreviewMode ? setPreviewMode : undefined}
-      lineCount={lineCount}
-      editable={editable}
-      supportsLsp={supportsLsp}
-      supportsStandaloneClangd={supportsStandaloneClangd}
-      disconnectedMessage={t("workspace.terminal.hostDisconnected")}
-      errorMessage={errorMessage}
-      isLoading={isLoading}
-      isMobile={isMobile}
-      location={location}
-      navigationRevision={navigationRevision}
-      imagePreviewUri={imagePreviewUri}
-    />
+  const handleOpenMarkdownFileLink = useCallback(
+    (target: InlinePathTarget, disposition: OpenFileDisposition) => {
+      void (async () => {
+        const targetRead = resolveFilePreviewReadTarget({
+          path: target.path,
+          workspaceRoot: normalizedWorkspaceRoot,
+        });
+        if (!client || !targetRead) {
+          showMarkdownFileNotFoundToast(toast, t, target.raw);
+          return;
+        }
+        try {
+          await client.readFile(targetRead.cwd, targetRead.path);
+        } catch {
+          showMarkdownFileNotFoundToast(toast, t, target.raw);
+          return;
+        }
+        openFileInWorkspace({
+          disposition: disposition === "side" ? "markdown-preview" : disposition,
+          location: {
+            path: target.path,
+            lineStart: target.lineStart,
+            lineEnd: target.lineEnd,
+            column: target.column,
+            openMode: "source",
+          },
+        });
+      })();
+    },
+    [client, normalizedWorkspaceRoot, openFileInWorkspace, t, toast],
   );
+
+  return (
+    <AssistantFileLinkResolverProvider
+      client={client}
+      serverId={serverId}
+      workspaceRoot={normalizedWorkspaceRoot}
+      primaryDisposition="side"
+      onOpenWorkspaceFile={handleOpenMarkdownFileLink}
+      toast={toast}
+    >
+      <FilePanePresentation
+        serverId={serverId}
+        client={client}
+        readTarget={readTarget}
+        preview={preview}
+        liveFile={liveFile.model}
+        onRetryRead={liveFile.refresh}
+        retryingRead={liveFile.isRetrying}
+        retryLabel={t("common.actions.retry")}
+        filename={getFileNameFromPath(location.path) ?? location.path}
+        previewMode={canTogglePreviewMode ? previewMode : undefined}
+        onPreviewModeChange={canTogglePreviewMode ? setPreviewMode : undefined}
+        lineCount={lineCount}
+        editable={editable}
+        supportsLsp={supportsLsp}
+        supportsStandaloneClangd={supportsStandaloneClangd}
+        disconnectedMessage={t("workspace.terminal.hostDisconnected")}
+        errorMessage={errorMessage}
+        isLoading={isLoading}
+        isMobile={isMobile}
+        location={location}
+        navigationRevision={navigationRevision}
+        imagePreviewUri={imagePreviewUri}
+        markdownParser={markdownParser}
+        markdownRules={markdownRules}
+      />
+    </AssistantFileLinkResolverProvider>
+  );
+}
+
+function showMarkdownFileNotFoundToast(
+  toast: ReturnType<typeof useToast>,
+  t: ReturnType<typeof useTranslation>["t"],
+  token: string,
+): void {
+  toast.show(t("common.errors.noFileFound", { token }), {
+    variant: "error",
+    testID: "assistant-file-link-not-found-toast",
+  });
+}
+
+interface FilePreviewMarkdownAstNode extends ASTNode {
+  sourceInfo?: string;
+}
+
+function createMarkdownFilePreviewRules(): RenderRules {
+  return {
+    ...createSharedMarkdownRules(),
+    link: (
+      node: FilePreviewMarkdownAstNode,
+      children: React.ReactNode[],
+      _parent: ASTNode[],
+      styles: MarkdownStyles,
+    ) => (
+      <AssistantMarkdownLink
+        key={node.key}
+        source={getMarkdownFilePreviewLinkSource(node)}
+        style={styles.link}
+      >
+        {React.Children.map(children, (child) => {
+          if (!React.isValidElement(child)) return child;
+          const childProps = child.props as { style?: StyleProp<TextStyle> };
+          return React.cloneElement(child, {
+            style: [childProps.style, { color: styles.link.color }],
+          } as Partial<{ style: StyleProp<TextStyle> }>);
+        })}
+      </AssistantMarkdownLink>
+    ),
+  };
+}
+
+function getMarkdownFilePreviewLinkSource(node: FilePreviewMarkdownAstNode) {
+  return {
+    href: typeof node.attributes?.href === "string" ? node.attributes.href : "",
+    text: getMarkdownNodeText(node),
+    markup: node.markup,
+    sourceInfo: node.sourceInfo,
+    sourceType: "file-preview" as const,
+  };
+}
+
+function getMarkdownNodeText(node: ASTNode): string {
+  if (!node.children.length) {
+    return node.content ?? "";
+  }
+  return node.children.map(getMarkdownNodeText).join("");
 }
 
 function isRenderablePreview(preview: ExplorerFile | null, path: string): boolean {
@@ -381,6 +515,8 @@ function FilePanePresentation({
   location,
   navigationRevision,
   imagePreviewUri,
+  markdownParser,
+  markdownRules,
 }: {
   serverId: string;
   client: DaemonClient | null;
@@ -404,6 +540,8 @@ function FilePanePresentation({
   location: WorkspaceFileLocation;
   navigationRevision: number;
   imagePreviewUri: string | null;
+  markdownParser: ReturnType<typeof MarkdownIt>;
+  markdownRules: RenderRules;
 }) {
   if (!client && readTarget) {
     return (
@@ -436,6 +574,8 @@ function FilePanePresentation({
         navigationRevision={navigationRevision}
         supportsLsp={supportsLsp}
         supportsStandaloneClangd={supportsStandaloneClangd}
+        markdownParser={markdownParser}
+        markdownRules={markdownRules}
       />
     );
   }
@@ -478,6 +618,8 @@ function FilePanePresentation({
         location={location}
         navigationRevision={navigationRevision}
         imagePreviewUri={imagePreviewUri}
+        markdownParser={markdownParser}
+        markdownRules={markdownRules}
       />
     </View>
   );
@@ -501,6 +643,8 @@ function EditableFilePane({
   navigationRevision,
   supportsLsp,
   supportsStandaloneClangd,
+  markdownParser,
+  markdownRules,
 }: {
   client: DaemonClient;
   serverId: string;
@@ -519,6 +663,8 @@ function EditableFilePane({
   navigationRevision: number;
   supportsLsp: boolean;
   supportsStandaloneClangd: boolean;
+  markdownParser: ReturnType<typeof MarkdownIt>;
+  markdownRules: RenderRules;
 }) {
   const { settings } = useAppSettings();
   const { t } = useTranslation();
@@ -757,6 +903,8 @@ function EditableFilePane({
           location={location}
           navigationRevision={navigationRevision}
           imagePreviewUri={null}
+          markdownParser={markdownParser}
+          markdownRules={markdownRules}
         />
       )}
     </View>

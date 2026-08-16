@@ -82,11 +82,12 @@ import {
 import { useSettings } from "@/hooks/use-settings";
 import { useKeyboardActionHandler } from "@/hooks/use-keyboard-action-handler";
 import { buildWorkspaceKeyboardHandlerId } from "@/keyboard/handler-id";
-import type {
-  KeyboardActionDefinition,
-  WorkspacePanelTarget,
+import {
+  type KeyboardActionDefinition,
+  type WorkspacePanelTarget,
 } from "@/keyboard/keyboard-action-dispatcher";
 import { useKeyboardActionDispatcher } from "@/keyboard/keyboard-action-dispatcher-context";
+import { resolveSideFileOpenPlacement } from "@/screens/workspace/workspace-pane-state";
 import { useCreateFlowStore } from "@/stores/create-flow-store";
 import { normalizeWorkspaceTabTarget, workspaceTabTargetsEqual } from "@/workspace-tabs/identity";
 import { useVisibleAgentIds } from "./visible-agent-ids";
@@ -205,6 +206,12 @@ import {
   type WorkspaceFileLocation,
   type WorkspaceFileOpenRequest,
 } from "@/workspace/file-open";
+import {
+  getInlineWorkingDiffNavigationSnapshot,
+  getWorkingDiffNavigationSnapshot,
+  resolveMarkdownChangesNavigation,
+  resolveMarkdownInlineChangesNavigation,
+} from "@/workspace/markdown-changes-navigation";
 import { RenderProfile } from "@/utils/render-profiler";
 import { useWorkspaceCheckoutStatus } from "@/screens/workspace/use-workspace-checkout-status";
 import { useHasPullRequest, usePullRequestAutoAdd } from "@/panels/pull-request";
@@ -2217,27 +2224,6 @@ function WorkspaceScreenContent({
     normalizedWorkspaceId,
   ]);
 
-  const handleOpenFileFromExplorer = useCallback(
-    function handleOpenFileFromExplorer(
-      filePath: string,
-      options?: { lineStart: number; openMode: "source" },
-    ) {
-      if (!persistenceKey) {
-        return;
-      }
-      const location = normalizeWorkspaceFileLocation({ path: filePath, ...options });
-      if (!location) {
-        return;
-      }
-      const tabId = openWorkspaceTabFocused(persistenceKey, createWorkspaceFileTabTarget(location));
-      if (tabId) {
-        requestFileNavigation(tabId);
-        navigateToTabId(tabId);
-      }
-    },
-    [navigateToTabId, openWorkspaceTabFocused, persistenceKey, requestFileNavigation],
-  );
-
   const handleOpenFileFromChat = useCallback(
     (location: WorkspaceFileLocation, parentTabId?: string | null) => {
       const normalizedLocation = normalizeWorkspaceFileLocation(location);
@@ -2306,6 +2292,60 @@ function WorkspaceScreenContent({
     ],
   );
 
+  const handleOpenAssistantFileInSidePanel = useCallback(
+    (input: {
+      location: WorkspaceFileLocation;
+      sourcePaneId?: string;
+      parentTabId?: string | null;
+      side?: "left" | "right";
+    }) => {
+      const location = normalizeWorkspaceFileLocation(input.location);
+      if (!location) return;
+      if (isMobile) showMobileAgent();
+      if (!persistenceKey) return;
+
+      const target: WorkspaceTabTarget = createWorkspaceFileTabTarget(location);
+      const placement = resolveSideFileOpenPlacement({
+        layout: workspaceLayout,
+        sourcePaneId: input.sourcePaneId,
+        explorerSidebarPaneId,
+        tabs: uiTabs,
+        target,
+        side: input.side,
+      });
+      if (placement.kind === "focus-side-pane") {
+        focusWorkspacePane(persistenceKey, placement.paneId);
+      } else if (placement.kind === "split-side-pane") {
+        splitWorkspacePaneEmpty(persistenceKey, {
+          targetPaneId: placement.paneId,
+          position: input.side ?? "right",
+        });
+      }
+
+      const tabId = input.parentTabId
+        ? revealWorkspaceChildTab(persistenceKey, target, input.parentTabId)
+        : openWorkspaceTabFocused(persistenceKey, target);
+      if (tabId) {
+        requestFileNavigation(tabId);
+        navigateToTabId(tabId);
+      }
+    },
+    [
+      focusWorkspacePane,
+      explorerSidebarPaneId,
+      isMobile,
+      navigateToTabId,
+      openWorkspaceTabFocused,
+      persistenceKey,
+      requestFileNavigation,
+      revealWorkspaceChildTab,
+      showMobileAgent,
+      splitWorkspacePaneEmpty,
+      uiTabs,
+      workspaceLayout,
+    ],
+  );
+
   const handleOpenWorkspaceFileFromPane = useStableEvent(function handleOpenWorkspaceFileFromPane({
     request,
     paneId,
@@ -2320,18 +2360,55 @@ function WorkspaceScreenContent({
     if (focusPaneBeforeOpen && paneId && persistenceKey) {
       focusWorkspacePane(persistenceKey, paneId);
     }
-    if (request.disposition === "side") {
+    if (request.disposition === "markdown-preview") {
       const location = normalizeWorkspaceFileLocation(request.location);
-      if (!location || !persistenceKey) return;
-      const tabId = openWorkspaceTargetBeside({
-        workspaceKey: persistenceKey,
-        target: createWorkspaceFileTabTarget(location),
-        parentTabId,
-      });
-      if (tabId) {
-        requestFileNavigation(tabId);
-        navigateToTabId(tabId);
+      if (!location) {
+        return;
       }
+      if (persistenceKey && workspaceDirectory && !isMobile) {
+        const navigation = resolveMarkdownChangesNavigation({
+          workspaceRoot: workspaceDirectory,
+          location,
+          tabs: uiTabs,
+          snapshot: getWorkingDiffNavigationSnapshot(persistenceKey),
+        });
+        if (navigation) {
+          const replacementTabId = replaceWorkspaceTabTarget(
+            persistenceKey,
+            navigation.tabId,
+            navigation.target,
+          );
+          if (replacementTabId) {
+            focusWorkspaceTab(persistenceKey, replacementTabId);
+            navigateToTabId(replacementTabId);
+            return;
+          }
+        }
+        const inlineSnapshot = getInlineWorkingDiffNavigationSnapshot(persistenceKey);
+        const inlineNavigation = resolveMarkdownInlineChangesNavigation({
+          workspaceRoot: workspaceDirectory,
+          location,
+          snapshot: inlineSnapshot,
+        });
+        if (inlineSnapshot && inlineNavigation) {
+          inlineSnapshot.navigate(inlineNavigation);
+          return;
+        }
+      }
+      handleOpenAssistantFileInSidePanel({
+        location,
+        sourcePaneId: paneId ?? undefined,
+        parentTabId,
+        side: "left",
+      });
+      return;
+    }
+    if (request.disposition === "side") {
+      handleOpenAssistantFileInSidePanel({
+        location: request.location,
+        parentTabId,
+        side: request.side,
+      });
       return;
     }
     if (request.disposition === "preferred") {

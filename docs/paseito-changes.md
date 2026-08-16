@@ -134,3 +134,32 @@ per file. Wide panes show language and provider labels; narrow panes use accessi
 LSP remains available with uncommitted changes, using the exact source revision displayed by each
 comparison. Conflicting unsaved editor buffers remain protected. See [paseito-lsp.md](paseito-lsp.md)
 for session ownership and retry behavior.
+
+## Markdown preview source links
+
+Markdown file previews recognize source locations in ordinary prose and inline code. Relative paths
+resolve from the active workspace, absolute paths can point to any readable local file, and explicit
+Markdown links continue to support paths containing spaces. Auto-detected paths are
+whitespace-delimited and require a location suffix; fenced code blocks and plain filenames remain
+untouched, while web URLs continue to open externally.
+
+Preview locations accept `path:10-14`, `path#L10-L14`, and `path lines 10-14` as explicit line
+ranges. A column is always the final colon-delimited number: `path:10:4` means line 10, column 4,
+while `path:10-14:4` adds column 4 to the range. `path(10,4)` and `path#L10C4` remain supported.
+
+On desktop, clicking a preview source location first checks for an already-open full **Changes** tab.
+When that tab's active working comparison contains the workspace-relative file and can render the
+requested current-side line, Paseito focuses the existing tab, expands the file, loads omitted
+context when supported, and highlights the requested line or range. Unwrapped diffs also reveal the
+requested column horizontally. When no full Changes tab is open, the same navigation reuses a
+visible inline **Changes** explorer, focusing its review surface without opening a file tab. Binary,
+oversized, deleted-only, invalid, unsupported hidden-context, outside-workspace, unchanged, or
+otherwise unavailable targets instead open source mode in the pane immediately to the left, reusing
+it when present or creating a left split when necessary. A closed Changes surface is never created
+by a preview link.
+
+The Markdown preview stays visible when source mode is used, and links never create or target a pane
+on its right. The editor focuses and centers the requested 1-based location, clamping positions beyond
+the document or line end. Compact layouts retain this source-opening behavior. A missing target leaves
+the preview intact and shows the existing file-not-found notification. Commit diffs and inline
+Changes panels that are not currently visible are not Markdown navigation targets.
