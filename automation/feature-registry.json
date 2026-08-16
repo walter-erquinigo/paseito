@@ -1,0 +1,497 @@
+{
+  "schemaVersion": 1,
+  "features": [
+    {
+      "id": "independent-desktop-identity",
+      "commitSubject": "feat: give Paseito an independent macOS identity",
+      "preservationFixes": [
+        "Keep the desktop bundle, daemon, CLI, storage, URL scheme, updater and artwork independent from Paseo."
+      ],
+      "permanent": true,
+      "intent": "Keep Paseito independently installable beside Paseo with distinct app, daemon, CLI, storage, protocol and visual identities.",
+      "invariants": [
+        "The bundle id is dev.werquinigo.paseito and the product/executable is Paseito.",
+        "Standalone Paseito uses ~/.paseito, port 6769, Paseito-specific app data and the paseito URL/update source; an explicitly registered in-place remote deployment may retain its existing Paseo home, port and server identity.",
+        "The original stepping-stone icon and AGPL attribution remain present."
+      ],
+      "contracts": [
+        "npx vitest run packages/protocol/src/agent-deep-link.test.ts packages/desktop/src/agent-navigation.test.ts packages/cli/src/cli-surface.test.ts"
+      ],
+      "paths": [
+        "NOTICE-PASEITO.md",
+        "packages/desktop",
+        "packages/cli",
+        "packages/app/app.config.js"
+      ]
+    },
+    {
+      "id": "changes-base-selector",
+      "commitSubject": "feat(changes): select and preserve comparison bases",
+      "preservationFixes": [
+        "Default ahead branches to their committed branch diff without hiding the explicit Uncommitted view.",
+        "Use valid top-commit Stack-Parent branches as the default comparison base and keep invalid markers visible.",
+        "Sort every werquinigo/ branch first in literal name order on both current and legacy hosts.",
+        "Keep branch search focused while revealing and activating the selected branch, including when it is absent from the bounded suggestion response."
+      ],
+      "permanent": false,
+      "intent": "Let the Changes tab select and remember a read-only comparison base without changing merge, update or pull-request targets.",
+      "invariants": [
+        "The selection is scoped by repository root and current branch.",
+        "On desktop, the base selector is beside the current branch selector and choosing a base switches Changes to Committed.",
+        "When a branch is ahead of its base, Changes defaults to the committed branch diff even if the working tree is dirty; an explicit Uncommitted selection is still honored.",
+        "A valid Stack-Parent line on the top commit supplies the default read-only comparison beneath manual overrides; malformed or missing parents fall back and retain an error badge.",
+        "Diffs, review attachments and commit history use the selected validated base.",
+        "Branch dropdowns rank every werquinigo/ branch first in literal name order, then the remaining current ancestry stack from base to tip, then other branches by recency.",
+        "Opening the current-branch dropdown focuses search and scrolls its active selected row into view without moving keyboard focus to the option.",
+        "Missing refs fall back safely, and hosts without the advertised capability show an explicit update-host state without a degraded fallback."
+      ],
+      "contracts": [
+        "npx vitest run packages/app/src/git/changes-base-selection.test.ts packages/protocol/src/messages.checkout-commits.test.ts packages/server/src/utils/checkout-git.commits.test.ts packages/server/src/utils/checkout-git.stack-parent.test.ts"
+      ],
+      "paths": [
+        "packages/app/src/components/branch-switcher.tsx",
+        "packages/app/src/components/ui/combobox.tsx",
+        "packages/app/src/git",
+        "packages/app/src/hooks/use-branch-switcher.ts",
+        "packages/protocol/src/messages.ts",
+        "packages/server/src/utils/checkout-git.ts"
+      ]
+    },
+    {
+      "id": "changes-uncommitted-branch-badge",
+      "commitSubject": "feat(changes): show uncommitted branch status",
+      "preservationFixes": [
+        "Keep the branch badge tied to live checkout dirtiness while Changes displays either comparison mode."
+      ],
+      "permanent": false,
+      "intent": "Show the selected branch's uncommitted working-tree state beside the Changes branch switcher.",
+      "invariants": [
+        "A muted Uncommitted badge appears immediately after the Changes branch switcher only when a named Git branch has a dirty working tree.",
+        "The badge follows live checkout-status updates and remains visible while Changes displays the Committed comparison.",
+        "Clean, loading, unavailable, non-Git and detached checkouts do not show the badge, and the branch switcher interaction remains unchanged."
+      ],
+      "contracts": [
+        "npm run test:e2e --workspace=@getpaseo/app -- e2e/browser/paseito-changes-uncommitted-branch-badge.spec.ts"
+      ],
+      "paths": [
+        "packages/app/src/components/ui/status-badge.tsx",
+        "packages/app/src/git/diff-pane.tsx",
+        "packages/app/src/git/use-working-diff.ts",
+        "packages/app/e2e/browser/paseito-changes-uncommitted-branch-badge.spec.ts",
+        "docs/paseito-changes.md"
+      ]
+    },
+    {
+      "id": "changes-amend-current-commit",
+      "commitSubject": "feat(changes): amend the current commit",
+      "preservationFixes": [
+        "Keep the one-click amend action tied to the live uncommitted badge and daemon capability."
+      ],
+      "permanent": false,
+      "intent": "Amend every current working-tree change into the current commit directly from Changes.",
+      "invariants": [
+        "A compact Amend button appears immediately after the Uncommitted badge for dirty named branches in either Changes surface.",
+        "The action stages tracked, deleted and non-ignored untracked changes, preserves the current message and commit count, and never pushes.",
+        "The action runs immediately without confirmation, exposes pending, success and failure UI, and refreshes checkout status and diffs after success.",
+        "The daemon rejects clean and unborn repositories, and older hosts keep the action visible with an explicit update-host error."
+      ],
+      "contracts": [
+        "npx vitest run packages/protocol/src/messages.checkout-commit-amend.test.ts packages/client/src/daemon-client.test.ts packages/app/src/git/actions-store.test.ts packages/server/src/utils/checkout-git.test.ts packages/server/src/server/session/checkout/checkout-session.test.ts --bail=1",
+        "npm run test:e2e --workspace=@getpaseo/app -- e2e/browser/paseito-changes-uncommitted-branch-badge.spec.ts"
+      ],
+      "paths": [
+        "packages/app/src/git/actions-store.ts",
+        "packages/app/src/git/diff-pane.tsx",
+        "packages/client/src/daemon-client.ts",
+        "packages/protocol/src/messages.ts",
+        "packages/server/src/server/session/checkout/checkout-session.ts",
+        "packages/server/src/utils/checkout-git.ts",
+        "automation/release/package_linux_daemon.py",
+        "automation/remote/deploy_remote_daemons.py",
+        "docs/paseito-changes.md"
+      ]
+    },
+    {
+      "id": "changes-context-expansion",
+      "commitSubject": "feat(changes): expand omitted diff context",
+      "preservationFixes": [
+        "Keep context expansion bounded, revision-validated and available to comments and suggestions."
+      ],
+      "permanent": false,
+      "intent": "Load and review omitted source context on demand from the Changes diff without transferring entire files by default.",
+      "invariants": [
+        "Expansion is capability-gated and unavailable against an older daemon.",
+        "Each omitted region offers 20-line upward/downward expansion and a bounded full expansion.",
+        "The daemon validates repository-relative paths, file revisions, a 5000-line limit and a 1 MiB response budget.",
+        "Expanded current-side lines retain syntax highlighting and can receive comments and suggestions."
+      ],
+      "contracts": [
+        "npx vitest run packages/protocol/src/messages.checkout-diff-context.test.ts packages/server/src/utils/checkout-git.context.test.ts packages/app/src/git/diff-context-expansion.test.ts"
+      ],
+      "paths": [
+        "packages/app/src/git",
+        "packages/client/src/daemon-client.ts",
+        "packages/protocol/src/messages.ts",
+        "packages/server/src/utils/checkout-git.ts",
+        "automation/release/package_linux_daemon.py",
+        "automation/remote/deploy_remote_daemons.py"
+      ]
+    },
+    {
+      "id": "review-suggestions-v1",
+      "commitSubject": "feat(changes): add structured review comments and suggestions",
+      "preservationFixes": [
+        "Keep multi-line comment editors focused without viewport jumps.",
+        "Keep comment threads aligned with fixed diff-gutter rows.",
+        "Keep review attachment contracts intact after upstream reconciliation."
+      ],
+      "permanent": false,
+      "intent": "Let a reviewer send persisted, structured one- or multi-line replacement suggestions to the destination agent from Changes.",
+      "invariants": [
+        "On macOS, reviewers can drag or Shift-click current-side gutters to select up to 200 contiguous loaded lines, including manually expanded context across synthetic hunk boundaries.",
+        "Range selection opens the suggestion editor below the final line with the selected source prefilled; omitted lines must be expanded before selection.",
+        "New drafts expose Comment and Code change tabs: comments require only a message, code changes require a changed replacement, and switching tabs preserves both drafts and any selected range.",
+        "A multi-line comment is persisted and sent with its inclusive current-side range, highlights that range while composing, and renders its thread below the final line.",
+        "Replacement text may be empty, must differ from the original, and is bounded to 200 lines and 64 KiB.",
+        "Suggestions are persisted with original lines and source revision; stale suggestions remain visible and block sending until updated or deleted.",
+        "Suggestions are sent only to the destination agent and never mutate a checkout or forge review.",
+        "A sent Review attachment is collapsed by default and expands in place to a bounded, selectable list of every comment and code-change entry with its file and line location."
+      ],
+      "contracts": [
+        "npx vitest run packages/app/src/review/store.test.ts packages/app/src/review/surface.test.tsx packages/app/src/attachments/review-attachment-items.test.ts packages/server/src/server/agent/prompt-attachments.test.ts",
+        "npm run test:e2e --workspace=@getpaseo/app -- e2e/browser/paseito-review-attachment-widget.spec.ts"
+      ],
+      "paths": [
+        "packages/app/src/review",
+        "packages/app/src/attachments/review-attachment-items.ts",
+        "packages/app/src/components/review-attachment-card.tsx",
+        "packages/app/src/components/message.tsx",
+        "packages/app/src/git/diff-pane.tsx",
+        "packages/protocol/src/messages.ts",
+        "packages/server/src/server/agent/prompt-attachments.ts"
+      ]
+    },
+    {
+      "id": "branch-file-review-state",
+      "commitSubject": "feat(changes): persist branch file and line review state",
+      "preservationFixes": [
+        "Expand a file when it is marked unreviewed.",
+        "Require the review-state capability in packaged and remote releases.",
+        "Preserve repeated reviewed edits only when their uniquely anchored sequence mapping is unambiguous.",
+        "Show the live Changes-focus binding in the selected-line shortcut widget."
+      ],
+      "permanent": false,
+      "intent": "Let reviewers mark branch files or individual edited lines reviewed while preserving checks only for identical branch-side content.",
+      "invariants": [
+        "Review state is private local app data scoped by host, main repository, branch and exact file path, independent of commit SHA, comparison base and diff mode.",
+        "Every reviewable diff entry has a daemon-provided content revision, including untracked, binary, oversized and deleted files.",
+        "Marking a file reviewed collapses it; marking that file unreviewed expands it; newly changed reviewed content is unchecked and reopened, while identical amended content keeps its check.",
+        "Committed and Uncommitted views share per-branch checks, and a bulk control marks or clears the active diff.",
+        "Every reviewable added and removed line has an always-visible 22px checkbox slot inside the fixed line-number gutter in unified, wrapped and split layouts; blank lines and lines containing only ];, }; or } are not reviewable, while context and hunk rows reserve the slot without showing a checkbox.",
+        "Replacement sides are reviewed independently, partial files are mixed, file-level controls synchronize all edited lines, and completing the final edited line collapses the file.",
+        "A dedicated toolbar action expands every incomplete file, collapses every fully reviewed file, and opens ancestor folders in tree view.",
+        "Keyboard review uses lowercase m to approve and move down and comma to approve and move up; Shift+M expands the next hidden block below and Shift+. expands the previous hidden block above. A compact accent marker follows the selected line, and a destination with fewer than five visible same-file rows below is centered only when the file actually has five later rows.",
+        "Command+semicolon focuses the last selected Changes line, then the first unreviewed line, then any reviewable line or file header; Command+L remains the counterpart that focuses the message input.",
+        "The selected-line shortcut widget resolves the current Changes-focus binding from the shortcut registry so user overrides are displayed accurately.",
+        "Line identity includes side, change type, exact content and surrounding context; unique unchanged edits survive revisions, and repeated edits survive only when their count and ordinal position inside unchanged unique anchors prove the mapping.",
+        "The feature is capability-gated and never infers unreliable content identity from an older daemon."
+      ],
+      "contracts": [
+        "npx vitest run packages/app/src/review/file-review.test.ts packages/app/src/review/line-review.test.ts packages/app/src/review/line-review-navigation.test.ts packages/app/src/git/file-review-expansion.test.ts packages/server/src/utils/checkout-git.context.test.ts packages/server/src/utils/checkout-git.test.ts",
+        "npm run test:e2e --workspace=@getpaseo/app -- e2e/browser/changes-pane.spec.ts"
+      ],
+      "paths": [
+        "packages/app/src/review/file-review.ts",
+        "packages/app/src/review/line-review-navigation.ts",
+        "packages/app/src/git/diff-pane.tsx",
+        "packages/app/src/i18n/resources",
+        "packages/protocol/src/messages.ts",
+        "packages/server/src/utils/checkout-git.ts"
+      ]
+    },
+    {
+      "id": "changes-source-navigation",
+      "commitSubject": "feat(changes): add source search and navigation",
+      "preservationFixes": [
+        "Share revision-safe LSP sessions with the editor and suppress stale buffers.",
+        "Anchor LSP positions to current-side source text and pause Changes intelligence while the workspace is dirty.",
+        "Preserve the exact terminal-newline form when rebuilding paged source for shared LSP sessions.",
+        "Search complete changed-file source on the daemon without transferring every file before results."
+      ],
+      "permanent": false,
+      "intent": "Search complete current-side changed files and use shared language intelligence directly from Changes.",
+      "invariants": [
+        "Slash opens a literal smart-case search over changed filenames and complete current-side source; Enter commits the query, n and N wrap through results, and Escape closes it.",
+        "A hidden text match loads only bounded surrounding context and is centered; deleted, binary and oversized files remain filename-searchable.",
+        "Search and expansion use the active comparison's exact content revision and reject stale source.",
+        "Search is capability-gated, returns at most 10,000 smart-case matches, and sends no source-file corpus to the client.",
+        "LSP hover, F12, Command/Ctrl-click and the Electron definition context menu operate only on current-side lines and share a reference-counted document session with the editor.",
+        "LSP columns are measured from rendered source text in unified, wrapped and split layouts; review and line-number gutters, hunk controls, deleted-side lines and other chrome are ineligible.",
+        "Eligible non-deleted C/C++ and Python headers acquire visibility-scoped sessions and show off, connecting, provider, unavailable, error and retry states without format-on-save controls.",
+        "An unsaved editor buffer that differs from the diff revision suppresses Changes LSP instead of replacing the editor's document version.",
+        "Full-source reconstruction verifies terminal-newline candidates against the exact content revision before sharing a document session.",
+        "Live workspace dirtiness releases every Changes lease, disables its global control and all navigation triggers, preserves the workspace preference, and resumes visible files when clean.",
+        "Changes exposes the same opt-in workspace language-intelligence preference and explicit old-host state as the editor."
+      ],
+      "contracts": [
+        "npx vitest run packages/protocol/src/messages.checkout-diff-context.test.ts packages/server/src/utils/checkout-git.context.test.ts packages/app/src/git/changes-search.test.ts packages/app/src/git/changes-lsp-controller.test.ts packages/app/src/git/revisioned-source.test.ts packages/app/src/file-pane/editor/lsp-session-pool.test.ts --bail=1",
+        "npm run test:browser --workspace=@getpaseo/app -- src/git/changes-lsp-target.browser.test.ts --bail=1",
+        "npm run test:e2e --workspace=@getpaseo/app -- e2e/browser/changes-pane.spec.ts --grep 'Changes LSP'"
+      ],
+      "paths": [
+        "packages/app/src/git/changes-search.ts",
+        "packages/app/src/git/changes-lsp-controller.ts",
+        "packages/app/src/git/changes-lsp-target.web.ts",
+        "packages/app/src/git/revisioned-source.ts",
+        "packages/app/src/git/use-diff-context-expansion.ts",
+        "packages/app/src/git/use-changes-lsp.web.ts",
+        "packages/app/src/git/diff-pane.tsx",
+        "packages/app/src/file-pane/editor/lsp-session-pool.ts",
+        "packages/app/src/file-pane/lsp-status-menu.tsx",
+        "packages/client/src/daemon-client.ts",
+        "packages/protocol/src/messages.ts",
+        "packages/server/src/utils/checkout-git.ts"
+      ]
+    },
+    {
+      "id": "changes-file-tree-navigator",
+      "commitSubject": "feat(changes): add the file-tree navigator",
+      "preservationFixes": [
+        "Keep repeated file selections monotonic and independent from manual diff scrolling.",
+        "Keep the pane-local Changes navigator responsive and preserve its state across retained tab switches."
+      ],
+      "permanent": false,
+      "intent": "Navigate large working diffs from a dedicated right-hand file tree in desktop Changes panes.",
+      "invariants": [
+        "Every sufficiently wide working Changes pane renders the 240px right-hand navigator; commit diffs and compact or narrow panes remain unchanged.",
+        "The navigator starts open, persists its whole-rail collapsed preference in pane-local Changes state and suppresses itself below an 800px containing-pane width without changing that preference.",
+        "Compressed directory folders and file selection remain pane-local and survive retained tab switches.",
+        "Selecting a file expands its diff, reissues a monotonic focus request, aligns its header to the top and focuses the diff scroll surface; repeated selections work.",
+        "Manual diff scrolling does not follow-select another tree row, and selection clears only when the selected path disappears from the active comparison."
+      ],
+      "contracts": [
+        "npx vitest run packages/app/src/git/changes-file-tree-navigation.test.ts --bail=1",
+        "npm run test:e2e --workspace=@getpaseo/app -- e2e/browser/paseito-changes-file-tree-navigator.spec.ts"
+      ],
+      "paths": [
+        "packages/app/src/git/changes-file-tree-navigation.ts",
+        "packages/app/src/git/changes-file-tree-navigator.tsx",
+        "packages/app/src/git/diff-pane.tsx",
+        "packages/app/src/panels/diff-panel.tsx",
+        "packages/app/src/panels/changes/state.ts",
+        "docs/paseito-changes.md"
+      ]
+    },
+    {
+      "id": "lens-shared-editor-lsp",
+      "commitSubject": "feat(editor): share Lens and clangd language intelligence",
+      "preservationFixes": [
+        "Keep cold-index deadlines, document-version rejection and safe save fallback behavior.",
+        "Replay pooled LSP state to late editor leases and keep backend failures visible with retry."
+      ],
+      "permanent": false,
+      "intent": "Provide editor intelligence through the existing Lens language server when available and a daemon-owned clangd fallback for ordinary C/C++ workspaces.",
+      "invariants": [
+        "Paseito prefers the Lens-owned per-workspace broker, never starts Lens itself, and starts one shared workspace-scoped clangd only for C/C++ when that broker is absent.",
+        "Standalone clangd automatically selects a root compile_commands.json or build/compile_commands.json, is reused across editor leases, and shuts down when the final lease closes.",
+        "LSP is opt-in per host and workspace, while format-on-save is separately opt-in per workspace and language.",
+        "Diagnostics, automatic and manual completion, token hover, F12, Command/Ctrl-click and the Electron Go to Definition / Declaration context-menu action use exact in-memory document versions; stale responses are rejected.",
+        "Hover and definition allow a 15-second cold-index deadline, and a transient interactive request failure never permanently disables an established editor session.",
+        "A shared document session immediately reports its current provider or complete startup failure to every new lease, bounds unanswered RPCs, and supports explicit retry.",
+        "Formatting has a 1.5-second deadline and any failure saves the original buffer unchanged in one write.",
+        "The UI is capability-gated and isolated in a reconfigurable CodeMirror compartment so ordinary editing remains independent."
+      ],
+      "contracts": [
+        "npx vitest run packages/app/src/file-pane/editor/lsp-session.test.ts packages/app/src/file-pane/editor/lsp-session-pool.test.ts packages/app/src/file-pane/editor/model.test.ts packages/client/src/daemon-client.test.ts packages/protocol/src/messages.workspace-lsp.test.ts packages/server/src/server/session/lsp/clangd-client.test.ts packages/server/src/server/session/lsp/workspace-lsp-session.test.ts",
+        "npx vitest run packages/server/src/server/session/lsp/clangd-client.local.e2e.test.ts --bail=1",
+        "python3 automation/release/test_package_linux_daemon.py",
+        "python3 automation/remote/test_deploy_remote_daemons.py"
+      ],
+      "paths": [
+        "automation/release/package_linux_daemon.py",
+        "automation/remote/deploy_remote_daemons.py",
+        "packages/app/src/file-pane/editor",
+        "packages/client/src/daemon-client.ts",
+        "packages/protocol/src/messages.ts",
+        "packages/server/src/server/session/lsp",
+        "docs/paseito-automation.md",
+        "docs/paseito-lsp.md"
+      ]
+    },
+    {
+      "id": "markdown-preview-source-links",
+      "commitSubject": "feat(markdown): open preview source links in review surfaces",
+      "preservationFixes": [
+        "Route source links to a visible Changes pane before creating an editor split."
+      ],
+      "permanent": false,
+      "intent": "Open source locations from a Markdown file preview in an existing review surface or a reusable split pane without replacing the preview.",
+      "invariants": [
+        "Preview prose and inline code auto-link whitespace-delimited relative or absolute file paths only when a line location is present; fenced code and unrelated prose remain plain.",
+        "Colon path suffixes use path:start-end for a 1-based line range and reserve only a final :column segment for a column; preview and assistant-message parsing share this rule, while #Lx-Ly and lines x-y remain supported ranges.",
+        "A visible Changes pane accepts a current-side location it can render, preserving the requested range and column while expanding omitted context when supported.",
+        "When no compatible Changes pane is visible, a retained Changes tab is revealed before creating a source file tab.",
+        "Locations unavailable in a visible Changes surface open source mode in an existing pane immediately to the left when available, or create a left split when none exists; preview links never create a source pane on the right.",
+        "The editor clamps invalid positions, centers and focuses the requested 1-based line and column, and missing files leave the Markdown preview visible while showing the existing file-not-found toast.",
+        "Explicit Markdown links retain their displayed text, web URLs stay external, and absolute readable files outside the active workspace are supported."
+      ],
+      "contracts": [
+        "npx vitest run packages/app/src/assistant-file-links/parse.test.ts packages/app/src/file-pane/markdown-file-links.test.ts packages/app/src/workspace/file-open/index.test.ts packages/app/src/workspace/markdown-changes-navigation.test.ts packages/app/src/screens/workspace/workspace-pane-state.test.ts packages/app/src/workspace-tabs/identity.test.ts --bail=1",
+        "npm run test:e2e --workspace=@getpaseo/app -- e2e/browser/paseito-markdown-preview-file-links.spec.ts"
+      ],
+      "paths": [
+        "packages/app/src/assistant-file-links",
+        "packages/app/src/git/diff-pane.tsx",
+        "packages/app/src/file-pane",
+        "packages/app/src/screens/workspace/workspace-pane-state.ts",
+        "packages/app/src/screens/workspace/workspace-screen.tsx",
+        "packages/app/src/workspace/file-open",
+        "packages/app/src/workspace/markdown-changes-navigation.ts",
+        "packages/app/e2e/browser/paseito-markdown-preview-file-links.spec.ts"
+      ]
+    },
+    {
+      "id": "local-semantic-maintenance",
+      "commitSubject": "feat(automation): maintain Paseito with fail-closed semantic rebases",
+      "preservationFixes": [
+        "Normalize local history into one commit per feature before inspecting or rebasing onto upstream.",
+        "Keep Git metadata controller-owned and independent semantic review read-only.",
+        "Verify deferred browser contracts, release provenance, installers and remote-daemon rollback before promotion.",
+        "Keep weekly overlap decisions interactive and scheduled publication credentials local.",
+        "Open weekly work in iTerm2 and finish locally when GitHub Actions quota is exhausted.",
+        "Bind every remote daemon to immutable GitHub release evidence and block cutover on runtime or service-unit drift without explicit restart approval.",
+        "Keep optional remote deployment arguments defined under nounset so routine schema-v3 cutovers do not require legacy exceptions.",
+        "Open scheduled iTerm sessions without launchd-owned AppleEvents and retain pushed revisions until published provenance catches up."
+      ],
+      "permanent": true,
+      "intent": "Use human-supervised weekly Codex reconciliation, fail-closed verification, provenance-bound installation, migration and daily reporting.",
+      "invariants": [
+        "Only the visible human-supervised weekly Codex session may execute the authorized promotion workflow; GitHub never rebases or semantically retires features.",
+        "Only exact registry Playwright contracts blocked before execution by the Codex listener sandbox may be deferred to the controller; every deferred command must pass with recorded evidence before independent review.",
+        "At 07:00 New York each Sunday, launchd opens a visible interactive Codex session through LaunchServices without AppleEvents, guarded by a single-run lock; it never rebases, pushes, publishes or installs unattended and stops for the human on blockers.",
+        "When upstream independently implements all or part of a registered local feature, the weekly session presents the feature ID, evidence and remaining differences, then waits for the human to choose carry-forward, adaptation or retirement before rebasing or promotion.",
+        "Before inspecting a new upstream release, the weekly session classifies every local commit, folds related fixes into its owning feature, and verifies exactly one commit per registered feature without changing the approved source tree.",
+        "The interactive prompt requires a semantic rebase onto the latest peeled stable upstream tag, focused and repository-required checks, push, publication, verified installation and registered remote deployment.",
+        "A checked-in Paseito revision newer than published provenance remains releasable even when the peeled upstream tag is unchanged.",
+        "When GitHub Actions quota is exhausted, the interactive session stops using Actions for that run, completes local checks and an Apple Silicon build, commits, force-pushes `paseito` with a lease, and installs locally while deferring release artifacts and remote deployment.",
+        "A separate read-only Codex review must approve every candidate.",
+        "Failed reconciliation or verification preserves the published branch and installed app.",
+        "The verified release contains checksum-bound macOS arm64 desktop and Linux x64 daemon artifacts from the same candidate commit.",
+        "Every remote daemon artifact carries a deterministic runtime inventory bound to its source repository, commit and immutable release tag; the controller re-downloads published evidence before invoking deployment.",
+        "Each registered SSH host refuses cutover during an active foreground agent turn, on runtime or service-unit drift, or without explicit restart approval; an accepted release deploys read-only and transactionally without replacing its Paseo home or server identity.",
+        "Every remote attempt creates a GitHub deployment record, and remote failure rolls back and is reported without retrying automatically.",
+        "Daily email runs locally, keeps its SMTP credential in macOS Keychain, and reports transport failures without exposing SMTP details."
+      ],
+      "contracts": [
+        "python3 -m unittest discover -s automation/release -p 'test_*.py'",
+        "python3 -m unittest discover -s automation/installer -p 'test_*.py'",
+        "python3 -m unittest discover -s automation/launchagents -p 'test_*.py'",
+        "python3 -m unittest discover -s automation/migration -p 'test_*.py'",
+        "python3 -m unittest discover -s automation/reporting -p 'test_*.py'",
+        "python3 -m unittest discover -s automation/remote -p 'test_*.py'"
+      ],
+      "paths": [
+        "automation",
+        ".agents/skills/paseito-upstream-sync",
+        ".github/workflows/paseito-release.yml"
+      ]
+    },
+    {
+      "id": "agent-message-delivery-control",
+      "commitSubject": "feat(agents): separate durable queueing from active-run steering",
+      "preservationFixes": [
+        "Restore failed sends to their original queue position and preserve legacy replacement behavior."
+      ],
+      "permanent": false,
+      "intent": "Let users queue durable follow-up messages or explicitly steer an active agent run without conflating the two actions.",
+      "invariants": [
+        "Queue is the default for new and migrated Paseito installations; users can explicitly select Steer as their default.",
+        "Queued messages are persisted by server and agent across app restarts and disconnects, then drained in order when the agent becomes idle.",
+        "Every queued row exposes a visible Steer action; a failed selected send restores the message at its original queue position.",
+        "Codex and Claude use native steering, while unsupported providers and legacy daemons retain replacement behavior.",
+        "Legacy requests that omit activeRunBehavior continue to replace an active run; only an explicit steer request changes behavior."
+      ],
+      "contracts": [
+        "npx vitest run packages/protocol/src/messages.active-run-behavior.test.ts packages/client/src/daemon-client.test.ts packages/server/src/server/agent/agent-manager.test.ts packages/server/src/server/agent/providers/codex-app-server-agent.test.ts packages/server/src/server/agent/providers/claude/agent.test.ts packages/app/src/composer/actions.test.ts packages/app/src/composer/queue-store.test.ts packages/app/src/hooks/use-settings/storage.test.ts"
+      ],
+      "paths": [
+        "packages/app/src/composer",
+        "packages/app/src/hooks/use-settings",
+        "packages/client/src/daemon-client.ts",
+        "packages/protocol/src/messages.ts",
+        "packages/server/src/server/agent"
+      ]
+    },
+    {
+      "id": "workspace-file-search-navigation",
+      "commitSubject": "feat(command-center): search every workspace file",
+      "preservationFixes": [
+        "Keep exhaustive project-file search fast and preserve alternate navigation into the active Changes comparison.",
+        "Gate exhaustive search on daemon support, bypass redundant ignored-path enumeration, and reject truncated Git file corpora.",
+        "Route Command+Enter to the right Changes sidebar even when a full Changes tab exists.",
+        "Keep absolute host-path autocomplete outside the Git index and preserve editable absolute file tabs."
+      ],
+      "permanent": false,
+      "intent": "Find every eligible workspace file from Command+P and open it either as source or in Changes.",
+      "invariants": [
+        "Workspace file search ranks the complete tracked and non-ignored untracked Git file set while returning only a bounded result window; ignored generated and dependency output stays excluded.",
+        "The daemon prewarms a bounded in-memory project-file index for the active workspace without adding a persistent database or external search-tool dependency, and non-Git workspaces retain an exhaustive filesystem fallback.",
+        "Superseded searches yield cooperatively and stop ranking, ordinary file changes refresh in the background, and branch switches hard-invalidate the previous revision before search resumes.",
+        "Complete Git file search starts without enumerating ignored paths, treats truncated Git output as unusable, and old hosts show an update-required state instead of incomplete results.",
+        "Absolute path queries autocomplete files from the immediate host directory without using the Git index or recursively scanning the filesystem, and are independently capability-gated.",
+        "Absolute results retain their host path and open through filesystem-root-scoped read, observation and atomic-write operations; Changes navigation accepts only paths inside the active workspace.",
+        "Enter and pointer activation open the normal file tab, while Command+Enter on web moves or reveals the canonical Changes tab in the right sidebar, even when it was already open elsewhere, and checks the file against that tab's exact loaded comparison.",
+        "A present Changes file expands and centers its header only when hidden; an already-visible header does not move, and file-tree navigation retains top alignment.",
+        "An absent file leaves Command+P open with an accessible inline error, while loading and transport failures remain distinct from absence."
+      ],
+      "contracts": [
+        "npx vitest run packages/server/src/utils/directory-suggestions.test.ts packages/app/src/workspace/markdown-changes-navigation.test.ts packages/app/src/git/changes-file-tree-navigation.test.ts packages/app/src/workspace-tabs/identity.test.ts packages/app/src/stores/workspace-layout-store.test.ts --bail=1",
+        "npm run test:e2e --workspace=@getpaseo/app -- e2e/browser/command-center-file-search.spec.ts"
+      ],
+      "paths": [
+        "packages/server/src/utils/directory-suggestions.ts",
+        "packages/server/src/server/session.ts",
+        "packages/client/src/daemon-client.ts",
+        "packages/protocol/src/messages.ts",
+        "packages/app/src/command-center",
+        "packages/app/src/workspace/markdown-changes-navigation.ts",
+        "packages/app/src/git/diff-pane.tsx",
+        "docs/paseito-changes.md"
+      ]
+    },
+    {
+      "id": "desktop-gitlab-mr-tracker",
+      "commitSubject": "feat(mrs): track GitLab merge requests in Paseito",
+      "preservationFixes": [
+        "Keep GitLab access tokens outside renderer-visible state and the repository, stored locally with owner-only permissions without Keychain, and preserve credentials across ordinary desktop upgrades.",
+        "Keep the unconfigured tracker free of dead controls and provide direct, security-explained setup actions.",
+        "Keep every local triage label understandable through concise desktop hover and keyboard-focus explanations.",
+        "Keep MR triage left-anchored while summary navigation, detail expansion, and importance controls remain independent interactions.",
+        "Keep MR triage binary as Important or Ignore, normalize legacy local choices to Ignore, and provide an accessible Important-only filter beside search."
+      ],
+      "permanent": false,
+      "intent": "Track GitLab merge requests in a read-only desktop sidebar surface without porting MR Tracker automations or personal configuration.",
+      "invariants": [
+        "Electron builds expose All, My MRs and Others above Workspaces, with a gear that opens desktop-only MR settings.",
+        "Discovery covers the configured owner, exact additional authors, optional reviewer assignments and local manual tracking on a fixed two-minute cadence.",
+        "GitLab integration issues GET requests only; local tracking and importance never mutate GitLab.",
+        "After token submission, desktop main never returns the stored GitLab token to renderer state; nonsecret state is stored separately, and the token remains in a separate owner-only local file without macOS Keychain.",
+        "MR readiness and notifications use generic GitLab mergeability, overall pipeline, approvals and blocking-discussion facts; MR Tracker automations and product-specific integrations remain excluded.",
+        "The first complete refresh is notification-silent, partial refreshes preserve cached results without advancing transitions, and later complete refreshes notify only for new owned MRs, readiness, or a new failed pipeline."
+      ],
+      "contracts": [
+        "npm test --workspace=@getpaseo/desktop -- --run src/features/mr-tracker/store.test.ts src/features/mr-tracker/gitlab-client.test.ts src/features/mr-tracker/service.test.ts",
+        "npm test --workspace=@getpaseo/app -- --run src/mr-tracker/model.test.ts src/mr-tracker/importance-control.test.tsx src/components/ui/tooltip.test.tsx",
+        "npm run test:e2e:renderer --workspace=@getpaseo/desktop -- e2e/mr-tracker-row.spec.ts"
+      ],
+      "paths": [
+        "packages/desktop/src/features/mr-tracker",
+        "packages/app/src/mr-tracker",
+        "packages/app/src/app/mrs",
+        "packages/app/src/components/left-sidebar.tsx",
+        "packages/app/src/screens/settings-screen.tsx",
+        "docs/paseito-mr-tracker.md"
+      ]
+    }
+  ]
+}

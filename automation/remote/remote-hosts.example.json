@@ -1,0 +1,16 @@
+{
+  "hosts": [
+    {
+      "architecture": "linux-x64",
+      "id": "viking-new",
+      "listen": "127.0.0.1:6767",
+      "node": "/raid/werquinigo/home-offload/local-werquinigo/pi-harness/node/current/bin/node",
+      "paseoHome": ".paseo",
+      "runtimeRoot": "/raid/werquinigo/home-offload/local-werquinigo/paseito-daemon",
+      "service": "paseo.service",
+      "sshTarget": "viking-new",
+      "toolPath": "/raid/werquinigo/home-offload/local-werquinigo/pi-harness/npm/bin:/raid/werquinigo/home-offload/local-werquinigo/pi-harness/node/current/bin:/usr/local/bin:/usr/bin:/bin"
+    }
+  ],
+  "schemaVersion": 1
+}
