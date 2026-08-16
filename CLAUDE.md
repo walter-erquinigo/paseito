@@ -131,6 +131,54 @@ See [docs/development.md](docs/development.md) for full setup, build sync requir
   - **Every shim is tagged.** `// COMPAT(name): added in vX, remove after <date>` at the site that has to be deleted. `rg "COMPAT\("` is the cleanup backlog; untagged back-compat is permanent by accident.
   - **New RPCs use dotted namespaces with direction suffixes.** Follow [docs/rpc-namespacing.md](docs/rpc-namespacing.md): `domain.provider.operation.request` pairs with `domain.provider.operation.response`. Existing flat RPC names will migrate over time; don't add new ones.
 
+## GUI critique and repair prompts
+
+For GUI creation, repair, or refinement, use the prompts below as working instructions. Read
+[docs/design.md](docs/design.md) and [docs/qa.md](docs/qa.md) first. Review the actual rendered
+state at the target platform and viewport; source code intent is not visual evidence. These prompts
+adapt the observable **Before / After / Why** review structure from
+[Humbleteam's design-review](https://github.com/humbleteam/design-review), the screenshot-driven
+repair loop from [PixelJury](https://github.com/gchahal1982/pixeljury), and the combined designer and
+frontend-engineer role from
+[vltansky's design-review skill](https://github.com/vltansky/skills/blob/master/skills/design-review/SKILL.md).
+
+### Screenshot diagnosis prompt
+
+```text
+Act as a senior product designer and frontend engineer reviewing the actual rendered screenshot,
+not the implementation's intended appearance. Read the product design system first and identify
+the exact platform, viewport, theme, UI state, and running build version shown.
+
+Report at most five prioritized issues. For each issue:
+- Before: state one observable defect and name the affected bounds, alignment rails, gutters,
+  controls, or content.
+- After: prescribe one measurable change to position, spacing, sizing, overflow, hierarchy,
+  typography, or interaction state.
+- Why: connect the change to a project design rule or one named usability/accessibility principle.
+
+Prioritize clipped content, overlap, stale geometry, broken rendering, and inaccessible controls
+before aesthetic polish. Distinguish facts visible in the screenshot from implementation
+hypotheses. Check whether a stale installed bundle could explain the screenshot before changing
+source code. Do not use vague judgments such as "cleaner", "modern", or "better spacing" without
+pixel-level evidence.
+```
+
+### Implementation and verification prompt
+
+```text
+Implement the prioritized GUI corrections in the repository. Trace each visible defect through
+layout, cached geometry, asynchronous state, content parsing, and component styling to find its
+root cause. Preserve working behavior, accessibility, responsive states, and existing design
+tokens. Do not mask a model or state defect with arbitrary padding, fixed offsets, or overflow.
+
+Add focused regression coverage for every state or geometry transition that caused the defect.
+Render the same target state and viewport after the change, then compare the before and after
+screenshots using observable bounds. Reject the result if content, source rows, gutters, controls,
+or hit targets overlap; if reserved space does not match rendered content; if raw markup leaks into
+the UI; or if another supported viewport regresses. Verify the version and executable path of the
+app that produced the final screenshot before declaring the GUI fix complete.
+```
+
 ## Platform gating
 
 The app runs on iOS, Android, web (browser), and web (Electron desktop). Code is cross-platform by default. Gate only when you must. Import gates from `@/constants/platform`.
@@ -182,3 +230,81 @@ The app runs on iOS, Android, web (browser), and web (Electron desktop). Code is
 ## Debugging
 
 Find the complete daemon logs and traces in the $PASEO_HOME/daemon.log
+
+## Verify the build the user is actually running
+
+Source changes are not visible in an already-running packaged Paseito app. Before reporting a desktop UI change as complete or diagnosing a missing UI element:
+
+0. Every commit that changes Paseito must increment the numeric `paseito.N` prerelease identifier in the root and desktop package versions. Never publish two different Paseito commits with the same visible version.
+1. Identify the exact version and path of the running app and daemon. On macOS, inspect the process path and the app's `Info.plist`; do not infer the running version from `package.json`.
+2. Compare that version with the version or commit that introduced the feature. Treat a stale running bundle as the first suspect when source-level tests pass but the UI is absent.
+3. For desktop UI work, run `npm run build:desktop` and verify the produced app's embedded `CFBundleShortVersionString` before claiming that a packaged build contains the change.
+4. Validate the new bundle in an isolated development profile and on non-production ports when possible. A source checkout, passing unit tests, or an Expo export alone is not proof that the user's packaged app has been updated.
+5. State the relaunch/install requirement explicitly in the handoff. Do not imply that an existing Electron process hot-reloads a newly built bundle.
+6. Never replace, quit, or relaunch the packaged app—and never restart its daemon on port `6767`—without the user's permission. Building an artifact is allowed; activating it is a separate step.
+7. When an improvement results in a new local Paseito installation, do not report it complete until the installed build is verified, the complete improvement is committed, and the commit is pushed to `fork/paseito`. A recovery tag is not a substitute for the branch push. If unrelated or mixed worktree changes prevent a coherent commit, separate them before installing; if that cannot be done safely, stop and report the blocker.
+
+For capability-gated UI, verify both sides of the runtime contract: the client bundle must contain the feature and the connected daemon must advertise the required `server_info.features.*` capability. When the capability is absent, the UI must show an explicit upgrade message rather than silently hiding the feature.
+
+See [docs/development.md](docs/development.md) for isolated runtime ports and [docs/release.md](docs/release.md) for packaging and release checks.
+
+<!-- PASEITO-LOCAL-FEATURES:START -->
+
+## Paseito local feature preservation
+
+`automation/feature-registry.json` is authoritative. Before and after every upstream rebase,
+verify each feature and its preservation fixes; update the registry and regenerate this block
+instead of editing the list by hand.
+
+- `independent-desktop-identity` — Keep Paseito independently installable beside Paseo with distinct app, daemon, CLI, storage, protocol and visual identities.
+  - Fix: Keep the desktop bundle, daemon, CLI, storage, URL scheme, updater and artwork independent from Paseo.
+- `changes-base-selector` — Let the Changes tab select and remember a read-only comparison base without changing merge, update or pull-request targets.
+  - Fix: Default ahead branches to their committed branch diff without hiding the explicit Uncommitted view.
+  - Fix: Sort every werquinigo/ branch first in literal name order on both current and legacy hosts.
+  - Fix: Keep branch search focused while revealing and activating the selected branch, including when it is absent from the bounded suggestion response.
+- `changes-uncommitted-branch-badge` — Show the selected branch's uncommitted working-tree state beside the Changes branch switcher.
+  - Fix: Keep the branch badge tied to live checkout dirtiness while Changes displays either comparison mode.
+- `changes-amend-current-commit` — Amend every current working-tree change into the current commit directly from Changes.
+  - Fix: Keep the one-click amend action tied to the live uncommitted badge and daemon capability.
+- `changes-context-expansion` — Load and review omitted source context on demand from the Changes diff without transferring entire files by default.
+  - Fix: Keep context expansion bounded, revision-validated and available to comments and suggestions.
+- `review-suggestions-v1` — Let a reviewer send persisted, structured one- or multi-line replacement suggestions to the destination agent from Changes.
+  - Fix: Keep multi-line comment editors focused without viewport jumps.
+  - Fix: Keep comment threads aligned with fixed diff-gutter rows.
+  - Fix: Keep review attachment contracts intact after upstream reconciliation.
+- `branch-file-review-state` — Let reviewers mark branch files or individual edited lines reviewed while preserving checks only for identical branch-side content.
+  - Fix: Expand a file when it is marked unreviewed.
+  - Fix: Require the review-state capability in packaged and remote releases.
+  - Fix: Preserve repeated reviewed edits only when their uniquely anchored sequence mapping is unambiguous.
+  - Fix: Show the live Changes-focus binding in the selected-line shortcut widget.
+- `changes-source-navigation` — Search complete current-side changed files and use shared language intelligence directly from Changes.
+  - Fix: Share revision-safe LSP sessions with the editor and suppress stale buffers.
+  - Fix: Anchor LSP positions to current-side source text and pause Changes intelligence while the workspace is dirty.
+  - Fix: Preserve the exact terminal-newline form when rebuilding paged source for shared LSP sessions.
+  - Fix: Search complete changed-file source on the daemon without transferring every file before results.
+- `changes-file-tree-navigator` — Navigate large working diffs from a dedicated right-hand file tree in desktop Changes panes.
+  - Fix: Keep repeated file selections monotonic and independent from manual diff scrolling.
+  - Fix: Keep the pane-local Changes navigator responsive and preserve its state across retained tab switches.
+- `lens-shared-editor-lsp` — Provide editor intelligence through the existing Lens language server when available and a daemon-owned clangd fallback for ordinary C/C++ workspaces.
+  - Fix: Keep cold-index deadlines, document-version rejection and safe save fallback behavior.
+  - Fix: Replay pooled LSP state to late editor leases and keep backend failures visible with retry.
+- `markdown-preview-source-links` — Open source locations from a Markdown file preview in an existing review surface or a reusable split pane without replacing the preview.
+  - Fix: Route source links to a visible Changes pane before creating an editor split.
+- `local-semantic-maintenance` — Use human-supervised weekly Codex reconciliation, fail-closed verification, provenance-bound installation, migration and daily reporting.
+  - Fix: Normalize local history into one commit per feature before inspecting or rebasing onto upstream.
+  - Fix: Keep Git metadata controller-owned and independent semantic review read-only.
+  - Fix: Verify deferred browser contracts, release provenance, installers and remote-daemon rollback before promotion.
+  - Fix: Keep weekly overlap decisions interactive and scheduled publication credentials local.
+  - Fix: Open weekly work in iTerm2 and finish locally when GitHub Actions quota is exhausted.
+  - Fix: Bind every remote daemon to immutable GitHub release evidence and block cutover on runtime or service-unit drift without explicit restart approval.
+  - Fix: Keep optional remote deployment arguments defined under nounset so routine schema-v3 cutovers do not require legacy exceptions.
+  - Fix: Open scheduled iTerm sessions without launchd-owned AppleEvents and retain pushed revisions until published provenance catches up.
+  - Fix: Reject post-reconciliation candidates whose rebased history is not normalized before independent review or promotion.
+- `agent-message-delivery-control` — Let users queue durable follow-up messages or explicitly steer an active agent run without conflating the two actions.
+  - Fix: Restore failed sends to their original queue position and preserve legacy replacement behavior.
+- `workspace-file-search-navigation` — Find every eligible workspace file from Command+P and open it either as source or in Changes.
+  - Fix: Keep exhaustive project-file search fast and preserve alternate navigation into the active Changes comparison.
+  - Fix: Gate exhaustive search on daemon support, bypass redundant ignored-path enumeration, and reject truncated Git file corpora.
+  - Fix: Route Command+Enter to the right Changes sidebar even when a full Changes tab exists.
+
+<!-- PASEITO-LOCAL-FEATURES:END -->
