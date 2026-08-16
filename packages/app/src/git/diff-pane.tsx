@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, type ReactElement } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { TreeRail } from "@/components/tree-rail";
@@ -9,6 +9,7 @@ import {
   Text,
   Pressable,
   FlatList,
+  type LayoutChangeEvent,
   type PressableStateCallbackType,
   type StyleProp,
   type ViewStyle,
@@ -70,6 +71,7 @@ import { useSessionStore } from "@/stores/session-store";
 import { confirmDialog } from "@/utils/confirm-dialog";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Button } from "@/components/ui/button";
+import { StatusBadge } from "@/components/ui/status-badge";
 import {
   PaneContentToolbar,
   paneContentToolbarIconSize,
@@ -81,9 +83,28 @@ import type { WorkspaceTabTarget } from "@/workspace-tabs/model";
 import { buildWorkspaceTabPersistenceKey } from "@/workspace-tabs/model";
 import { isWeb } from "@/constants/platform";
 import { usePublishWorkingDiffAttachment, useWorkingDiff } from "@/git/use-working-diff";
+import { useChangesLsp } from "@/git/use-changes-lsp";
+import type { ChangesSearchMatch } from "@/git/changes-search";
 import type { CheckoutStatusPayload } from "@/git/use-status-query";
 import { DiffTooLargeState } from "@/git/diff-too-large-state";
 import { openDesktopTarget, useDesktopOpenTargets } from "@/workspace/desktop-open-targets";
+import { ChangesBaseSelector } from "@/git/changes-base-selector";
+import {
+  applyChangesBaseSelection,
+  getChangesStackParentBadgeKind,
+} from "@/git/changes-base-selection";
+import { retainSelectedChangesFile } from "@/git/changes-file-tree-navigation";
+import {
+  CHANGES_FILE_TREE_MIN_PANE_WIDTH,
+  ChangesFileTreeNavigator,
+  ChangesFileTreeToggle,
+} from "@/git/changes-file-tree-navigator";
+import {
+  clearInlineWorkingDiffNavigationSnapshot,
+  clearWorkingDiffNavigationSnapshot,
+  publishInlineWorkingDiffNavigationSnapshot,
+  publishWorkingDiffNavigationSnapshot,
+} from "@/workspace/markdown-changes-navigation";
 
 export type { GitActionId, GitAction, GitActions } from "@/git/policy";
 
@@ -92,6 +113,120 @@ export function resolveDiffLayout(
   canUseSplitLayout: boolean,
 ): "unified" | "split" {
   return canUseSplitLayout ? layout : "unified";
+}
+
+interface ChangesFocusRequest {
+  path: string;
+  revision: number;
+  lineStart?: number;
+  lineEnd?: number;
+  column?: number;
+  reveal?: "center-if-hidden";
+}
+
+function createExternalFocusRequest(input: {
+  path?: string;
+  revision?: number;
+  lineStart?: number;
+  lineEnd?: number;
+  column?: number;
+  reveal?: "center-if-hidden";
+}): ChangesFocusRequest | null {
+  if (!input.path) return null;
+  return { ...input, path: input.path, revision: input.revision ?? 0 };
+}
+
+function selectNewestFocusRequest(
+  local: ChangesFocusRequest | null,
+  external: ChangesFocusRequest | null,
+): ChangesFocusRequest | null {
+  if (!local) return external;
+  if (!external) return local;
+  return local.revision >= external.revision ? local : external;
+}
+
+function nextFocusRevision(current: ChangesFocusRequest | null): number {
+  return Math.max(Date.now(), (current?.revision ?? 0) + 1);
+}
+
+function focusModeProperties(focus: ChangesFocusRequest | null): Partial<WorkingDiffMode> {
+  if (!focus) return {};
+  return {
+    focusPath: focus.path,
+    focusRequestId: focus.revision,
+    focusLineStart: focus.lineStart,
+    focusLineEnd: focus.lineEnd,
+    focusColumn: focus.column,
+    focusReveal: focus.reveal,
+  };
+}
+
+function workspaceFileDragScope(serverId: string, workspaceId?: string) {
+  return workspaceId ? { serverId, workspaceId } : undefined;
+}
+
+function desktopTargetLabel(target: { label: string } | undefined): string | undefined {
+  return target?.label;
+}
+
+function buildWorkingDiffMode(input: {
+  base: Omit<
+    WorkingDiffMode,
+    | "kind"
+    | "onExpandContext"
+    | "focusPath"
+    | "focusRequestId"
+    | "focusLineStart"
+    | "focusLineEnd"
+    | "focusColumn"
+    | "focusReveal"
+    | "workspaceFileDragScope"
+    | "onReveal"
+    | "onDuplicate"
+  > & {
+    onReveal: WorkingDiffMode["onReveal"];
+    onDuplicate: WorkingDiffMode["onDuplicate"];
+  };
+  contextExpansionSupported: boolean;
+  expandContext: WorkingDiffMode["onExpandContext"];
+  focus: ChangesFocusRequest | null;
+  serverId: string;
+  workspaceId?: string;
+  revealAvailable: boolean;
+  duplicateAvailable: boolean;
+}): WorkingDiffMode {
+  return {
+    ...input.base,
+    kind: "working",
+    onExpandContext: input.contextExpansionSupported ? input.expandContext : undefined,
+    ...focusModeProperties(input.focus),
+    workspaceFileDragScope: workspaceFileDragScope(input.serverId, input.workspaceId),
+    onReveal: input.revealAvailable ? input.base.onReveal : undefined,
+    onDuplicate: input.duplicateAvailable ? input.base.onDuplicate : undefined,
+  };
+}
+
+function resolveChangesState(state: ChangesState | undefined): ChangesState {
+  return state ?? defaultChangesState;
+}
+
+function resolveStateChange(
+  onStateChange: ((state: ChangesState) => void) | undefined,
+): (state: ChangesState) => void {
+  return onStateChange ?? noopStateChange;
+}
+
+function resolveNavigatorVisibility(input: {
+  canUseSplitLayout: boolean;
+  paneWidth: number;
+  hasChanges: boolean;
+  collapsed: boolean;
+}): { available: boolean; shown: boolean } {
+  const available =
+    input.canUseSplitLayout &&
+    input.paneWidth >= CHANGES_FILE_TREE_MIN_PANE_WIDTH &&
+    input.hasChanges;
+  return { available, shown: available && !input.collapsed };
 }
 
 function computeSelectedDiffStat(
@@ -170,6 +305,11 @@ interface ChangesSurfaceProps {
   modeScope: string;
   focusPath?: string;
   focusRequestId?: number;
+  focusLineStart?: number;
+  focusLineEnd?: number;
+  focusColumn?: number;
+  focusReveal?: "center-if-hidden";
+  onActivate?: () => void;
   onOpenFile?: (path: string) => void;
   onAddToChat?: (path: string) => void;
   state?: ChangesState;
@@ -329,12 +469,15 @@ export function DiffModeMenu({
 
 interface ChangesToolbarProps {
   branchName: string | null;
+  baseSelection: ReturnType<typeof useWorkingDiff>["baseSelection"];
   allFilesCollapsed: boolean;
   canUseSplitLayout: boolean;
   changesTabOpen: boolean;
   committedDescription?: string;
   cwd: string;
   desktopTreeVisible: boolean;
+  fileNavigatorAvailable: boolean;
+  fileNavigatorCollapsed: boolean;
   diffMode: "uncommitted" | "base";
   gitActions: GitActions;
   hasFiles: boolean;
@@ -346,6 +489,7 @@ interface ChangesToolbarProps {
   overflowToggleStyle: PressableStyleFn;
   refreshSupported: boolean;
   selectedDiffStat: { additions: number; deletions: number } | null;
+  hasUncommittedChanges: boolean;
   serverId: string;
   workspaceId?: string | null;
   wrapLines: boolean;
@@ -353,9 +497,11 @@ interface ChangesToolbarProps {
   onCollapseAll: () => void;
   onExpandAll: () => void;
   onSelectBase: () => void;
+  onSelectComparisonBase: (baseRef: string | null) => Promise<void>;
   onSelectUncommitted: () => void;
   onToggleChangesTab: () => void;
   onToggleDesktopTree: () => void;
+  onToggleFileNavigator: () => void;
   onToggleHideWhitespace: () => void;
   onToggleLayout: () => void;
   onToggleWrapLines: () => void;
@@ -368,19 +514,25 @@ interface ChangesToolbarProps {
 function ChangesToolbar(props: ChangesToolbarProps) {
   const {
     branchName,
+    baseSelection,
     committedDescription,
     cwd,
     desktopTreeVisible,
+    fileNavigatorAvailable,
+    fileNavigatorCollapsed,
     diffMode,
     gitActions,
     hasFiles,
     isMobile,
     selectedDiffStat,
+    hasUncommittedChanges,
     serverId,
     workspaceId,
     onSelectBase,
+    onSelectComparisonBase,
     onSelectUncommitted,
     onToggleDesktopTree,
+    onToggleFileNavigator,
   } = props;
   return (
     <PaneContentToolbar style={styles.changesToolbar} testID="changes-header">
@@ -399,6 +551,20 @@ function ChangesToolbar(props: ChangesToolbarProps) {
           isGitCheckout
           testID="changes-branch-switcher"
         />
+        <ChangesUncommittedActions
+          serverId={serverId}
+          cwd={cwd}
+          currentBranchName={branchName}
+          hasUncommittedChanges={hasUncommittedChanges}
+        />
+        <ChangesBaseSelectorPlacement
+          visible={!isMobile}
+          serverId={serverId}
+          cwd={cwd}
+          currentBranchName={branchName}
+          baseSelection={baseSelection}
+          onSelect={onSelectComparisonBase}
+        />
         {!isMobile && selectedDiffStat ? (
           <DiffStat
             additions={selectedDiffStat.additions}
@@ -415,10 +581,117 @@ function ChangesToolbar(props: ChangesToolbarProps) {
             onToggle={onToggleDesktopTree}
           />
         ) : null}
+        {!isMobile && fileNavigatorAvailable ? (
+          <ChangesFileTreeToggle
+            collapsed={fileNavigatorCollapsed}
+            onToggle={onToggleFileNavigator}
+          />
+        ) : null}
         {isMobile ? <GitActionsSplitButton gitActions={gitActions} menuOnly /> : null}
         <ChangesOptionsMenu {...props} />
       </View>
     </PaneContentToolbar>
+  );
+}
+
+function ChangesBaseSelectorPlacement({
+  visible,
+  serverId,
+  cwd,
+  currentBranchName,
+  baseSelection,
+  onSelect,
+}: {
+  visible: boolean;
+  serverId: string;
+  cwd: string;
+  currentBranchName: string | null;
+  baseSelection: ReturnType<typeof useWorkingDiff>["baseSelection"];
+  onSelect: (baseRef: string | null) => Promise<void>;
+}) {
+  const { t } = useTranslation();
+  if (!visible || !currentBranchName) return null;
+  const badgeKind = getChangesStackParentBadgeKind(baseSelection.stackParentStatus);
+  return (
+    <>
+      <ChangesBaseSelector
+        serverId={serverId}
+        cwd={cwd}
+        currentBranch={currentBranchName}
+        defaultBaseRef={baseSelection.defaultBaseRef}
+        recordedBaseRef={baseSelection.recordedBaseRef}
+        selectedBaseRef={baseSelection.selectedBaseRef}
+        effectiveBaseRef={baseSelection.effectiveBaseRef}
+        supported={baseSelection.supported}
+        onSelect={onSelect}
+      />
+      {badgeKind ? (
+        <StatusBadge
+          label={t(
+            badgeKind === "malformed"
+              ? "workspace.git.diff.stackParentMalformed"
+              : "workspace.git.diff.stackParentMissing",
+          )}
+          variant="error"
+          testID={`changes-stack-parent-${badgeKind}-badge`}
+        />
+      ) : null}
+    </>
+  );
+}
+
+function ChangesUncommittedActions({
+  serverId,
+  cwd,
+  currentBranchName,
+  hasUncommittedChanges,
+}: {
+  serverId: string;
+  cwd: string;
+  currentBranchName: string | null;
+  hasUncommittedChanges: boolean;
+}) {
+  const { t } = useTranslation();
+  const toast = useToast();
+  // COMPAT(checkoutCommitAmend): added in Paseito v0.2.5-paseito.1, remove after 2027-02-04.
+  const amendSupported = useSessionStore(
+    (state) => state.sessions[serverId]?.serverInfo?.features?.checkoutCommitAmend === true,
+  );
+  const amend = useCheckoutGitActionsStore((state) => state.amend);
+  const isAmending =
+    useCheckoutGitActionsStore((state) => state.getStatus({ serverId, cwd, actionId: "amend" })) ===
+    "pending";
+  const handleAmend = useCallback(() => {
+    if (!amendSupported) {
+      toast.error(t("workspace.git.diff.amendUpdateHost"));
+      return;
+    }
+    if (isAmending) return;
+    void amend({ serverId, cwd })
+      .then(() => toast.show(t("workspace.git.diff.amendSuccess"), { variant: "success" }))
+      .catch((error) =>
+        toast.error(error instanceof Error ? error.message : t("workspace.git.diff.failedAmend")),
+      );
+  }, [amend, amendSupported, cwd, isAmending, serverId, t, toast]);
+  if (!currentBranchName || !hasUncommittedChanges) return null;
+  return (
+    <>
+      <StatusBadge
+        label={t("workspace.git.diff.uncommitted")}
+        variant="muted"
+        testID="changes-uncommitted-badge"
+      />
+      <Button
+        variant="outline"
+        size="xs"
+        loading={isAmending}
+        onPress={handleAmend}
+        testID="changes-amend-button"
+        accessibilityLabel={t("workspace.git.diff.amend")}
+      >
+        {isAmending ? t("workspace.git.diff.amending") : t("workspace.git.diff.amend")}
+      </Button>
+    </>
   );
 }
 
@@ -1003,7 +1276,11 @@ function useDiffTabNavigation({
     () => buildWorkspaceTabPersistenceKey({ serverId, workspaceId: workspaceId ?? cwd }),
     [cwd, serverId, workspaceId],
   );
-  const changesTabOpen = false;
+  const changesTabOpen = useWorkspaceLayoutStore((state) =>
+    persistenceKey
+      ? state.getWorkspaceTabs(persistenceKey).some((tab) => tab.target.kind === "working_diff")
+      : false,
+  );
   const openChanges = useCallback(
     (path?: string) => {
       if (!persistenceKey || isMobile) {
@@ -1056,6 +1333,11 @@ export function ChangesSurface({
   modeScope,
   focusPath,
   focusRequestId,
+  focusLineStart,
+  focusLineEnd,
+  focusColumn,
+  focusReveal,
+  onActivate,
   onOpenFile,
   onAddToChat,
   state: changesState,
@@ -1065,8 +1347,8 @@ export function ChangesSurface({
   const { t } = useTranslation();
   const isMobile = useIsCompactFormFactor();
   const canUseSplitLayout = isWeb && !isMobile;
-  const instanceState = changesState ?? defaultChangesState;
-  const updateState = onStateChange ?? noopStateChange;
+  const instanceState = resolveChangesState(changesState);
+  const updateState = resolveStateChange(onStateChange);
   const wrapLines = instanceState.wrapLines;
   const desktopTreeVisible = instanceState.treeVisible;
   const effectiveLayout = resolveDiffLayout(instanceState.layout, canUseSplitLayout);
@@ -1148,7 +1430,9 @@ export function ChangesSurface({
     notGit,
     statusErrorMessage,
     baseRef,
+    baseSelection,
     currentBranchName,
+    hasUncommittedChanges,
     diffMode,
     selectUncommitted: handleSelectUncommitted,
     selectBase: handleSelectBase,
@@ -1158,13 +1442,17 @@ export function ChangesSurface({
     isDiffLoading,
     reviewActions,
     reviewAttachment,
+    contextExpansion,
+    contextExpansionSupported,
+    diffSearchSupported,
+    fileReviews,
   } = useWorkingDiff({
     serverId,
     workspaceId: workspaceId ?? undefined,
     cwd,
     ignoreWhitespace: instanceState.hideWhitespace,
     enabled: enabled !== false,
-    modeScope,
+    queryScope: modeScope,
   });
   usePublishWorkingDiffAttachment({
     serverId,
@@ -1275,48 +1563,96 @@ export function ChangesSurface({
     [client, cwd, t, toast],
   );
   const onRevertPath = useDiscardChangesAction({ serverId, cwd, diffMode });
-  const [localFocusRequest, setLocalFocusRequest] = useState<{
-    path: string;
-    revision: number;
-  } | null>(null);
+  const [localFocusRequest, setLocalFocusRequest] = useState<ChangesFocusRequest | null>(null);
   const externalFocusRequest = useMemo(
-    () => (focusPath ? { path: focusPath, revision: focusRequestId ?? 0 } : null),
-    [focusPath, focusRequestId],
+    () =>
+      createExternalFocusRequest({
+        path: focusPath,
+        revision: focusRequestId,
+        lineStart: focusLineStart,
+        lineEnd: focusLineEnd,
+        column: focusColumn,
+        reveal: focusReveal,
+      }),
+    [focusColumn, focusLineEnd, focusLineStart, focusPath, focusRequestId, focusReveal],
   );
-  const documentFocusRequest =
-    localFocusRequest &&
-    (!externalFocusRequest || localFocusRequest.revision >= externalFocusRequest.revision)
-      ? localFocusRequest
-      : externalFocusRequest;
+  const documentFocusRequest = selectNewestFocusRequest(localFocusRequest, externalFocusRequest);
   const handleSelectTreeFile = useCallback((path: string) => {
     setLocalFocusRequest((current) => ({
       path,
-      revision: Math.max(Date.now(), (current?.revision ?? 0) + 1),
+      revision: nextFocusRevision(current),
+      reveal: undefined,
     }));
   }, []);
+  const handleOpenLspDefinition = useCallback(
+    (location: { path: string; lineStart: number; lineEnd: number }) => {
+      onOpenFile?.(location.path);
+    },
+    [onOpenFile],
+  );
+  const loadChangesLspSource = contextExpansion.loadSource;
+  const expandSearchLine = contextExpansion.expandLine;
+  const searchChanges = contextExpansion.search;
+  useEffect(() => {
+    if (!documentFocusRequest?.lineStart) return;
+    void expandSearchLine(documentFocusRequest.path, documentFocusRequest.lineStart).catch(
+      () => undefined,
+    );
+  }, [documentFocusRequest, expandSearchLine]);
+  const changesLsp = useChangesLsp({
+    serverId,
+    cwd,
+    active: enabled !== false,
+    dirty: hasUncommittedChanges,
+    loadSource: loadChangesLspSource,
+    onOpenDefinition: handleOpenLspDefinition,
+  });
+  const revealSearchMatch = useCallback(
+    async (match: ChangesSearchMatch) => {
+      if (match.kind === "text") await expandSearchLine(match.filePath, match.lineNumber);
+    },
+    [expandSearchLine],
+  );
   const workingMode = useMemo(
-    () => ({
-      kind: "working" as const,
-      reviewActions,
-      onFilePress: onChangesFilePress,
-      focusPath: documentFocusRequest?.path,
-      focusRequestId: documentFocusRequest?.revision,
-      workspaceFileDragScope: workspaceId ? { serverId, workspaceId } : undefined,
-      onOpenFile,
-      onAddToChat,
-      onCopyPath: handleCopyPath,
-      onCopyRelativePath: handleCopyRelativePath,
-      onReveal: fileManagerTarget ? handleRevealPath : undefined,
-      revealTargetName: fileManagerTarget?.label,
-      onDownload: handleDownloadPath,
-      onDuplicate: fsEntryDuplicateEnabled ? handleDuplicatePath : undefined,
-      onRevert: onRevertPath,
-    }),
+    () =>
+      buildWorkingDiffMode({
+        base: {
+          reviewActions,
+          fileReviews,
+          onExpandFile: contextExpansion.expandFile,
+          onActivate,
+          onFilePress: onChangesFilePress,
+          onOpenFile,
+          onAddToChat,
+          onCopyPath: handleCopyPath,
+          onCopyRelativePath: handleCopyRelativePath,
+          onReveal: handleRevealPath,
+          revealTargetName: desktopTargetLabel(fileManagerTarget),
+          onDownload: handleDownloadPath,
+          onDuplicate: handleDuplicatePath,
+          onRevert: onRevertPath,
+          onSearch: searchChanges,
+          searchSupported: diffSearchSupported,
+          onRevealSearchMatch: revealSearchMatch,
+          lsp: changesLsp,
+        },
+        contextExpansionSupported,
+        expandContext: contextExpansion.expand,
+        focus: documentFocusRequest,
+        serverId,
+        workspaceId: workspaceId ?? undefined,
+        revealAvailable: Boolean(fileManagerTarget),
+        duplicateAvailable: fsEntryDuplicateEnabled,
+      }),
     [
       reviewActions,
+      fileReviews,
+      contextExpansionSupported,
+      contextExpansion.expand,
+      contextExpansion.expandFile,
+      onActivate,
       onChangesFilePress,
-      documentFocusRequest?.path,
-      documentFocusRequest?.revision,
+      documentFocusRequest,
       serverId,
       workspaceId,
       onOpenFile,
@@ -1329,10 +1665,110 @@ export function ChangesSurface({
       fileManagerTarget,
       fsEntryDuplicateEnabled,
       onRevertPath,
+      searchChanges,
+      diffSearchSupported,
+      revealSearchMatch,
+      changesLsp,
     ],
   );
 
   const hasChanges = files.length > 0;
+  const [paneWidth, setPaneWidth] = useState(0);
+  const navigatorOwner = useRef({});
+  const selectedNavigatorPath = retainSelectedChangesFile(
+    instanceState.selectedFilePath ?? null,
+    files,
+  );
+  const fileNavigatorCollapsed = instanceState.fileNavigatorCollapsed ?? false;
+  const navigatorFolders = useMemo(
+    () => instanceState.fileNavigatorCollapsedFolders ?? [],
+    [instanceState.fileNavigatorCollapsedFolders],
+  );
+  const setNavigatorState = useCallback(
+    (patch: Partial<ChangesState>) => updateState({ ...instanceState, ...patch }),
+    [instanceState, updateState],
+  );
+  useEffect(() => {
+    if (instanceState.selectedFilePath && !selectedNavigatorPath) {
+      setNavigatorState({ selectedFilePath: undefined });
+    }
+  }, [instanceState.selectedFilePath, selectedNavigatorPath, setNavigatorState]);
+  const activateNavigatorFile = useCallback(
+    (path: string) => {
+      setLocalFocusRequest((current) => ({
+        path,
+        revision: nextFocusRevision(current),
+      }));
+      setNavigatorState({ selectedFilePath: path });
+    },
+    [setNavigatorState],
+  );
+  const toggleNavigatorFolder = useCallback(
+    (path: string) => {
+      setNavigatorState({
+        fileNavigatorCollapsedFolders: navigatorFolders.includes(path)
+          ? navigatorFolders.filter((candidate) => candidate !== path)
+          : [...navigatorFolders, path],
+      });
+    },
+    [navigatorFolders, setNavigatorState],
+  );
+  const toggleFileNavigator = useCallback(
+    () => setNavigatorState({ fileNavigatorCollapsed: !fileNavigatorCollapsed }),
+    [fileNavigatorCollapsed, setNavigatorState],
+  );
+  const workspaceKey = useMemo(
+    () => buildWorkspaceTabPersistenceKey({ serverId, workspaceId: workspaceId ?? cwd }),
+    [cwd, serverId, workspaceId],
+  );
+  useEffect(() => {
+    if (!workspaceKey) return;
+    const owner = navigatorOwner.current;
+    const snapshot = {
+      files,
+      isLoading: isDiffLoading,
+      contextExpansionSupported,
+    };
+    if (host === "panel") {
+      publishWorkingDiffNavigationSnapshot(workspaceKey, owner, {
+        ...snapshot,
+        tabId: modeScope,
+      });
+      return () => clearWorkingDiffNavigationSnapshot(workspaceKey, owner);
+    }
+    publishInlineWorkingDiffNavigationSnapshot(workspaceKey, owner, {
+      ...snapshot,
+      navigate: (target) => {
+        setLocalFocusRequest({
+          path: target.focusPath ?? "",
+          revision: target.focusRequestId ?? Date.now(),
+          lineStart: target.focusLineStart,
+          lineEnd: target.focusLineEnd,
+          column: target.focusColumn,
+          reveal: target.focusReveal,
+        });
+        if (target.focusPath) setNavigatorState({ selectedFilePath: target.focusPath });
+      },
+    });
+    return () => clearInlineWorkingDiffNavigationSnapshot(workspaceKey, owner);
+  }, [
+    contextExpansionSupported,
+    files,
+    host,
+    isDiffLoading,
+    modeScope,
+    setNavigatorState,
+    workspaceKey,
+  ]);
+  const { available: navigatorAvailable, shown: showFileNavigator } = resolveNavigatorVisibility({
+    canUseSplitLayout,
+    paneWidth,
+    hasChanges,
+    collapsed: fileNavigatorCollapsed,
+  });
+  const handlePaneLayout = useCallback((event: LayoutChangeEvent) => {
+    setPaneWidth(event.nativeEvent.layout.width);
+  }, []);
   const selectedDiffStat = useMemo(
     () => computeSelectedDiffStat(files, isDiffLoading),
     [files, isDiffLoading],
@@ -1376,6 +1812,15 @@ export function ChangesSurface({
     selectUncommitted: handleSelectUncommitted,
     selectBase: handleSelectBase,
   });
+  const handleSelectComparisonBase = useCallback(
+    (nextBaseRef: string | null) =>
+      applyChangesBaseSelection({
+        baseRef: nextBaseRef,
+        setOverride: baseSelection.setOverride,
+        showCommitted: handleSelectBase,
+      }),
+    [baseSelection.setOverride, handleSelectBase],
+  );
 
   const diffContent: ReactElement = (
     <DiffBodyContent
@@ -1410,7 +1855,7 @@ export function ChangesSurface({
       collapsedFolderPaths={instanceState.collapsedFolderPaths}
       onCollapsedFolderPathsChange={updateCollapsedFolderPaths}
     >
-      {diffContent}
+      <View style={styles.diffBody}>{diffContent}</View>
     </ChangesTreeRail>
   );
 
@@ -1420,19 +1865,24 @@ export function ChangesSurface({
         onContextMenu: (event: { preventDefault?: () => void }) => event.preventDefault?.(),
       }}
       style={styles.container}
+      onLayout={handlePaneLayout}
     >
       {isGit ? (
         <ChangesToolbar
           branchName={currentBranchName}
+          baseSelection={baseSelection}
           allFilesCollapsed={allFilesCollapsed}
           canUseSplitLayout={canUseSplitLayout}
           changesTabOpen={changesTabOpen}
           committedDescription={committedDiffDescription}
           cwd={cwd}
           desktopTreeVisible={desktopTreeVisible}
+          fileNavigatorAvailable={navigatorAvailable}
+          fileNavigatorCollapsed={fileNavigatorCollapsed}
           diffMode={diffMode}
           gitActions={gitActions}
           hasFiles={hasChanges}
+          hasUncommittedChanges={hasUncommittedChanges}
           hideWhitespace={instanceState.hideWhitespace}
           host={host}
           isMobile={isMobile}
@@ -1448,9 +1898,11 @@ export function ChangesSurface({
           onExpandAll={handleExpandAllFiles}
           onRefresh={handleRefresh}
           onSelectBase={handleSelectBase}
+          onSelectComparisonBase={handleSelectComparisonBase}
           onSelectUncommitted={handleSelectUncommitted}
           onToggleChangesTab={handleToggleChangesTab}
           onToggleDesktopTree={handleToggleDesktopTree}
+          onToggleFileNavigator={toggleFileNavigator}
           onToggleHideWhitespace={handleToggleHideWhitespace}
           onToggleLayout={handleToggleLayout}
           onToggleWrapLines={handleToggleWrapLines}
@@ -1465,7 +1917,19 @@ export function ChangesSurface({
 
       {prErrorMessage ? <Text style={styles.actionErrorText}>{prErrorMessage}</Text> : null}
 
-      <View style={styles.diffContainer}>{bodyContent}</View>
+      <View style={styles.diffContainer}>
+        {bodyContent}
+        {showFileNavigator ? (
+          <ChangesFileTreeNavigator
+            files={files}
+            selectedPath={selectedNavigatorPath}
+            collapsedFolders={navigatorFolders}
+            onActivateFile={activateNavigatorFile}
+            onToggleFolder={toggleNavigatorFolder}
+            onCollapse={toggleFileNavigator}
+          />
+        ) : null}
+      </View>
 
       <CommitsSection
         serverId={serverId}
@@ -1554,6 +2018,12 @@ const styles = StyleSheet.create((theme) => ({
     flex: 1,
     minHeight: 0,
     position: "relative",
+    flexDirection: "row",
+  },
+  diffBody: {
+    flex: 1,
+    minWidth: 0,
+    minHeight: 0,
   },
   scrollView: {
     flex: 1,

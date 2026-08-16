@@ -212,6 +212,7 @@ instead of editing the list by hand.
   - Fix: Keep the desktop bundle, daemon, CLI, storage, URL scheme, updater and artwork independent from Paseo.
 - `changes-base-selector` — Let the Changes tab select and remember a read-only comparison base without changing merge, update or pull-request targets.
   - Fix: Default ahead branches to their committed branch diff without hiding the explicit Uncommitted view.
+  - Fix: Use valid top-commit Stack-Parent branches as the default comparison base and keep invalid markers visible.
   - Fix: Sort every werquinigo/ branch first in literal name order on both current and legacy hosts.
   - Fix: Keep branch search focused while revealing and activating the selected branch, including when it is absent from the bounded suggestion response.
 - `changes-uncommitted-branch-badge` — Show the selected branch's uncommitted working-tree state beside the Changes branch switcher.
