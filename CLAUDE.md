@@ -227,6 +227,7 @@ instead of editing the list by hand.
   - Fix: Keep repeated file selections monotonic and independent from manual diff scrolling.
 - `lens-shared-editor-lsp` — Provide editor intelligence through the existing Lens language server when available and a daemon-owned clangd fallback for ordinary C/C++ workspaces.
   - Fix: Keep cold-index deadlines, document-version rejection and safe save fallback behavior.
+  - Fix: Replay pooled LSP state to late editor leases and keep backend failures visible with retry.
 - `markdown-preview-source-links` — Open source locations from a Markdown file preview in an existing review surface or a reusable split pane without replacing the preview.
   - Fix: Route source links to a visible inline Changes surface before creating an editor split.
 - `retained-chat-scroll-position` — Preserve a chat's reading position while switching agent tabs or workspaces on desktop.

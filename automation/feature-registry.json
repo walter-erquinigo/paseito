@@ -213,7 +213,8 @@
       "id": "lens-shared-editor-lsp",
       "commitSubject": "feat(editor): share Lens and clangd language intelligence",
       "preservationFixes": [
-        "Keep cold-index deadlines, document-version rejection and safe save fallback behavior."
+        "Keep cold-index deadlines, document-version rejection and safe save fallback behavior.",
+        "Replay pooled LSP state to late editor leases and keep backend failures visible with retry."
       ],
       "permanent": false,
       "intent": "Provide editor intelligence through the existing Lens language server when available and a daemon-owned clangd fallback for ordinary C/C++ workspaces.",
@@ -223,18 +224,23 @@
         "LSP is opt-in per host and workspace, while format-on-save is separately opt-in per workspace and language.",
         "Diagnostics, automatic and manual completion, token hover, F12, Command/Ctrl-click and the Electron Go to Definition / Declaration context-menu action use exact in-memory document versions; stale responses are rejected.",
         "Hover and definition allow a 15-second cold-index deadline, and a transient interactive request failure never permanently disables an established editor session.",
+        "A shared document session immediately reports its current provider or complete startup failure to every new lease, bounds unanswered RPCs, and supports explicit retry.",
         "Formatting has a 1.5-second deadline and any failure saves the original buffer unchanged in one write.",
         "The UI is capability-gated and isolated in a reconfigurable CodeMirror compartment so ordinary editing remains independent."
       ],
       "contracts": [
-        "npx vitest run packages/app/src/file-pane/editor/lsp-session.test.ts packages/app/src/file-pane/editor/model.test.ts packages/client/src/daemon-client.test.ts packages/protocol/src/messages.workspace-lsp.test.ts packages/server/src/server/session/lsp/clangd-client.test.ts packages/server/src/server/session/lsp/workspace-lsp-session.test.ts",
-        "npx vitest run packages/server/src/server/session/lsp/clangd-client.local.e2e.test.ts --bail=1"
+        "npx vitest run packages/app/src/file-pane/editor/lsp-session.test.ts packages/app/src/file-pane/editor/lsp-session-pool.test.ts packages/app/src/file-pane/editor/model.test.ts packages/client/src/daemon-client.test.ts packages/protocol/src/messages.workspace-lsp.test.ts packages/server/src/server/session/lsp/clangd-client.test.ts packages/server/src/server/session/lsp/workspace-lsp-session.test.ts",
+        "npx vitest run packages/server/src/server/session/lsp/clangd-client.local.e2e.test.ts --bail=1",
+        "python3 automation/release/test_package_linux_daemon.py && python3 automation/remote/test_deploy_remote_daemons.py"
       ],
       "paths": [
+        "automation/release/package_linux_daemon.py",
+        "automation/remote/deploy_remote_daemons.py",
         "packages/app/src/file-pane/editor",
         "packages/client/src/daemon-client.ts",
         "packages/protocol/src/messages.ts",
         "packages/server/src/server/session/lsp",
+        "docs/paseito-automation.md",
         "docs/paseito-lsp.md"
       ]
     },

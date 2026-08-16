@@ -3215,6 +3215,8 @@ export const ServerInfoStatusPayloadSchema = z
         workspaceFileEditing: z.boolean().optional(),
         // COMPAT(workspaceLsp): added in Paseito v0.2.5-paseito.11, remove after 2027-02-08.
         workspaceLsp: z.boolean().optional(),
+        // COMPAT(workspaceLspClangd): added in Paseito v0.4.0-paseito.15, remove after 2027-02-16.
+        workspaceLspClangd: z.boolean().optional(),
         // COMPAT(providerUsageList): added in v0.1.98, drop the gate when daemon floor >= v0.1.98.
         providerUsageList: z.boolean().optional(),
         // COMPAT(agentDetach): added in v0.1.98, remove gate after 2026-12-19 once daemon floor >= v0.1.98.
@@ -5328,8 +5330,14 @@ export const FileEntryDeleteResponseSchema = z.object({
   }),
 });
 
+export const WorkspaceLspProviderSchema = z.enum(["lens", "clangd"]);
+
 export const WorkspaceLspResultSchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("ack") }),
+  z.object({
+    kind: z.literal("ack"),
+    // COMPAT(workspaceLspProvider): added in Paseito v0.4.0-paseito.15, remove after 2027-02-16.
+    provider: WorkspaceLspProviderSchema.optional(),
+  }),
   z.object({ kind: z.literal("diagnostics"), items: z.array(WorkspaceLspDiagnosticSchema) }),
   z.object({
     kind: z.literal("completion"),
@@ -6420,6 +6428,7 @@ export type FileWriteResult = z.infer<typeof FileWriteResultSchema>;
 export type WorkspaceLspRequest = z.infer<typeof WorkspaceLspRequestSchema>;
 export type WorkspaceLspResponse = z.infer<typeof WorkspaceLspResponseSchema>;
 export type WorkspaceLspResult = z.infer<typeof WorkspaceLspResultSchema>;
+export type WorkspaceLspProvider = z.infer<typeof WorkspaceLspProviderSchema>;
 export type WorkspaceLspDiagnostic = z.infer<typeof WorkspaceLspDiagnosticSchema>;
 export type WorkspaceLspCompletionItem = z.infer<typeof WorkspaceLspCompletionItemSchema>;
 export type WorkspaceLspLocation = z.infer<typeof WorkspaceLspLocationSchema>;

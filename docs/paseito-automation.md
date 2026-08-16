@@ -95,7 +95,8 @@ Each release publishes:
 Linux daemon manifests retain the legacy singular `feature` field for old deployers and add a
 `features` list for capability-complete releases. New Paseito releases require the base selector,
 on-demand Changes context, structured review suggestions, branch-file review-state, and the
-attach-only Lens editor-LSP capability to be present together.
+workspace editor-LSP capability, including the daemon-owned clangd fallback, to be present
+together.
 
 ## Registered remote hosts
 

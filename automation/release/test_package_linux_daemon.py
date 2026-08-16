@@ -43,6 +43,7 @@ class PackageLinuxDaemonTests(unittest.TestCase):
                     "reviewSuggestionsV1",
                     "fileReviewV1",
                     "workspaceLsp",
+                    "workspaceLspClangd",
                 ],
             },
         )
