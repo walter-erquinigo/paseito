@@ -69,6 +69,7 @@ import { useSessionStore } from "@/stores/session-store";
 import { confirmDialog } from "@/utils/confirm-dialog";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Button } from "@/components/ui/button";
+import { StatusBadge } from "@/components/ui/status-badge";
 import {
   PaneContentToolbar,
   paneContentToolbarIconSize,
@@ -98,7 +99,6 @@ import { PullRequestStateIcon } from "@/git/pull-request-state-icon";
 import { openExternalUrl } from "@/utils/open-external-url";
 import { openWorkspacePullRequest } from "@/workspace-tabs/open-supporting-view";
 import type { PullRequestOpenLocation } from "@/hooks/use-settings";
-import { StatusBadge } from "@/components/ui/status-badge";
 import { ChangesBaseSelector } from "@/git/changes-base-selector";
 import {
   applyChangesBaseSelection,
@@ -470,6 +470,7 @@ interface ChangesRepositoryToolbarModel {
   branchName: string | null;
   cwd: string;
   gitActions: GitActions | null;
+  hasUncommittedChanges: boolean;
   pullRequest: ChangesPullRequestLinkModel | null;
   serverId: string;
   workspaceId?: string | null;
@@ -505,6 +506,7 @@ interface BuildChangesHeaderModelInput {
   cwd: string;
   diffMode: "uncommitted" | "base";
   gitActions: GitActions;
+  hasUncommittedChanges: boolean;
   mode: ChangesToolbarMode;
   onOpenPullRequest: () => void;
   onSelectBase: () => void;
@@ -525,6 +527,7 @@ function buildChangesHeaderModel(input: BuildChangesHeaderModelInput): {
       branchName: input.branchName,
       cwd: input.cwd,
       gitActions: input.compact ? input.gitActions : null,
+      hasUncommittedChanges: input.hasUncommittedChanges,
       pullRequest: input.pullRequest
         ? { ...input.pullRequest, onOpen: input.onOpenPullRequest }
         : null,
@@ -561,6 +564,7 @@ function ChangesHeader({
       <ChangesDiffOnlyToolbar
         lspControls={lspControls}
         compact={compact}
+        repository={repository}
         mode={comparison.mode}
         sidebarSurface={sidebarSurface}
       />
@@ -585,10 +589,12 @@ function ChangesHeader({
 function ChangesDiffOnlyToolbar({
   lspControls,
   compact,
+  repository,
   mode,
   sidebarSurface,
 }: {
   compact: boolean;
+  repository: ChangesRepositoryToolbarModel;
   mode: Extract<ChangesToolbarMode, { kind: "diff" }>;
   lspControls: ReactNode;
   sidebarSurface: boolean;
@@ -600,7 +606,14 @@ function ChangesDiffOnlyToolbar({
       testID="changes-header"
       trailing="glyph"
     >
-      <ChangesToolbarLeading />
+      <ChangesToolbarLeading>
+        <ChangesUncommittedActions
+          serverId={repository.serverId}
+          cwd={repository.cwd}
+          currentBranchName={repository.branchName}
+          hasUncommittedChanges={repository.hasUncommittedChanges}
+        />
+      </ChangesToolbarLeading>
       <ChangesToolbarTrailing>
         {lspControls}
         <ChangesToolbarActions mode={mode} compact={compact} />
@@ -1633,6 +1646,7 @@ export function ChangesSurface({
     baseRef,
     baseSelection,
     currentBranchName,
+    hasUncommittedChanges,
     diffMode,
     selectUncommitted: handleSelectUncommitted,
     selectBase: handleSelectBase,
@@ -2014,6 +2028,7 @@ export function ChangesSurface({
         cwd,
         diffMode,
         gitActions,
+        hasUncommittedChanges,
         mode: toolbarMode,
         onOpenPullRequest: handleOpenPullRequest,
         onSelectBase: handleSelectBase,
@@ -2031,6 +2046,7 @@ export function ChangesSurface({
       cwd,
       diffMode,
       gitActions,
+      hasUncommittedChanges,
       handleOpenPullRequest,
       handleSelectBase,
       handleSelectComparisonBase,

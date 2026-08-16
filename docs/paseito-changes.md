@@ -20,6 +20,10 @@ becomes the default Changes base and opens the committed comparison. A remembere
 wins. A malformed marker or missing branch falls back to the recorded Git base and keeps an error
 badge beside the base selector until the top commit is corrected.
 
+A muted **Uncommitted** badge reports the selected branch's live working-tree state. It remains
+visible while Changes displays the **Committed** comparison and also appears in the standalone Diff
+view.
+
 ## Hidden context
 
 Omitted regions use a quiet separator row instead of code-line chrome. Gaps of up to 40 lines expose
