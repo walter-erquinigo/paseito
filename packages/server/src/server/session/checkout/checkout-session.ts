@@ -7,6 +7,7 @@ import type {
   BranchSuggestionsRequest,
   CheckoutCommitsListRequest,
   CheckoutCommitFileDiffRequest,
+  CheckoutDiffGetContextRequest,
   CheckoutRefreshRequest,
   CheckoutRenameBranchRequest,
   CheckoutStatusRequest,
@@ -268,13 +269,22 @@ export class CheckoutSession {
   }
 
   async handleCommitsListRequest(msg: CheckoutCommitsListRequest): Promise<void> {
-    const { cwd, requestId } = msg;
+    const { cwd, baseRef, requestId } = msg;
 
     try {
-      const { baseRef, commits } = await listCheckoutCommits({ cwd: expandTilde(cwd) });
+      if (baseRef !== undefined) {
+        assertSafeGitRef(baseRef, "base branch");
+      }
+      const result = await listCheckoutCommits({ cwd: expandTilde(cwd), baseRef });
       this.host.emit({
         type: "checkout.commits.list.response",
-        payload: { cwd, baseRef, commits, error: null, requestId },
+        payload: {
+          cwd,
+          baseRef: result.baseRef,
+          commits: result.commits,
+          error: null,
+          requestId,
+        },
       });
     } catch (error) {
       this.host.emit({
@@ -442,6 +452,45 @@ export class CheckoutSession {
     const unsubscribe = this.diffSubscriptions.get(msg.subscriptionId);
     this.diffSubscriptions.delete(msg.subscriptionId);
     unsubscribe?.();
+  }
+
+  async handleDiffGetContextRequest(msg: CheckoutDiffGetContextRequest): Promise<void> {
+    const cwd = expandTilde(msg.cwd);
+    try {
+      const result = await this.workspaceGitService.getCheckoutDiffContext(cwd, {
+        compare: msg.compare,
+        filePath: msg.filePath,
+        ...(msg.expectedRevision ? { expectedRevision: msg.expectedRevision } : {}),
+        region: msg.region,
+        offset: msg.offset,
+        limit: msg.limit,
+      });
+      this.host.emit({
+        type: "checkout.diff.get_context.response",
+        payload: {
+          cwd: msg.cwd,
+          filePath: msg.filePath,
+          ...result,
+          error: null,
+          requestId: msg.requestId,
+        },
+      });
+    } catch (error) {
+      this.host.emit({
+        type: "checkout.diff.get_context.response",
+        payload: {
+          cwd: msg.cwd,
+          filePath: msg.filePath,
+          revision: msg.expectedRevision ?? "",
+          region: msg.region,
+          offset: msg.offset,
+          lines: [],
+          hasMore: false,
+          error: toCheckoutError(error),
+          requestId: msg.requestId,
+        },
+      });
+    }
   }
 
   async handleRefreshRequest(msg: CheckoutRefreshRequest): Promise<void> {
