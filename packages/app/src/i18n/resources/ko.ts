@@ -1,5 +1,10 @@
 import { en, type TranslationResources } from "./en";
 import { pluginSettings } from "./plugin-settings";
+import {
+  mrTrackerSectionTranslations,
+  mrTrackerSettingsTranslations,
+  mrTrackerTranslations,
+} from "./mr-tracker";
 
 export const ko: TranslationResources = {
   common: {
@@ -55,6 +60,7 @@ export const ko: TranslationResources = {
       close: "메뉴 닫기",
     },
     commandCenter: {
+      ...en.shell.commandCenter,
       placeholder: "명령, 파일, 워크스페이스 및 에이전트 검색...",
       filePlaceholder: "파일 검색...",
       searchingFiles: "파일 검색 중...",
@@ -86,6 +92,7 @@ export const ko: TranslationResources = {
     },
   },
   composer: {
+    ...en.composer,
     placeholders: {
       desktop: "에이전트에게 메시지를 보내거나 @files 태그, /commands, /skills를 사용하세요",
       mobile: "메시지, @files, /commands",
@@ -862,6 +869,7 @@ export const ko: TranslationResources = {
         },
       },
       diff: {
+        ...en.workspace.git.diff,
         openChangesTab: "변경사항 탭 열기",
         openDiffTab: "Diff 탭 열기",
         closeChangesTab: "변경사항 탭 닫기",
@@ -1102,7 +1110,7 @@ export const ko: TranslationResources = {
       discord: "Discord",
       github: "GitHub 이슈 만들기",
       whatsNew: "새로운 소식",
-      appName: "Paseo",
+      appName: "Paseito",
     },
     sections: {
       sessions: "기록",
@@ -1393,6 +1401,7 @@ export const ko: TranslationResources = {
       },
     },
     integrations: {
+      ...en.desktop.integrations,
       cli: {
         statusFailed: "CLI 설치 상태를 확인할 수 없습니다.",
         installFailed: "Paseo CLI를 설치할 수 없습니다.",
@@ -1864,6 +1873,7 @@ export const ko: TranslationResources = {
     accessibility: "컨텍스트 윈도우 {{percentage}}% 사용됨",
   },
   review: {
+    ...en.review,
     comment: {
       add: "리뷰 댓글 추가",
       edit: "리뷰 댓글 편집",
@@ -1876,6 +1886,7 @@ export const ko: TranslationResources = {
       saveAccessibility: "리뷰 댓글 저장",
     },
   },
+  mrTracker: mrTrackerTranslations,
   settings: {
     title: "설정",
     loading: "설정 불러오는 중...",
@@ -1897,6 +1908,7 @@ export const ko: TranslationResources = {
     },
     groupInfo: "{{title}} 정보",
     sections: {
+      ...mrTrackerSectionTranslations,
       general: "일반",
       appearance: "모양",
       layout: en.settings.sections.layout,
@@ -1909,6 +1921,7 @@ export const ko: TranslationResources = {
       about: "정보",
     },
     layout: en.settings.layout,
+    mrTracker: mrTrackerSettingsTranslations,
     editor: {
       title: "편집기",
       vimKeybindings: "Vim 키 바인딩",
@@ -2160,6 +2173,7 @@ export const ko: TranslationResources = {
         agentInput: "에이전트 입력",
       },
       help: {
+        ...en.settings.shortcuts.help,
         openProject: "프로젝트 열기",
         newWorkspace: "새 워크스페이스",
         newWorktree: "새 워크트리",
