@@ -1,9 +1,9 @@
 {
   "name": "@getpaseo/cli",
   "version": "0.6.1",
-  "description": "Paseo CLI - control your AI coding agents from the command line",
+  "description": "Paseito CLI - control your AI coding agents from the command line",
   "bin": {
-    "paseo": "bin/paseo"
+    "paseito": "bin/paseito"
   },
   "files": [
     "bin",

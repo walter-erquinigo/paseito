@@ -1,6 +1,6 @@
 {
   "name": "paseo",
-  "version": "0.5.2-paseito.1",
+  "version": "0.5.2-paseito.2",
   "private": true,
   "description": "Paseo: voice-controlled development environment for local AI coding agents",
   "keywords": [
@@ -15,10 +15,6 @@
   "author": {
     "name": "Mohamed Boudra",
     "email": "hello@moboudra.com"
-  },
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/getpaseo/paseo.git"
   },
   "workspaces": [
     "packages/expo-two-way-audio",

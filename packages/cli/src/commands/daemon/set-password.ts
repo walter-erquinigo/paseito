@@ -100,8 +100,8 @@ export async function setDaemonPasswordInConfig(
   return {
     action: "password_set",
     configPath,
-    restartCommand: "paseo daemon restart",
-    message: `Password written to ${configPath}\nRestart the daemon for the change to take effect.\nRun: paseo daemon restart`,
+    restartCommand: "paseito daemon restart",
+    message: `Password written to ${configPath}\nRestart the daemon for the change to take effect.\nRun: paseito daemon restart`,
   };
 }
 
