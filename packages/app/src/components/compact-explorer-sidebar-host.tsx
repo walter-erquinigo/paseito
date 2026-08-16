@@ -17,6 +17,7 @@ import { useWorkspaceCheckoutStatus } from "@/screens/workspace/use-workspace-ch
 import { openWorkspaceFileFromExplorer } from "@/screens/workspace/workspace-file-open-command";
 import { isWeb } from "@/constants/platform";
 import { DiffDocumentWorkspaceCacheProvider } from "@/git/diff-document/workspace-cache";
+import type { WorkspaceFileOpenOptions } from "@/workspace/file-open";
 import {
   resolveCompactExplorerSidebarHostModel,
   type CompactExplorerSidebarHostModel,
@@ -131,12 +132,13 @@ export function CompactExplorerSidebarHost({
   }, [model, openCompactFileExplorer]);
 
   const handleOpenFile = useCallback(
-    (filePath: string) => {
+    (filePath: string, location?: WorkspaceFileOpenOptions) => {
       if (!model) {
         return;
       }
       openWorkspaceFileFromExplorer({
         filePath,
+        location,
         persistenceKey: model.persistenceKey,
         closeExplorerAfterOpen: presentation === "overlay",
         showMobileAgent,

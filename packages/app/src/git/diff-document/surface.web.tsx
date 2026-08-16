@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Pressable, Text, type ViewStyle } from "react-native";
+import type { ViewStyle } from "react-native";
 import { DomOverlayScrollbar } from "@/components/ui/overlay-scrollbar/dom-overlay-scrollbar";
+import { useIsCompactFormFactor } from "@/constants/layout";
 import { getInlineReviewThreadState, InlineReviewGutterCell, InlineReviewThread } from "@/review";
 import type { ReviewableDiffTarget } from "@/utils/diff-layout";
 import { DocumentFileHeader } from "./document-file-header";
@@ -12,6 +13,12 @@ import {
   resolveVisibleFileSections,
 } from "./header-layout";
 import { parseDiffContextMarker, type DiffContextRegion } from "@/git/diff-context-expansion";
+import { DiffContextControl } from "./context-control";
+import {
+  LINE_REVIEW_DOT_GUTTER_WIDTH,
+  lineReviewDotGutterWidth,
+  ReviewCheckbox,
+} from "./review-checkbox";
 import { hitTestDiffDocument, selectedSourceText } from "./hit-testing";
 import { retainHorizontalOffsetMapForPaths } from "./horizontal-offsets";
 import { HorizontalScroll } from "./horizontal-scroll.web";
@@ -172,6 +179,7 @@ function navigationMarkers(
 export function DiffSurface(props: DiffSurfaceProps) {
   const { t } = useTranslation();
   const workspaceCache = useDiffDocumentWorkspaceCache();
+  const isCompact = useIsCompactFormFactor();
   const onToggleFile = props.onToggleFile;
   const rootRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -277,6 +285,7 @@ export function DiffSurface(props: DiffSurfaceProps) {
   const measurement =
     readyTypographyResource === typographyResource ? typographyResource.measureText : null;
   const reviewActions = props.mode.kind === "working" ? props.mode.reviewActions : undefined;
+  const reviewIndicatorWidth = lineReviewDotGutterWidth(props.reviewPresentation !== undefined);
   const workingMode = props.mode.kind === "working" ? props.mode : null;
   const navigationHighlight = useMemo(() => {
     if (!workingMode?.focusPath || !workingMode.focusLineStart) return undefined;
@@ -325,6 +334,7 @@ export function DiffSurface(props: DiffSurfaceProps) {
       measureText: measurement,
       palette: props.palette,
       reviewActions,
+      reviewIndicatorWidth,
       labels: {
         binary: t("workspace.git.diff.binaryFile"),
         tooLarge: t("workspace.git.diff.tooLarge"),
@@ -341,6 +351,7 @@ export function DiffSurface(props: DiffSurfaceProps) {
     props.files,
     props.palette,
     reviewActions,
+    reviewIndicatorWidth,
     t,
     desiredTypography.lineHeight,
     loadedTypography,
@@ -1154,7 +1165,6 @@ export function DiffSurface(props: DiffSurfaceProps) {
                 onSelectPath={props.onSelectPath}
                 canvasRendered
                 onFocusDocument={focusDocument}
-                canvasRendered
               />
             </WebFileHeaderSection>
           ))}
@@ -1216,6 +1226,7 @@ export function DiffSurface(props: DiffSurfaceProps) {
                           : false
                       }
                       selected={changed?.id === props.reviewPresentation?.selectedLineId}
+                      alwaysVisible={isCompact}
                       onSelectLine={props.reviewPresentation?.onSelectLine}
                       onToggleLine={props.reviewPresentation?.onToggleLine}
                     />,
@@ -1401,6 +1412,7 @@ function WebReviewGutter({
   changedLine,
   reviewed,
   selected,
+  alwaysVisible,
   onSelectLine,
   onToggleLine,
 }: {
@@ -1413,6 +1425,7 @@ function WebReviewGutter({
   changedLine: import("@/review").ReviewableChangedLine | undefined;
   reviewed: boolean;
   selected: boolean;
+  alwaysVisible: boolean;
   onSelectLine?: (line: import("@/review").ReviewableChangedLine) => void;
   onToggleLine?: (line: import("@/review").ReviewableChangedLine) => void;
 }) {
@@ -1420,7 +1433,6 @@ function WebReviewGutter({
     () => ({ position: "absolute", top, left, width, height, zIndex: 5 }),
     [height, left, top, width],
   );
-  const accessibilityState = useMemo(() => ({ checked: reviewed }), [reviewed]);
   const toggleReviewed = useCallback(
     (event: { stopPropagation: () => void }) => {
       event.stopPropagation();
@@ -1432,19 +1444,22 @@ function WebReviewGutter({
   );
   const comments = actions.commentsByTarget.get(target.key) ?? [];
   return (
-    <InlineReviewGutterCell
-      reviewTarget={target}
-      comments={comments}
-      isEditorOpen={
-        getInlineReviewThreadState({ reviewTarget: target, reviewActions: actions }) !== null
-      }
-      lineHeight={height}
-      onStartComment={actions.onStartComment}
-      reviewActions={actions}
-      style={style}
-      actionTestID={`diff-review-gutter-action-${target.key}`}
-      testID={`diff-review-gutter-${target.key}`}
-    >
+    <div data-diff-review="true" style={style as React.CSSProperties}>
+      <InlineReviewGutterCell
+        reviewTarget={target}
+        comments={comments}
+        isEditorOpen={
+          getInlineReviewThreadState({ reviewTarget: target, reviewActions: actions }) !== null
+        }
+        lineHeight={height}
+        onStartComment={actions.onStartComment}
+        reviewActions={actions}
+        style={WEB_REVIEW_GUTTER_FILL_STYLE}
+        actionTestID={`diff-review-gutter-action-${target.key}`}
+        testID={`diff-review-gutter-${target.key}`}
+      >
+        {null}
+      </InlineReviewGutterCell>
       <div
         data-paseito-review-selected={selected ? "true" : undefined}
         data-paseito-review-target-key={target.key}
@@ -1452,19 +1467,19 @@ function WebReviewGutter({
         style={selected ? WEB_SELECTED_LINE_STYLE : undefined}
       >
         {changedLine && onToggleLine ? (
-          <Pressable
-            accessibilityRole="checkbox"
-            accessibilityState={accessibilityState}
+          <ReviewCheckbox
+            appearance="dot"
             accessibilityLabel={reviewed ? "Mark line unreviewed" : "Mark line reviewed"}
+            alwaysVisible={alwaysVisible}
             onPress={toggleReviewed}
+            selected={selected}
+            state={reviewed ? "reviewed" : "unreviewed"}
             style={WEB_LINE_REVIEW_STYLE}
             testID={`diff-line-review-${target.key}`}
-          >
-            <Text style={WEB_LINE_REVIEW_TEXT}>{reviewed ? "✓" : "○"}</Text>
-          </Pressable>
+          />
         ) : null}
       </div>
-    </InlineReviewGutterCell>
+    </div>
   );
 }
 
@@ -1512,38 +1527,16 @@ function WebContextControl({
     () => ({
       position: "absolute",
       top,
-      left: 22,
+      left: 0,
+      right: 0,
       height,
       zIndex: 7,
-      display: "flex",
-      alignItems: "center",
-      gap: 8,
     }),
     [height, top],
   );
-  const expandUp = useCallback(
-    () => void onExpand(filePath, region, "up"),
-    [filePath, onExpand, region],
-  );
-  const expandDown = useCallback(
-    () => void onExpand(filePath, region, "down"),
-    [filePath, onExpand, region],
-  );
-  const expandAll = useCallback(
-    () => void onExpand(filePath, region, "all"),
-    [filePath, onExpand, region],
-  );
   return (
-    <div style={style} data-diff-review="true" data-testid="diff-context-control">
-      <button type="button" onClick={expandUp}>
-        ↑ 20
-      </button>
-      <button type="button" onClick={expandDown}>
-        ↓ 20
-      </button>
-      <button type="button" onClick={expandAll}>
-        Expand {Math.min(region.lineCount, 5000)}
-      </button>
+    <div style={style} data-diff-review="true">
+      <DiffContextControl filePath={filePath} region={region} onExpand={onExpand} />
     </div>
   );
 }
@@ -1679,12 +1672,18 @@ const SHORTCUT_HINT_STYLE: React.CSSProperties = {
   pointerEvents: "none",
 };
 const WEB_LINE_REVIEW_STYLE: ViewStyle = {
-  width: 22,
+  width: LINE_REVIEW_DOT_GUTTER_WIDTH,
   height: 22,
   alignItems: "center",
   justifyContent: "center",
 };
-const WEB_LINE_REVIEW_TEXT = { color: "#0a84ff", fontSize: 13 };
+const WEB_REVIEW_GUTTER_FILL_STYLE: ViewStyle = {
+  position: "absolute",
+  top: 0,
+  right: 0,
+  bottom: 0,
+  left: 0,
+};
 const WEB_SELECTED_LINE_STYLE: React.CSSProperties = {
   borderLeftWidth: 2,
   borderLeftStyle: "solid",

@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 
 const spawnCounters = vi.hoisted(() => ({
+  contentRevisionHashCalls: 0,
   trackedTextDiffCalls: 0,
 }));
 
@@ -29,6 +30,12 @@ vi.mock("child_process", async () => {
           !normalizedArgs.includes("--name-status");
         if (isTrackedTextDiff) {
           spawnCounters.trackedTextDiffCalls += 1;
+        }
+        if (
+          normalizedArgs[subcommandIndex] === "hash-object" &&
+          normalizedArgs.includes("--stdin-paths")
+        ) {
+          spawnCounters.contentRevisionHashCalls += 1;
         }
       }
       return actual.spawn(...args);
@@ -70,6 +77,7 @@ describe("checkout git diff batching", () => {
     const setup = initRepoWithTrackedChanges(20);
     tempDir = setup.tempDir;
     repoDir = setup.repoDir;
+    spawnCounters.contentRevisionHashCalls = 0;
     spawnCounters.trackedTextDiffCalls = 0;
   });
 
@@ -86,5 +94,16 @@ describe("checkout git diff batching", () => {
     expect(result.diff).toContain("file-0.txt");
     expect(result.diff).toContain("file-19.txt");
     expect(spawnCounters.trackedTextDiffCalls).toBe(20);
+  });
+
+  it("hashes working-tree content revisions in one Git process", async () => {
+    const result = await getCheckoutDiff(repoDir, {
+      mode: "uncommitted",
+      includeStructured: true,
+    });
+
+    expect(result.structured).toHaveLength(20);
+    expect(result.structured?.every((file) => Boolean(file.contentRevision))).toBe(true);
+    expect(spawnCounters.contentRevisionHashCalls).toBe(1);
   });
 });
