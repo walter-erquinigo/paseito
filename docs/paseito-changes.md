@@ -83,9 +83,11 @@ Uncommitted views, but are not committed, synchronized, sent to an agent, or pos
 daemons expose an update-host message instead of attempting to infer content identity from patch
 text.
 
-Text diffs also expose an always-visible checkbox in a fixed 22px gutter slot for every physical
-added and removed line. Every row reserves the slot, but context and hunk rows leave it blank. A
-replacement therefore has one review item on each side, while context lines are never counted. File review is derived from
+Text diffs reserve a fixed 22px checkbox slot for every physical added and removed line. Reviewed
+marks stay quietly visible. On desktop, unchecked controls appear when the slot is hovered or the
+line is focused or selected; native and compact layouts keep them visible because hover is
+unavailable. Every row reserves the slot, but context and hunk rows leave it blank. A replacement
+therefore has one review item on each side, while context lines are never counted. File review is derived from
 the visible edited lines: checking a file checks them all, clearing it clears them all, and completing
 the final line collapses the file. Binary and oversized diffs remain explicitly reviewable only at
 file level.

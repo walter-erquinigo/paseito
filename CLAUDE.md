@@ -231,6 +231,7 @@ instead of editing the list by hand.
   - Fix: Require the review-state capability in packaged and remote releases.
   - Fix: Preserve repeated reviewed edits only when their uniquely anchored sequence mapping is unambiguous.
   - Fix: Show the live Changes-focus binding in the selected-line shortcut widget.
+  - Fix: Keep reviewed lines quietly scannable while revealing unchecked line controls through hover, focus or selection on desktop and keeping them visible without hover.
 - `changes-source-navigation` — Search complete current-side changed files and use shared language intelligence directly from Changes.
   - Fix: Share revision-safe LSP sessions with the editor and suppress stale buffers.
   - Fix: Anchor LSP positions to current-side source text and pause Changes intelligence while the workspace is dirty.
