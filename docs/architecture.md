@@ -95,6 +95,10 @@ code imports from `@getpaseo/client`.
 
 Cross-platform React Native app that connects to one or more daemons.
 
+The desktop source editor can opt into the attach-only Lens LSP bridge described in
+[paseito-lsp.md](paseito-lsp.md). Lens owns the language-server lifecycle; the app and daemon
+degrade only the LSP surface when no matching Lens broker is active.
+
 - Expo Router navigation (`/h/[serverId]/workspace/[workspaceId]`, `/h/[serverId]/agent/[agentId]`, etc.). The `workspaceId` URL segment is an opaque workspace id, not a directly meaningful filesystem path.
 - `HostRuntimeController` manages saved host connections, reconnection, and per-host runtime state
 - `runtime/replica-cache` keeps a non-authoritative per-host display replica in AsyncStorage: only the last focused agent, its workspace, and a short timeline tail. It restores before navigation becomes ready, leaves remote hydration flags false, and is atomically replaced by the normal snapshot-plus-delta synchronization path.
