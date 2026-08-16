@@ -1,9 +1,9 @@
 {
   "name": "@getpaseo/desktop",
-  "version": "0.5.2-paseito.10",
+  "version": "0.5.2-paseito.13",
   "private": true,
-  "description": "Paseo desktop app (Electron wrapper)",
-  "homepage": "https://paseo.sh",
+  "description": "Paseito desktop app for Apple Silicon macOS",
+  "homepage": "https://github.com/walter-erquinigo/paseito",
   "license": "AGPL-3.0-or-later",
   "author": {
     "name": "Mohamed Boudra",
