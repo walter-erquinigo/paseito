@@ -8,6 +8,7 @@ import type {
   BranchSuggestionsRequest,
   CheckoutCommitsListRequest,
   CheckoutCommitFileDiffRequest,
+  CheckoutDiffGetContextRequest,
   CheckoutRefreshRequest,
   CheckoutRenameBranchRequest,
   CheckoutStatusRequest,
@@ -489,6 +490,44 @@ export class CheckoutSession {
     await ownership.release(msg.subscriptionId);
   }
 
+  async handleDiffGetContextRequest(msg: CheckoutDiffGetContextRequest): Promise<void> {
+    const cwd = expandTilde(msg.cwd);
+    try {
+      const result = await this.workspaceGitService.getCheckoutDiffContext(cwd, {
+        compare: msg.compare,
+        filePath: msg.filePath,
+        ...(msg.expectedRevision ? { expectedRevision: msg.expectedRevision } : {}),
+        region: msg.region,
+        offset: msg.offset,
+        limit: msg.limit,
+      });
+      this.host.emit({
+        type: "checkout.diff.get_context.response",
+        payload: {
+          cwd: msg.cwd,
+          filePath: msg.filePath,
+          ...result,
+          error: null,
+          requestId: msg.requestId,
+        },
+      });
+    } catch (error) {
+      this.host.emit({
+        type: "checkout.diff.get_context.response",
+        payload: {
+          cwd: msg.cwd,
+          filePath: msg.filePath,
+          revision: msg.expectedRevision ?? "",
+          region: msg.region,
+          offset: msg.offset,
+          lines: [],
+          hasMore: false,
+          error: toCheckoutError(error),
+          requestId: msg.requestId,
+        },
+      });
+    }
+  }
   async handleRefreshRequest(msg: CheckoutRefreshRequest): Promise<void> {
     const { cwd, requestId } = msg;
     const resolvedCwd = expandTilde(cwd);

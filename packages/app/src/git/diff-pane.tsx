@@ -1621,6 +1621,8 @@ export function ChangesSurface({
     isDiffLoading,
     reviewActions,
     reviewAttachment,
+    contextExpansion,
+    contextExpansionSupported,
   } = useWorkingDiff({
     serverId,
     workspaceId: workspaceId ?? undefined,
@@ -1781,6 +1783,8 @@ export function ChangesSurface({
       onDownload: handleDownloadPath,
       onDuplicate: fsEntryDuplicateEnabled ? handleDuplicatePath : undefined,
       onRevert: onRevertPath,
+      onExpandContext: contextExpansion.expand,
+      onExpandFile: contextExpansionSupported ? contextExpansion.expandFile : undefined,
     }),
     [
       reviewActions,
@@ -1799,6 +1803,9 @@ export function ChangesSurface({
       fileManagerTarget,
       fsEntryDuplicateEnabled,
       onRevertPath,
+      contextExpansion.expand,
+      contextExpansion.expandFile,
+      contextExpansionSupported,
     ],
   );
 

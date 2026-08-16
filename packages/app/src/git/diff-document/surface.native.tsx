@@ -21,6 +21,7 @@ import Animated, {
 import { scheduleOnRN } from "react-native-worklets";
 import { InlineReviewThread } from "@/review";
 import { useKeyboardShift } from "@/keyboard/shift";
+import { parseDiffContextMarker } from "@/git/diff-context-expansion";
 import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
 import { DocumentFileHeader } from "./document-file-header";
 import {
@@ -31,6 +32,7 @@ import {
 import { hitTestDiffBodyPoint } from "./native-hit-testing";
 import { retainDiffViewport } from "./viewport";
 import { HorizontalScroll } from "./horizontal-scroll.native";
+import { DiffContextControl } from "./context-control";
 import {
   horizontalOffsetForPath,
   retainHorizontalOffsetsForPaths,
@@ -506,12 +508,34 @@ function NativeReviewOverlays({
   model: DiffDocumentModel;
   mode: DiffSurfaceProps["mode"];
 }) {
-  if (mode.kind !== "working" || !mode.reviewActions) return null;
+  if (mode.kind !== "working") return null;
   const reviewActions = mode.reviewActions;
   return model.rows.flatMap((row) => {
-    if (row.kind !== "line" || row.reviewHeight === 0) return [];
+    if (row.kind !== "line") return [];
     const columnWidth = model.viewportWidth / row.cells.length;
     return row.cells.flatMap((cell, index) => {
+      const marker = cell && parseDiffContextMarker(cell.content);
+      if (marker && mode.onExpandContext && index === row.cells.length - 1) {
+        const file = model.files[row.fileIndex];
+        return file
+          ? [
+              <DiffContextControl
+                key={`${file.path}:${row.index}`}
+                filePath={file.path}
+                region={marker}
+                onExpand={mode.onExpandContext}
+                style={inlineUnistylesStyle<ViewStyle>({
+                  position: "absolute",
+                  top: row.top,
+                  left: 0,
+                  right: 0,
+                  zIndex: 8,
+                })}
+              />,
+            ]
+          : [];
+      }
+      if (!reviewActions || row.reviewHeight === 0) return [];
       if (!cell?.reviewTarget) return [];
       const comments = reviewActions.commentsByTarget.get(cell.reviewTarget.key) ?? [];
       const editor = reviewActions.editor;

@@ -2814,6 +2814,8 @@ export class Session {
         return this.checkoutSession.handleSubscribeDiffRequest(msg, this.delivery);
       case "unsubscribe_checkout_diff_request":
         return this.checkoutSession.handleUnsubscribeDiffRequest(msg, this.delivery);
+      case "checkout.diff.get_context.request":
+        return this.checkoutSession.handleDiffGetContextRequest(msg);
       case "checkout_switch_branch_request":
         return this.checkoutSession.handleCheckoutSwitchBranchRequest(msg);
       case "checkout.rename_branch.request":

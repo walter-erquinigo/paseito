@@ -12,6 +12,7 @@ import {
 import { useToast } from "@/contexts/toast-context";
 import { useStableEvent } from "@/hooks/use-stable-event";
 import { InlineReviewAddButton, InlineReviewThread } from "@/review";
+import { parseDiffContextMarker } from "@/git/diff-context-expansion";
 import { copyToClipboard } from "@/utils/copy-to-clipboard";
 import type { ReviewableDiffTarget } from "@/utils/diff-layout";
 import { DocumentFileHeader } from "./document-file-header";
@@ -28,6 +29,7 @@ import {
 } from "./hit-testing";
 import { retainHorizontalOffsetMapForPaths } from "./horizontal-offsets";
 import { HorizontalScroll } from "./horizontal-scroll.web";
+import { DiffContextControl } from "./context-control";
 import { buildDiffDocumentModel, FILE_HEADER_HEIGHT, resolveRelayoutScrollTop } from "./model";
 import { paintWebFileHeader, paintWebViewport } from "./paint.web";
 import { hasPointerDragStarted } from "./pointer-gesture";
@@ -45,6 +47,10 @@ import { useDiffDocumentWorkspaceCache } from "./workspace-cache";
 
 const DEFAULT_MONO_STACK = "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace";
 const RESIZE_SETTLE_DELAY_MS = 120;
+
+function webContextControlStyle(top: number): ViewStyle {
+  return { position: "absolute", top, left: 0, right: 0, zIndex: 7 };
+}
 
 interface StickyHeaderCanvasSlot {
   section: HTMLDivElement | null;
@@ -159,6 +165,7 @@ export function DiffSurface(props: DiffSurfaceProps) {
   const measurement =
     readyTypographyResource === typographyResource ? typographyResource.measureText : null;
   const reviewActions = props.mode.kind === "working" ? props.mode.reviewActions : undefined;
+  const expandContext = props.mode.kind === "working" ? props.mode.onExpandContext : undefined;
   const model = useMemo(() => {
     if (!loadedTypography || !measurement) {
       return emptyDiffDocumentModel({
@@ -870,6 +877,25 @@ export function DiffSurface(props: DiffSurfaceProps) {
                     />
                   );
                 });
+              })
+            : null}
+          {props.mode.kind === "working" && expandContext
+            ? model.rows.map((row) => {
+                if (row.kind !== "line") return null;
+                const marker = row.cells
+                  .map((cell) => cell && parseDiffContextMarker(cell.content))
+                  .find(Boolean);
+                if (!marker) return null;
+                const file = model.files[row.fileIndex];
+                return file ? (
+                  <DiffContextControl
+                    key={`${file.path}:${row.index}`}
+                    filePath={file.path}
+                    region={marker}
+                    onExpand={expandContext}
+                    style={webContextControlStyle(row.top)}
+                  />
+                ) : null;
               })
             : null}
         </div>

@@ -19,3 +19,13 @@ When the top commit contains exactly one `Stack-Parent:` line naming an existing
 becomes the default Changes base and opens the committed comparison. A remembered manual base still
 wins. A malformed marker or missing branch falls back to the recorded Git base and keeps an error
 badge beside the base selector until the top commit is corrected.
+
+## Hidden context
+
+Omitted regions use a quiet separator row instead of code-line chrome. Gaps of up to 40 lines expose
+one full reveal. Larger gaps can load 20 lines from either edge or request up to 5,000 lines from the
+whole remaining region. The file header retains a compact action for revealing the entire file.
+Full expansion is paginated at 5,000 lines and 1 MiB per daemon response. The request names
+the expected current-file revision; a changed file rejects the request instead of mixing revisions.
+Expansion is session-local, while persisted comments and suggestions automatically reveal their
+target region when the Changes view reopens.

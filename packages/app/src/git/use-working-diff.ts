@@ -7,11 +7,14 @@ import {
   buildReviewDraftKey,
   useInlineReviewController,
   useReviewAttachmentSnapshot,
+  useReviewDraftComments,
 } from "@/review";
 import { useCheckoutDiffQuery } from "@/git/use-diff-query";
 import { useChangesBaseSelection } from "@/git/use-changes-base-selection";
 import { useCheckoutStatusQuery } from "@/git/use-status-query";
 import { useWorkingDiffComparison } from "@/git/working-diff-comparison";
+import { useSessionStore } from "@/stores/session-store";
+import { useDiffContextExpansion } from "@/git/use-diff-context-expansion";
 
 interface UseWorkingDiffOptions {
   serverId: string;
@@ -36,6 +39,30 @@ function resolveSelectedComparisonBaseRef(
     : undefined;
 }
 
+function getGitStatus(status: ReturnType<typeof useCheckoutStatusQuery>["status"]) {
+  return status?.isGit === true ? status : null;
+}
+
+function isNotGitStatus(status: ReturnType<typeof useCheckoutStatusQuery>["status"]): boolean {
+  return status?.isGit === false && !status.error;
+}
+
+function getStatusErrorMessage(input: {
+  status: ReturnType<typeof useCheckoutStatusQuery>["status"];
+  isStatusError: boolean;
+  statusError: unknown;
+}): string | null {
+  if (input.status?.error?.message) return input.status.error.message;
+  return input.isStatusError && input.statusError instanceof Error
+    ? input.statusError.message
+    : null;
+}
+
+function getCurrentBranchName(gitStatus: ReturnType<typeof getGitStatus>): string | null {
+  const branch = gitStatus?.currentBranch;
+  return branch && branch !== "HEAD" ? branch : null;
+}
+
 export function useWorkingDiff({
   serverId,
   workspaceId,
@@ -50,16 +77,13 @@ export function useWorkingDiff({
     isError: isStatusError,
     error: statusError,
   } = useCheckoutStatusQuery({ serverId, cwd });
-  const gitStatus = status && status.isGit ? status : null;
+  const gitStatus = getGitStatus(status);
   const isGit = Boolean(gitStatus);
-  const notGit = status !== null && !status.isGit && !status.error;
-  const statusErrorMessage =
-    status?.error?.message ??
-    (isStatusError && statusError instanceof Error ? statusError.message : null);
+  const notGit = isNotGitStatus(status);
+  const statusErrorMessage = getStatusErrorMessage({ status, isStatusError, statusError });
   const recordedBaseRef = gitStatus?.baseRef ?? undefined;
   const hasUncommittedChanges = Boolean(gitStatus?.isDirty);
-  const currentBranchName =
-    gitStatus?.currentBranch && gitStatus.currentBranch !== "HEAD" ? gitStatus.currentBranch : null;
+  const currentBranchName = getCurrentBranchName(gitStatus);
   const baseSelection = useChangesBaseSelection({
     serverId,
     cwd,
@@ -84,7 +108,7 @@ export function useWorkingDiff({
   const selectBase = useCallback(() => selectComparison("base"), [selectComparison]);
 
   const {
-    files,
+    files: sourceFiles,
     payloadError: diffPayloadError,
     diffTooLarge,
     isLoading: isDiffLoading,
@@ -109,6 +133,30 @@ export function useWorkingDiff({
       }),
     [baseRef, cwd, diffMode, ignoreWhitespace, serverId, workspaceId],
   );
+  const persistedComments = useReviewDraftComments(reviewDraftKey);
+  const requestedContextLines = useMemo(
+    () =>
+      persistedComments
+        .filter((comment) => comment.side === "new")
+        .map((comment) => ({ filePath: comment.filePath, lineNumber: comment.lineNumber })),
+    [persistedComments],
+  );
+  const contextExpansionSupported = useSessionStore(
+    (state) => state.sessions[serverId]?.serverInfo?.features?.changesContextExpansion === true,
+  );
+  const contextExpansion = useDiffContextExpansion({
+    serverId,
+    cwd,
+    compare: {
+      mode: diffMode,
+      ...(diffMode === "base" && comparisonBaseRef ? { baseRef: comparisonBaseRef } : {}),
+      ignoreWhitespace,
+    },
+    files: sourceFiles,
+    supported: contextExpansionSupported,
+    requestedLines: requestedContextLines,
+  });
+  const files = contextExpansion.files;
   const reviewActions = useInlineReviewController({ reviewDraftKey });
   const reviewAttachment = useReviewAttachmentSnapshot({
     key: reviewDraftKey,
@@ -133,11 +181,15 @@ export function useWorkingDiff({
     selectUncommitted,
     selectBase,
     files,
+    sourceFiles,
     diffPayloadError,
     diffTooLarge,
     isDiffLoading,
     reviewActions,
     reviewAttachment,
+    reviewDraftKey,
+    contextExpansion,
+    contextExpansionSupported,
   };
 }
 
