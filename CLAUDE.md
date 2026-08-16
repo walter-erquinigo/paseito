@@ -221,6 +221,7 @@ instead of editing the list by hand.
   - Fix: Keep the one-click amend action tied to the live uncommitted badge and daemon capability.
 - `changes-context-expansion` — Load and review omitted source context on demand from the Changes diff without transferring entire files by default.
   - Fix: Keep context expansion bounded, revision-validated and available to comments and suggestions.
+  - Fix: Keep omitted context visually integrated with the diff while retaining adaptive edge and whole-region controls.
 - `review-suggestions-v1` — Let a reviewer send persisted, structured one- or multi-line replacement suggestions to the destination agent from Changes.
   - Fix: Keep multi-line comment editors focused without viewport jumps.
   - Fix: Keep comment threads aligned with fixed diff-gutter rows.
