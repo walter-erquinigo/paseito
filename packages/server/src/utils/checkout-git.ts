@@ -246,6 +246,7 @@ export interface BranchSuggestion {
   hasRemote: boolean;
   localAhead?: number;
   localBehind?: number;
+  stackOrder?: number;
 }
 
 async function listGitRefs(cwd: string, refPrefix: string): Promise<GitRef[]> {
@@ -276,6 +277,7 @@ interface BranchSuggestionMeta {
   hasRemote: boolean;
   localOid?: string;
   remoteOid?: string;
+  stackOrder?: number;
 }
 
 function sortBranchSuggestions(
@@ -294,6 +296,19 @@ function sortBranchSuggestions(
       }
     }
 
+    const aPreferredOwner = a.startsWith("werquinigo/");
+    const bPreferredOwner = b.startsWith("werquinigo/");
+    if (aPreferredOwner !== bPreferredOwner) return aPreferredOwner ? -1 : 1;
+    if (aPreferredOwner) return a.localeCompare(b);
+
+    const aStackOrder = branchMeta.get(a)?.stackOrder;
+    const bStackOrder = branchMeta.get(b)?.stackOrder;
+    if (aStackOrder !== undefined || bStackOrder !== undefined) {
+      if (aStackOrder === undefined) return 1;
+      if (bStackOrder === undefined) return -1;
+      if (aStackOrder !== bStackOrder) return aStackOrder - bStackOrder;
+    }
+
     const aMeta = branchMeta.get(a);
     const bMeta = branchMeta.get(b);
     const aDate = aMeta?.committerDate ?? 0;
@@ -304,6 +319,78 @@ function sortBranchSuggestions(
 
     return a.localeCompare(b);
   });
+}
+
+function buildBranchSuggestionMeta(
+  localRefs: GitRef[],
+  remoteRefs: GitRef[],
+): Map<string, BranchSuggestionMeta> {
+  const branchMeta = new Map<string, BranchSuggestionMeta>();
+  for (const ref of localRefs) {
+    const normalized = normalizeBranchSuggestionName(ref.name);
+    if (!normalized) continue;
+    const existing = branchMeta.get(normalized);
+    branchMeta.set(normalized, {
+      hasLocal: true,
+      hasRemote: existing?.hasRemote ?? false,
+      localOid: ref.oid,
+      ...(existing?.remoteOid ? { remoteOid: existing.remoteOid } : {}),
+      committerDate: Math.max(ref.committerDate, existing?.committerDate ?? 0),
+    });
+  }
+  for (const ref of remoteRefs) {
+    const normalized = normalizeBranchSuggestionName(ref.name);
+    if (!normalized) continue;
+    const existing = branchMeta.get(normalized);
+    branchMeta.set(normalized, {
+      hasLocal: existing?.hasLocal ?? false,
+      hasRemote: true,
+      committerDate: Math.max(ref.committerDate, existing?.committerDate ?? 0),
+      ...(existing?.localOid ? { localOid: existing.localOid } : {}),
+      remoteOid: ref.oid,
+    });
+  }
+  return branchMeta;
+}
+
+async function applyCurrentStackOrder(
+  cwd: string,
+  branchNames: string[],
+  branchMeta: Map<string, BranchSuggestionMeta>,
+): Promise<void> {
+  const currentBranch = await getCurrentBranch(cwd);
+  if (!currentBranch) return;
+  try {
+    const { stdout } = await runGitCommand(["rev-list", "--first-parent", currentBranch], {
+      cwd,
+      envOverlay: READ_ONLY_GIT_ENV,
+    });
+    const distanceBySha = new Map(
+      stdout
+        .split("\n")
+        .filter(Boolean)
+        .map((sha, distance) => [sha, distance] as const),
+    );
+    const resolvedBaseRef = await getResolvedBaseRefForCwd(cwd);
+    const mergeBase = resolvedBaseRef ? await tryResolveMergeBase(cwd, resolvedBaseRef) : null;
+    const baseDistance = mergeBase ? distanceBySha.get(mergeBase) : undefined;
+    const isInsideStack = (distance: number | undefined): distance is number =>
+      distance !== undefined && (baseDistance === undefined || distance < baseDistance);
+    const distances = branchNames
+      .map((name) => {
+        const meta = branchMeta.get(name);
+        return distanceBySha.get(meta?.localOid ?? meta?.remoteOid ?? "");
+      })
+      .filter(isInsideStack);
+    const furthestDistance = Math.max(0, ...distances);
+    for (const name of branchNames) {
+      const meta = branchMeta.get(name);
+      const distance = meta ? distanceBySha.get(meta.localOid ?? meta.remoteOid ?? "") : undefined;
+      if (meta && isInsideStack(distance)) meta.stackOrder = furthestDistance - distance;
+    }
+  } catch {
+    // Sorting falls back to preferred-owner name order and recency when ancestry is unavailable.
+  }
 }
 
 export async function listBranchSuggestions(
@@ -322,41 +409,7 @@ export async function listBranchSuggestions(
     listGitRefs(cwd, "refs/remotes/origin"),
   ]);
 
-  const branchMeta = new Map<string, BranchSuggestionMeta>();
-
-  for (const ref of localRefs) {
-    const normalized = normalizeBranchSuggestionName(ref.name);
-    if (!normalized) continue;
-    const existing = branchMeta.get(normalized);
-    branchMeta.set(normalized, {
-      hasLocal: true,
-      hasRemote: existing?.hasRemote ?? false,
-      localOid: ref.oid,
-      ...(existing?.remoteOid ? { remoteOid: existing.remoteOid } : {}),
-      committerDate: Math.max(ref.committerDate, existing?.committerDate ?? 0),
-    });
-  }
-
-  for (const ref of remoteRefs) {
-    const normalized = normalizeBranchSuggestionName(ref.name);
-    if (!normalized) continue;
-    const existing = branchMeta.get(normalized);
-    if (!existing) {
-      branchMeta.set(normalized, {
-        hasLocal: false,
-        hasRemote: true,
-        remoteOid: ref.oid,
-        committerDate: ref.committerDate,
-      });
-    } else {
-      branchMeta.set(normalized, {
-        ...existing,
-        hasRemote: true,
-        remoteOid: ref.oid,
-        committerDate: Math.max(ref.committerDate, existing.committerDate),
-      });
-    }
-  }
+  const branchMeta = buildBranchSuggestionMeta(localRefs, remoteRefs);
 
   const filteredNames = Array.from(branchMeta.keys()).filter((name) =>
     query ? name.toLowerCase().includes(query) : true,
@@ -364,6 +417,8 @@ export async function listBranchSuggestions(
   if (filteredNames.length === 0) {
     return [];
   }
+
+  await applyCurrentStackOrder(cwd, filteredNames, branchMeta);
 
   const ordered = sortBranchSuggestions(filteredNames, branchMeta, query);
   return Promise.all(
@@ -434,20 +489,27 @@ export async function resolveBranchCheckout(
 ): Promise<BranchCheckoutResolution> {
   await requireGitRepo(cwd);
 
+  const explicitRemote = name.startsWith("origin/") || name.startsWith("refs/remotes/origin/");
+  const explicitLocal = name.startsWith("refs/heads/");
   const normalized = normalizeBranchSuggestionName(name);
   if (!normalized) {
     return { kind: "not-found" };
   }
 
-  const localRef = `refs/heads/${normalized}`;
-  const localResult = await runGitCommand(["rev-parse", "--verify", "--quiet", localRef], {
-    cwd,
-    envOverlay: READ_ONLY_GIT_ENV,
-    acceptExitCodes: [0, 1],
-  });
-  const hasLocal = localResult.exitCode === 0;
-  if (hasLocal) {
-    return { kind: "local", name: normalized };
+  if (!explicitRemote) {
+    const localRef = `refs/heads/${normalized}`;
+    const localResult = await runGitCommand(["rev-parse", "--verify", "--quiet", localRef], {
+      cwd,
+      envOverlay: READ_ONLY_GIT_ENV,
+      acceptExitCodes: [0, 1],
+    });
+    const hasLocal = localResult.exitCode === 0;
+    if (hasLocal) {
+      return { kind: "local", name: normalized };
+    }
+    if (explicitLocal) {
+      return { kind: "not-found" };
+    }
   }
 
   const remoteRef = `origin/${normalized}`;
@@ -1164,7 +1226,7 @@ export interface GitWorktreeEntry {
   isBare?: boolean;
 }
 
-/** Check whether a path is under Paseo's worktree root. */
+/** Check whether a path is under Paseito's root or a legacy Paseo worktree root. */
 export function isPaseoWorktreePath(
   p: string,
   options?: { paseoHome?: string; worktreesRoot?: string },
@@ -1172,7 +1234,7 @@ export function isPaseoWorktreePath(
   if (options?.worktreesRoot || options?.paseoHome) {
     return isDescendantPath(p, resolvePaseoWorktreesBaseRoot(options));
   }
-  return /[/\\]\.paseo[/\\]worktrees[/\\]/.test(p);
+  return /[/\\]\.pase(?:it)?o[/\\]worktrees[/\\]/.test(p);
 }
 
 /** True when `child` is strictly inside `parent` (handles both `/` and `\`). */
@@ -1743,6 +1805,34 @@ async function resolveMostAheadBaseRef(cwd: string, baseRef: string): Promise<st
   }
 
   return normalizedBaseRef;
+}
+
+async function resolveRequestedComparisonBaseRef(cwd: string, baseRef: string): Promise<string> {
+  const normalized = normalizeComparisonBaseRefName(baseRef);
+  const explicitRemote =
+    baseRef.startsWith("origin/") || baseRef.startsWith("refs/remotes/origin/");
+  const explicitLocal = baseRef.startsWith("refs/heads/");
+
+  if (explicitRemote) {
+    if (await doesGitRefExist(cwd, `refs/remotes/origin/${normalized.localName}`)) {
+      return normalized.originRef;
+    }
+    throw new Error(`Base branch not found on origin: ${normalized.originRef}`);
+  }
+
+  if (await doesGitRefExist(cwd, `refs/heads/${normalized.localName}`)) {
+    if (explicitLocal) {
+      return normalized.localName;
+    }
+    return resolveBestComparisonBaseRef(cwd, normalized.localName);
+  }
+  if (
+    !explicitLocal &&
+    (await doesGitRefExist(cwd, `refs/remotes/origin/${normalized.localName}`))
+  ) {
+    return normalized.originRef;
+  }
+  throw new Error(`Base branch not found locally: ${normalized.localName}`);
 }
 
 async function getAheadBehind(
@@ -2595,9 +2685,11 @@ async function tryResolveCheckoutCommitsBaseRef(
 export async function listCheckoutCommits({
   cwd,
   context,
+  baseRef,
 }: {
   cwd: string;
   context?: CheckoutContext;
+  baseRef?: string;
 }): Promise<CheckoutCommitsResult> {
   const currentBranch = await getCurrentBranch(cwd);
   if (!currentBranch) {
@@ -2606,12 +2698,16 @@ export async function listCheckoutCommits({
 
   const { resolvedBaseRef } = await resolveBaseRefForCwd(cwd, context);
   const normalizedBaseRef = resolvedBaseRef ? branchNameFromRef(resolvedBaseRef) : null;
-  let comparisonBaseRef = await tryResolveCheckoutCommitsBaseRef(
-    cwd,
-    resolvedBaseRef,
-    currentBranch,
-  );
-  if (!comparisonBaseRef && normalizedBaseRef && normalizedBaseRef !== currentBranch) {
+  let comparisonBaseRef =
+    baseRef === undefined
+      ? await tryResolveCheckoutCommitsBaseRef(cwd, resolvedBaseRef, currentBranch)
+      : await resolveRequestedComparisonBaseRef(cwd, baseRef);
+  if (
+    baseRef === undefined &&
+    !comparisonBaseRef &&
+    normalizedBaseRef &&
+    normalizedBaseRef !== currentBranch
+  ) {
     // Saved worktree metadata can outlive a renamed or deleted base branch.
     comparisonBaseRef = await tryResolveCheckoutCommitsBaseRef(
       cwd,
@@ -3093,6 +3189,18 @@ interface AppendStructuredTrackedDiffsInput {
   ) => void;
 }
 
+async function readTrackedTargetContent(input: {
+  cwd: string;
+  change: CheckoutFileChange;
+  refsForDiff: CheckoutDiffRefs;
+}): Promise<string | null> {
+  if (input.change.isDeleted) return null;
+  if (input.refsForDiff.targetRef) {
+    return readGitFileContentAtRef(input.cwd, input.refsForDiff.targetRef, input.change.path);
+  }
+  return readFile(resolve(input.cwd, input.change.path), "utf8").catch(() => null);
+}
+
 async function buildHighlightedTrackedDiffFile(input: {
   cwd: string;
   change: CheckoutFileChange;
@@ -3120,18 +3228,6 @@ async function buildHighlightedTrackedDiffFile(input: {
     newLineCount: countContentLines(newFileContent),
     ...(newFileContent === null ? {} : { revision: hashFileContent(newFileContent) }),
   };
-}
-
-async function readTrackedTargetContent(input: {
-  cwd: string;
-  change: CheckoutFileChange;
-  refsForDiff: CheckoutDiffRefs;
-}): Promise<string | null> {
-  if (input.change.isDeleted) return null;
-  if (input.refsForDiff.targetRef) {
-    return readGitFileContentAtRef(input.cwd, input.refsForDiff.targetRef, input.change.path);
-  }
-  return readFile(resolve(input.cwd, input.change.path), "utf8").catch(() => null);
 }
 
 function isWhitespaceOnlyTrackedChange(input: {
@@ -3386,16 +3482,15 @@ async function resolveCheckoutDiffRefs(
   if (compare.mode === "uncommitted") {
     return { baseRef: "HEAD", includeUntracked: true };
   }
-  const { storedBaseRef, resolvedBaseRef } = await resolveBaseRefForCwd(cwd, context);
-  const baseRef = resolveOperationBaseRef({
-    storedBaseRef,
-    resolvedBaseRef,
-    requestedBaseRef: compare.baseRef,
-  });
+  const { resolvedBaseRef } = await resolveBaseRefForCwd(cwd, context);
+  const baseRef = compare.baseRef ?? resolvedBaseRef;
   if (!baseRef) {
     return null;
   }
-  const bestBaseRef = await resolveBestComparisonBaseRef(cwd, baseRef);
+  const bestBaseRef =
+    compare.baseRef === undefined
+      ? await resolveBestComparisonBaseRef(cwd, baseRef)
+      : await resolveRequestedComparisonBaseRef(cwd, baseRef);
   return {
     baseRef: (await tryResolveMergeBase(cwd, bestBaseRef)) ?? bestBaseRef,
     targetRef: "HEAD",
@@ -3405,6 +3500,7 @@ async function resolveCheckoutDiffRefs(
 
 const CHECKOUT_DIFF_CONTEXT_MAX_LINES = 5_000;
 const CHECKOUT_DIFF_CONTEXT_MAX_BYTES = 1024 * 1024;
+const DELETED_CONTENT_REVISION = "deleted:v1";
 
 function splitContentLines(content: string | null): string[] {
   if (content === null || content.length === 0) return [];
@@ -3421,6 +3517,88 @@ function hashFileContent(content: string): string {
   return createHash("sha256").update(content).digest("hex");
 }
 
+async function resolveDiffContentRevision(
+  cwd: string,
+  refs: CheckoutDiffRefs,
+  file: ParsedDiffFile,
+): Promise<string> {
+  if (file.isDeleted) {
+    return DELETED_CONTENT_REVISION;
+  }
+  if (refs.targetRef) {
+    const { stdout } = await runGitCommand(["rev-parse", `${refs.targetRef}:${file.path}`], {
+      cwd,
+      envOverlay: READ_ONLY_GIT_ENV,
+    });
+    return stdout.trim();
+  }
+
+  const absolutePath = resolve(cwd, file.path);
+  const metadata = await statFile(absolutePath);
+  if (metadata.isDirectory()) {
+    const { stdout } = await runGitCommand(["-C", absolutePath, "rev-parse", "HEAD"], {
+      cwd,
+      envOverlay: READ_ONLY_GIT_ENV,
+    });
+    return stdout.trim();
+  }
+
+  const { stdout } = await runGitCommand(
+    ["hash-object", "--filters", `--path=${file.path}`, "--", file.path],
+    { cwd, envOverlay: READ_ONLY_GIT_ENV },
+  );
+  return stdout.trim();
+}
+
+async function attachContentRevisions(
+  cwd: string,
+  refs: CheckoutDiffRefs,
+  files: ParsedDiffFile[],
+): Promise<ParsedDiffFile[]> {
+  if (!refs.targetRef) {
+    const batchCandidates = (
+      await Promise.all(
+        files.map(async (file, index) => {
+          if (file.isDeleted || file.path.includes("\n") || file.path.includes("\r")) return null;
+          const metadata = await statFile(resolve(cwd, file.path));
+          return metadata.isDirectory() ? null : { index, path: file.path };
+        }),
+      )
+    ).filter((candidate): candidate is { index: number; path: string } => candidate !== null);
+    const batchRevisions = new Map<number, string>();
+    if (batchCandidates.length > 0) {
+      const { stdout } = await runGitCommand(["hash-object", "--filters", "--stdin-paths"], {
+        cwd,
+        envOverlay: READ_ONLY_GIT_ENV,
+        stdin: `${batchCandidates.map((candidate) => candidate.path).join("\n")}\n`,
+      });
+      const revisions = stdout.trimEnd().split("\n");
+      if (revisions.length !== batchCandidates.length) {
+        throw new Error(
+          `Git returned ${revisions.length} content revisions for ${batchCandidates.length} files`,
+        );
+      }
+      for (const [batchIndex, candidate] of batchCandidates.entries()) {
+        const revision = revisions[batchIndex]?.trim();
+        if (!revision) throw new Error(`Git returned no content revision for ${candidate.path}`);
+        batchRevisions.set(candidate.index, revision);
+      }
+    }
+    return Promise.all(
+      files.map(async (file, index) => ({
+        ...file,
+        contentRevision:
+          batchRevisions.get(index) ?? (await resolveDiffContentRevision(cwd, refs, file)),
+      })),
+    );
+  }
+  return Promise.all(
+    files.map(async (file) => ({
+      ...file,
+      contentRevision: await resolveDiffContentRevision(cwd, refs, file),
+    })),
+  );
+}
 async function resolveContextFileContent(
   cwd: string,
   compare: CheckoutDiffCompare,
@@ -3670,7 +3848,11 @@ export async function getCheckoutDiff(
   }
 
   if (compare.includeStructured) {
-    return { diff: diffText, structured: structured.files };
+    const files = await attachContentRevisions(cwd, effectiveRefsForDiff, structured.files);
+    if (Buffer.byteLength(JSON.stringify(files), "utf8") > CHECKOUT_DIFF_MAX_STRUCTURED_BYTES) {
+      return { diff: "", structured: [], diffTooLarge: true };
+    }
+    return { diff: diffText, structured: files };
   }
   return { diff: diffText };
 }

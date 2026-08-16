@@ -73,6 +73,15 @@ function input(overrides: Partial<BuildDiffDocumentModelInput> = {}): BuildDiffD
 }
 
 describe("diff document model", () => {
+  it("reserves a fixed indicator inset without reducing line-number space", () => {
+    const base = buildDiffDocumentModel(input());
+    const withIndicator = buildDiffDocumentModel(
+      input({ reviewIndicatorWidth: 14 } as Partial<BuildDiffDocumentModelInput>),
+    );
+
+    expect(withIndicator.files[0]!.gutterWidth).toBe(base.files[0]!.gutterWidth + 14);
+  });
+
   it("does not imperatively scroll for a no-op relayout", () => {
     expect(shouldApplyRelayoutScroll(320, 320)).toBe(false);
     expect(shouldApplyRelayoutScroll(320, 320.4)).toBe(false);
@@ -274,31 +283,19 @@ describe("diff document model", () => {
   it("reserves review geometry in the measured row", () => {
     const model = buildDiffDocumentModel(
       input({
-        reviewActions: {
-          commentsByTarget: new Map(),
-          editor: {
-            target: {
-              key: "src/a.ts:old:1",
-              filePath: "src/a.ts",
-              hunkHeader: "@@ -1 +1 @@",
-              hunkIndex: 0,
-              lineIndex: 1,
-              oldLineNumber: 1,
-              newLineNumber: null,
-              side: "old",
-              lineNumber: 1,
-              lineType: "remove",
-              content: "const oldValue = '👨‍👩‍👧‍👦';",
-            },
-            body: "",
-            commentId: null,
-          },
-          onStartComment() {},
-          onCancelEditor() {},
-          onSaveEditor() {},
-          onEditComment() {},
-          onDeleteComment() {},
-        },
+        reviewActions: reviewActionsWithEditor({
+          key: "src/a.ts:old:1",
+          filePath: "src/a.ts",
+          hunkHeader: "@@ -1 +1 @@",
+          hunkIndex: 0,
+          lineIndex: 1,
+          oldLineNumber: 1,
+          newLineNumber: null,
+          side: "old",
+          lineNumber: 1,
+          lineType: "remove",
+          content: "const oldValue = '👨‍👩‍👧‍👦';",
+        }),
       }),
     );
     const reviewRow = model.rows.find((row) => {
@@ -307,7 +304,7 @@ describe("diff document model", () => {
         row.cells[0]?.reviewTarget?.side === "old" || row.cells[1]?.reviewTarget?.side === "old"
       );
     });
-    expect(reviewRow?.kind === "line" ? reviewRow.reviewHeight : 0).toBe(148);
+    expect(reviewRow?.kind === "line" ? reviewRow.reviewHeight : 0).toBe(168);
   });
 
   it("reflows review geometry without remeasuring unchanged text", () => {
@@ -340,9 +337,9 @@ describe("diff document model", () => {
     const editorRow = rowForReviewTarget(withEditor, reviewCell.reviewTarget.key);
 
     expect(measurementCount).toBe(initialMeasurementCount);
-    expect(editorRow.reviewHeight).toBe(148);
+    expect(editorRow.reviewHeight).toBe(168);
     expect(editorRow.cells).toBe(baseReviewRow.cells);
-    expect(withEditor.files[1]!.top).toBe(baseSecondFileTop + 148);
+    expect(withEditor.files[1]!.top).toBe(baseSecondFileTop + 168);
 
     const withoutEditor = buildDiffDocumentModel(
       input({
@@ -692,12 +689,31 @@ function reviewActionsWithEditor(
   target: NonNullable<ReturnType<typeof addedCell>["reviewTarget"]> | null,
 ): NonNullable<BuildDiffDocumentModelInput["reviewActions"]> {
   return {
+    canSuggest: true,
+    composerMode: target ? "comment" : null,
     commentsByTarget: new Map(),
-    editor: target ? { target, body: "", commentId: null } : null,
+    editor: target ? { targets: [target], body: "", commentId: null } : null,
+    suggestionsByTarget: new Map(),
+    suggestionEditor: null,
+    selectedRangeTargetKeys: new Set(),
+    suggestionRangeError: null,
     onStartComment() {},
     onCancelEditor() {},
     onSaveEditor() {},
     onEditComment() {},
     onDeleteComment() {},
+    onStartSuggestion() {},
+    onSwitchSuggestionToComment() {},
+    onBeginSuggestionDrag() {},
+    onUpdateSuggestionDrag() {},
+    onShiftSuggestionRange() {},
+    onPressReviewGutter() {},
+    onCancelSuggestionRange() {},
+    onClearSuggestionRangeError() {},
+    onCancelSuggestion() {},
+    onEditSuggestion() {},
+    onExtendSuggestion() {},
+    onSaveSuggestion() {},
+    onDeleteSuggestion() {},
   };
 }

@@ -4,6 +4,7 @@ import type { DiffContextRegion } from "@/git/diff-context-expansion";
 import type { ChangesSearchMatch, ChangesSearchResult } from "@/git/changes-search";
 import type { ChangesLspController } from "@/git/use-changes-lsp";
 import type { ReviewableDiffTarget } from "@/utils/diff-layout";
+import type { WorkspaceFileOpenOptions } from "@/workspace/file-open";
 
 interface DiffDocumentBaseProps {
   files: ParsedDiffFile[];
@@ -35,8 +36,9 @@ export interface WorkingDiffMode {
   focusColumn?: number;
   focusReveal?: "center-if-hidden";
   workspaceFileDragScope?: { serverId: string; workspaceId: string };
-  onOpenFile?: (path: string) => void;
+  onOpenFile?: (path: string, options?: WorkspaceFileOpenOptions) => void;
   onOpenToSide?: (path: string) => void;
+  onEditLine?: (line: ReviewableChangedLine) => void;
   onAddToChat?: (path: string) => void;
   onCopyPath?: (path: string) => void;
   onCopyRelativePath?: (path: string) => void;
@@ -212,6 +214,8 @@ export interface BuildDiffDocumentModelInput {
   measureText: TextMeasurer;
   palette: DiffPalette;
   reviewActions?: InlineReviewActions;
+  /** Fixed space before line numbers for persistent per-line review indicators. */
+  reviewIndicatorWidth?: number;
   labels: { binary: string; tooLarge: string };
   materializationWindow?: { top: number; height: number };
   /** A geometry-compatible model whose unchanged file measurements may be reused. */

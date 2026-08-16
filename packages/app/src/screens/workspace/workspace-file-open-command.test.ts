@@ -30,4 +30,19 @@ describe("openWorkspaceFileFromExplorer", () => {
     expect(input.openWorkspaceTabInFocusedPane).toHaveBeenCalledOnce();
     expect(input.focusWorkspaceTab).toHaveBeenCalledWith("server:workspace", "file-tab");
   });
+
+  it("preserves a requested source location when opening a compact explorer file", () => {
+    const input = {
+      ...createInput(false),
+      location: { lineStart: 14, openMode: "source" as const },
+    };
+
+    openWorkspaceFileFromExplorer(input);
+
+    expect(input.openWorkspaceTabInFocusedPane).toHaveBeenCalledWith(
+      "server:workspace",
+      { kind: "file", path: "src/app.tsx", lineStart: 14, openMode: "source" },
+      expect.any(Object),
+    );
+  });
 });

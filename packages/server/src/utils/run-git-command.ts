@@ -48,6 +48,7 @@ export interface GitCommandOptions {
   cwd: string;
   env?: ProcessEnvRecord;
   envOverlay?: ProcessEnvRecord;
+  stdin?: string;
   logger?: Pick<Logger, "trace">;
   timeout?: number;
   maxOutputBytes?: number;
@@ -381,7 +382,7 @@ function runGitCommandWithProvenance(
           cwd: options.cwd,
           envOverlay,
           shell: false,
-          stdio: ["ignore", "pipe", "pipe"],
+          stdio: [options.stdin === undefined ? "ignore" : "pipe", "pipe", "pipe"],
         });
         spawnGitCommandTrace(commandTrace, child.pid);
       } catch (error) {
@@ -395,6 +396,18 @@ function runGitCommandWithProvenance(
         child.kill("SIGKILL");
         rejectSpawnFailure(new Error("Git process did not expose piped stdout and stderr"));
         return;
+      }
+
+      if (options.stdin !== undefined) {
+        if (!child.stdin) {
+          child.kill("SIGKILL");
+          rejectSpawnFailure(new Error("Git process did not expose piped stdin"));
+          return;
+        }
+        child.stdin.on("error", (error) => {
+          processError ??= error;
+        });
+        child.stdin.end(options.stdin);
       }
 
       timer = setTimeout(() => {
