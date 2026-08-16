@@ -125,6 +125,8 @@ import type {
   AgentSkillSelection,
   AgentSkillsStatus,
   AgentSkillsSaveResult,
+  WorkspaceLspRequest,
+  WorkspaceLspResult,
 } from "@getpaseo/protocol/messages";
 import type {
   AgentPermissionRequest,
@@ -1038,6 +1040,7 @@ function toTimeoutError(error: unknown, label: string, timeoutMs: number): Error
 const DEFAULT_RECONNECT_BASE_DELAY_MS = 1500;
 const DEFAULT_RECONNECT_MAX_DELAY_MS = 30000;
 const DEFAULT_SESSION_RPC_TIMEOUT_MS = 60_000;
+const WORKSPACE_LSP_RPC_TIMEOUT_MS = 30_000;
 const PUSH_TOKEN_REVOCATION_TIMEOUT_MS = 2_000;
 const DEFAULT_CONNECT_TIMEOUT_MS = 15_000;
 const DEFAULT_LIVENESS_TIMEOUT_MS = 5000;
@@ -4898,6 +4901,23 @@ export class DaemonClient {
     return this.sendNamespacedCorrelatedSessionRequest<"checkout.discard_changes.response">({
       message: { type: "checkout.discard_changes.request", cwd, paths: input.paths },
     });
+  }
+
+  async requestWorkspaceLsp(
+    input: Omit<WorkspaceLspRequest, "type" | "requestId">,
+  ): Promise<WorkspaceLspResult> {
+    const payload = await this.sendCorrelatedSessionRequest({
+      message: { type: "workspace.lsp.request", ...input },
+      responseType: "workspace.lsp.response",
+      timeout: WORKSPACE_LSP_RPC_TIMEOUT_MS,
+    });
+    if (payload.error || !payload.result) {
+      throw new Error(payload.error ?? "Workspace LSP returned no result");
+    }
+    if (payload.documentVersion !== input.documentVersion) {
+      throw new Error("Workspace LSP returned a stale document version");
+    }
+    return payload.result;
   }
 
   async uploadFile(input: FileUploadInput): Promise<FileUploadResult> {

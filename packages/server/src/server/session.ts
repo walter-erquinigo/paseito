@@ -176,6 +176,7 @@ import {
 import { ScheduleSession } from "./session/schedule/schedule-session.js";
 import { ProviderCatalogSession } from "./session/provider/provider-catalog-session.js";
 import { WorkspaceFilesSession } from "./session/files/workspace-files-session.js";
+import { WorkspaceLspSession } from "./session/lsp/workspace-lsp-session.js";
 import { AgentConfigSession } from "./session/agent-config/agent-config-session.js";
 import { ProjectConfigSession } from "./session/project-config/project-config-session.js";
 import { DaemonSession, type DaemonRuntimeConfig } from "./session/daemon/daemon-session.js";
@@ -779,6 +780,7 @@ export class Session {
   private readonly scheduleSession: ScheduleSession;
   private readonly providerCatalogSession: ProviderCatalogSession;
   private readonly workspaceFilesSession: WorkspaceFilesSession;
+  private readonly workspaceLspSession: WorkspaceLspSession;
   private readonly agentConfigSession: AgentConfigSession;
   private readonly projectConfigSession: ProjectConfigSession;
   private readonly daemonSession: DaemonSession;
@@ -881,6 +883,13 @@ export class Session {
       paseoHome,
       logger: this.sessionLogger,
     });
+    this.workspaceLspSession = new WorkspaceLspSession(
+      {
+        emit: (message) => this.emit(message),
+      },
+      undefined,
+      this.sessionLogger,
+    );
     this.agentManager = agentManager;
     this.agentStorage = agentStorage;
     this.projectRegistry = projectRegistry;
@@ -2954,6 +2963,8 @@ export class Session {
         return this.workspaceFilesSession.handleFileEntryDuplicateRequest(msg);
       case "fs.entry.delete.request":
         return this.workspaceFilesSession.handleFileEntryDeleteRequest(msg);
+      case "workspace.lsp.request":
+        return this.workspaceLspSession.handleRequest(msg);
       case "project_icon_request":
         return this.workspaceFilesSession.handleProjectIconRequest(msg);
       case "project.icon.get.request":
@@ -8446,6 +8457,7 @@ export class Session {
     this.checkoutSession.cleanup();
 
     this.workspaceGitObserver.dispose();
+    this.workspaceLspSession.dispose();
   }
 }
 

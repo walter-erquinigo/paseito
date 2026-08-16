@@ -1877,6 +1877,10 @@ export class VoiceAssistantWebSocketServer {
         workspaceRecovery: true,
         // COMPAT(workspaceFileEditing): added in v0.2.0, remove after 2027-01-18 once daemon floor >= v0.2.0.
         workspaceFileEditing: true,
+        // COMPAT(workspaceLsp): added in Paseito v0.2.5-paseito.9, remove after 2027-02-08.
+        workspaceLsp: true,
+        // COMPAT(workspaceLspClangd): added in Paseito v0.4.0-paseito.15, remove after 2027-02-16.
+        workspaceLspClangd: true,
         // COMPAT(providerUsageList): added in v0.1.98, drop the gate when daemon floor >= v0.1.98.
         providerUsageList: true,
         // COMPAT(agentDetach): added in v0.1.98, remove gate after 2026-12-19 once daemon floor >= v0.1.98.

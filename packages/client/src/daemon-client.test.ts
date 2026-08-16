@@ -745,6 +745,47 @@ function useHeartbeatClock(): void {
   });
 }
 
+test("sendAgentMessage forwards explicit steering behavior", async () => {
+  const logger = createMockLogger();
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "clsk_steering_test",
+    logger,
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+
+  const connectPromise = client.connect();
+  mock.triggerOpen();
+  await connectPromise;
+
+  const sendPromise = client.sendAgentMessage("agent-1", "change direction", {
+    messageId: "message-1",
+    activeRunBehavior: "steer",
+  });
+  const request = parseSentFrame(mock.sent[0]);
+  expect(request).toMatchObject({
+    type: "send_agent_message_request",
+    agentId: "agent-1",
+    text: "change direction",
+    activeRunBehavior: "steer",
+  });
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "send_agent_message_response",
+      payload: {
+        requestId: request.requestId,
+        agentId: "agent-1",
+        accepted: true,
+        error: null,
+      },
+    }),
+  );
+  await expect(sendPromise).resolves.toBeUndefined();
+});
+
 test("dedupes in-flight checkout status requests per agentId", async () => {
   const logger = createMockLogger();
   const mock = createMockTransport();
@@ -2313,7 +2354,9 @@ test("a candidate measurement that times out under a heartbeat tick does not cou
   );
   await session.advance(5_500);
   await expect(measurementError).resolves.toEqual(
-    expect.objectContaining({ message: "Latency measurement timed out (5000ms)" }),
+    expect.objectContaining({
+      message: "Latency measurement timed out (5000ms)",
+    }),
   );
 
   // The measurement timeout must not have been recorded as a liveness failure: a
@@ -3672,7 +3715,9 @@ test("sends project.remove.request", async () => {
     }),
   );
 
-  await expect(removePromise).resolves.toEqual({ removedWorkspaceIds: ["ws-main"] });
+  await expect(removePromise).resolves.toEqual({
+    removedWorkspaceIds: ["ws-main"],
+  });
 });
 
 test("sends worktree base-ref fields in create_paseo_worktree_request", async () => {
@@ -4088,7 +4133,10 @@ test("getCheckoutDiff reads a snapshot without creating a subscription", async (
   mock.triggerOpen();
   await connectPromise;
 
-  const promise = client.getCheckoutDiff("/tmp/project", { mode: "base", baseRef: "main" });
+  const promise = client.getCheckoutDiff("/tmp/project", {
+    mode: "base",
+    baseRef: "main",
+  });
 
   expect(mock.sent).toHaveLength(1);
   const subscribeRequest = parseSentFrame(mock.sent[0]);
@@ -6569,6 +6617,95 @@ test("sends provider.usage.list.request and resolves provider.usage.list.respons
         ],
       },
     ],
+  });
+});
+
+test("correlates workspace LSP responses and rejects stale document versions", async () => {
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "clsk_lsp_test",
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+  const connectPromise = client.connect();
+  mock.triggerOpen();
+  await connectPromise;
+
+  const response = client.requestWorkspaceLsp({
+    cwd: "/repo",
+    path: "main.cpp",
+    documentVersion: 3,
+    operation: { kind: "hover", position: { line: 0, character: 2 } },
+  });
+  const request = parseSentFrame(mock.sent[0]);
+  expect(request).toMatchObject({
+    type: "workspace.lsp.request",
+    cwd: "/repo",
+    path: "main.cpp",
+    documentVersion: 3,
+  });
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "workspace.lsp.response",
+      payload: {
+        documentVersion: 3,
+        result: { kind: "hover", hover: null },
+        error: null,
+        requestId: request.requestId,
+      },
+    }),
+  );
+  await expect(response).resolves.toEqual({ kind: "hover", hover: null });
+
+  const stale = client.requestWorkspaceLsp({
+    cwd: "/repo",
+    path: "main.cpp",
+    documentVersion: 4,
+    operation: { kind: "diagnostics" },
+  });
+  const staleRequest = parseSentFrame(mock.sent[1]);
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "workspace.lsp.response",
+      payload: {
+        documentVersion: 3,
+        result: { kind: "diagnostics", items: [] },
+        error: null,
+        requestId: staleRequest.requestId,
+      },
+    }),
+  );
+  await expect(stale).rejects.toThrow("stale document version");
+});
+
+test("bounds an unanswered workspace LSP request to thirty seconds", async () => {
+  vi.useFakeTimers();
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "clsk_lsp_timeout_test",
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+  const connectPromise = client.connect();
+  mock.triggerOpen();
+  await connectPromise;
+
+  const pending = client
+    .requestWorkspaceLsp({
+      cwd: "/repo",
+      path: "main.cpp",
+      documentVersion: 1,
+      operation: { kind: "open", content: "int main() {}\n" },
+    })
+    .catch((error: unknown) => error);
+  await vi.advanceTimersByTimeAsync(30_000);
+
+  await expect(pending).resolves.toMatchObject({
+    message: "Timeout waiting for message (30000ms)",
   });
 });
 

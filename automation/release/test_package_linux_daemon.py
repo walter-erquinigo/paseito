@@ -68,6 +68,8 @@ class PackageLinuxDaemonTests(unittest.TestCase):
                     "changesContextExpansion",
                     "reviewSuggestionsV1",
                     "fileReviewV1",
+                    "workspaceLsp",
+                    "workspaceLspClangd",
                     "checkoutDiffSearch",
                 ],
             },

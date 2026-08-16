@@ -104,4 +104,3 @@ hourly run.
 
 Bootstrap steps are in `automation/reporting/README.md`. The NVIDIA password must be entered directly
 into macOS Keychain, and the relay requires the Mac to be on-premises or connected to VPN.
-
