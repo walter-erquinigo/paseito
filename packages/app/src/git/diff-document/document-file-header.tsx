@@ -1,11 +1,14 @@
-import { memo, useCallback, useMemo } from "react";
+import { memo, useCallback, useEffect, useMemo, useSyncExternalStore } from "react";
 import { Text, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import { ListChevronsUpDown } from "lucide-react-native";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { buildDiffContextRegions } from "@/git/diff-context-expansion";
+import { lspLanguageForFile } from "@/file-pane/editor/lsp-preferences";
+import { LspStatusMenu } from "@/file-pane/lsp-status-menu";
 import { FileHeader } from "@/git/file-header";
+import type { ChangesLspController } from "@/git/use-changes-lsp";
 import type { DiffDocumentProps, DiffFileSection } from "./types";
 import { ReviewCheckbox } from "./review-checkbox";
 import type { ReviewCheckboxState } from "./review-checkbox-model";
@@ -86,6 +89,50 @@ function WorkingDocumentFileHeader({
     () => <DocumentFileReviewControl file={file} mode={mode} onToggleFile={onToggleFile} />,
     [file, mode, onToggleFile],
   );
+  const canExpandCompleteFile = Boolean(
+    onExpandFile && buildDiffContextRegions(file.file).length > 0,
+  );
+  const headerActions = useMemo(
+    () => (
+      <View style={styles.headerActions}>
+        {canExpandCompleteFile ? (
+          <Tooltip delayDuration={300} enabledOnDesktop enabledOnMobile={false}>
+            <TooltipTrigger asChild>
+              <Button
+                accessibilityLabel={`Show entire ${file.path} file`}
+                leftIcon={ListChevronsUpDown}
+                onPress={expandFile}
+                size="xs"
+                style={styles.expandFileControl}
+                testID={`diff-file-${file.fileIndex}-expand-file`}
+                variant="ghost"
+              />
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              <Text style={styles.tooltipText}>Show entire file</Text>
+            </TooltipContent>
+          </Tooltip>
+        ) : null}
+        {mode.lsp ? (
+          <DocumentFileLspStatus
+            filePath={file.path}
+            lsp={mode.lsp}
+            presentation={mode.lspStatusPresentation ?? "label"}
+          />
+        ) : null}
+        {reviewControl}
+      </View>
+    ),
+    [
+      canExpandCompleteFile,
+      expandFile,
+      file.fileIndex,
+      file.path,
+      mode.lsp,
+      mode.lspStatusPresentation,
+      reviewControl,
+    ],
+  );
   return (
     <View style={styles.root}>
       <FileHeader
@@ -106,29 +153,11 @@ function WorkingDocumentFileHeader({
         onDownload={mode.onDownload}
         onDuplicate={mode.onDuplicate}
         onRevert={mode.onRevert}
-        trailingContent={reviewControl}
+        trailingContent={headerActions}
         testID={`diff-file-${file.fileIndex}`}
         canvasRendered={canvasRendered}
         onActiveChange={onActiveChange}
       />
-      {onExpandFile && buildDiffContextRegions(file.file).length > 0 ? (
-        <Tooltip delayDuration={300} enabledOnDesktop enabledOnMobile={false}>
-          <TooltipTrigger asChild>
-            <Button
-              accessibilityLabel={`Show entire ${file.path} file`}
-              leftIcon={ListChevronsUpDown}
-              onPress={expandFile}
-              size="xs"
-              style={styles.expandFileControl}
-              testID={`diff-file-${file.fileIndex}-expand-file`}
-              variant="ghost"
-            />
-          </TooltipTrigger>
-          <TooltipContent side="bottom">
-            <Text style={styles.tooltipText}>Show entire file</Text>
-          </TooltipContent>
-        </Tooltip>
-      ) : null}
     </View>
   );
 }
@@ -172,6 +201,46 @@ function DocumentFileReviewControl({
   );
 }
 
+function DocumentFileLspStatus({
+  filePath,
+  lsp,
+  presentation,
+}: {
+  filePath: string;
+  lsp: ChangesLspController;
+  presentation: "label" | "icon";
+}) {
+  const language = lspLanguageForFile(filePath);
+  const subscribe = useCallback(
+    (listener: () => void) => lsp.subscribeFile(filePath, listener),
+    [filePath, lsp],
+  );
+  const getSnapshot = useCallback(() => lsp.getFileSnapshot(filePath), [filePath, lsp]);
+  const snapshot = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+  useEffect(() => {
+    if (!language || !lsp.supported) return;
+    return lsp.acquireVisibleFile(filePath);
+  }, [filePath, language, lsp]);
+  const retry = useCallback(() => lsp.retry(filePath), [filePath, lsp]);
+  if (!language || !lsp.supported) return null;
+  return (
+    <LspStatusMenu
+      enabled={lsp.preferenceEnabled}
+      snapshot={snapshot}
+      language={language}
+      standaloneClangdSupported={lsp.standaloneClangdSupported}
+      pausedReason={
+        lsp.pauseReason === "dirty-worktree"
+          ? "Language intelligence is paused while this workspace has uncommitted changes. Clean the workspace to resume."
+          : null
+      }
+      onEnabledChange={lsp.setEnabled}
+      onRetry={retry}
+      presentation={presentation}
+      testIDPrefix={`changes-lsp-${filePath}`}
+    />
+  );
+}
 const styles = StyleSheet.create((theme) => ({
   root: { position: "relative" },
   headerControl: {
@@ -180,13 +249,16 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     justifyContent: "center",
   },
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[1],
+    flexShrink: 0,
+  },
   expandFileControl: {
-    position: "absolute",
-    right: 34,
-    top: 1,
-    width: 28,
+    width: 24,
+    height: 24,
     paddingHorizontal: 0,
-    zIndex: 8,
   },
   tooltipText: { color: theme.colors.foreground, fontSize: theme.fontSize.sm },
 }));
@@ -198,20 +270,35 @@ function documentFileHeaderPropsEqual(
   if (!documentFileHeaderIdentityMatches(previous, next)) return false;
   if (previous.mode.kind === "commit" || next.mode.kind === "commit") return true;
   return (
-    previous.mode.onFilePress === next.mode.onFilePress &&
-    previous.mode.workspaceFileDragScope === next.mode.workspaceFileDragScope &&
-    previous.mode.onOpenFile === next.mode.onOpenFile &&
-    previous.mode.onOpenToSide === next.mode.onOpenToSide &&
-    previous.mode.onAddToChat === next.mode.onAddToChat &&
-    previous.mode.onCopyPath === next.mode.onCopyPath &&
-    previous.mode.onCopyRelativePath === next.mode.onCopyRelativePath &&
-    previous.mode.onReveal === next.mode.onReveal &&
-    previous.mode.revealTargetName === next.mode.revealTargetName &&
-    previous.mode.onDownload === next.mode.onDownload &&
-    previous.mode.onDuplicate === next.mode.onDuplicate &&
-    previous.mode.onRevert === next.mode.onRevert &&
-    previous.mode.onExpandFile === next.mode.onExpandFile &&
+    documentFileHeaderWorkingModeMatches(previous.mode, next.mode) &&
     previous.onFocusDocument === next.onFocusDocument
+  );
+}
+
+function documentFileHeaderWorkingModeMatches(
+  previous: Extract<DiffDocumentProps["mode"], { kind: "working" }>,
+  next: Extract<DiffDocumentProps["mode"], { kind: "working" }>,
+): boolean {
+  return (
+    previous.onFilePress === next.onFilePress &&
+    previous.workspaceFileDragScope === next.workspaceFileDragScope &&
+    previous.onOpenFile === next.onOpenFile &&
+    previous.onOpenToSide === next.onOpenToSide &&
+    previous.fileReviews === next.fileReviews &&
+    previous.onAddToChat === next.onAddToChat &&
+    previous.onCopyPath === next.onCopyPath &&
+    previous.onCopyRelativePath === next.onCopyRelativePath &&
+    previous.onReveal === next.onReveal &&
+    previous.revealTargetName === next.revealTargetName &&
+    previous.onDownload === next.onDownload &&
+    previous.onDuplicate === next.onDuplicate &&
+    previous.onRevert === next.onRevert &&
+    previous.onExpandFile === next.onExpandFile &&
+    previous.onSearch === next.onSearch &&
+    previous.onRevealSearchMatch === next.onRevealSearchMatch &&
+    previous.searchSupported === next.searchSupported &&
+    previous.lsp === next.lsp &&
+    previous.lspStatusPresentation === next.lspStatusPresentation
   );
 }
 
