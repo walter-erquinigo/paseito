@@ -36,6 +36,10 @@ The app checks for the capability and either runs the feature or tells the user 
 - **No defensive branches spread through the feature.** Detection happens in one place, and everything downstream reads a clean shape.
 - Capability flags live in `features` on the `server_info` message (`packages/protocol/src/messages.ts`, the `server_info` schema).
 
+Command Center workspace-file search follows this rule through `workspaceFileSearch`: the app sends
+no exhaustive-search request to a host that does not advertise the capability, and reports that the
+host must be updated.
+
 Existing functionality keeps working across versions because of the protocol contract. Gating a new feature never substitutes for that.
 
 ## Every shim is tagged and dated

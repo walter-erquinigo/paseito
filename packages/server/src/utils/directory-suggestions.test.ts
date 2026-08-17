@@ -14,6 +14,9 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { isPlatform } from "../test-utils/platform.js";
 import { startGitCommandMetrics, stopGitCommandMetrics } from "./run-git-command.js";
 import {
+  type DirectorySuggestionEntry,
+  invalidateWorkspaceFileSearch,
+  parseWorkspaceFilesResult,
   searchDirectoryEntries,
   WORKSPACE_SEARCH_HIDDEN_DIRECTORIES,
 } from "./directory-suggestions.js";
@@ -169,6 +172,246 @@ describe("searchDirectoryEntries", () => {
     );
   });
 
+  it("searches the complete Git project file set beyond traversal limits", async () => {
+    initGitRepo(searchRoot, "generated/\n");
+    mkdirSync(path.join(searchRoot, "a-first"), { recursive: true });
+    mkdirSync(path.join(searchRoot, "deep", "nested"), { recursive: true });
+    mkdirSync(path.join(searchRoot, "generated"), { recursive: true });
+    writeFileSync(path.join(searchRoot, "a-first", "ordinary.ts"), "");
+    writeFileSync(path.join(searchRoot, "deep", "nested", "complete-search-needle.ts"), "");
+    writeFileSync(path.join(searchRoot, "generated", "ignored-needle.ts"), "");
+
+    startGitCommandMetrics();
+    await expect(
+      searchRelativeDirectoryEntries({
+        cwd: searchRoot,
+        query: "complete-search-needle",
+        includeFiles: true,
+        includeDirectories: false,
+        maxDepth: 1,
+        maxEntriesScanned: 1,
+        respectGitIgnore: true,
+      }),
+    ).resolves.toEqual([{ path: "deep/nested/complete-search-needle.ts", kind: "file" }]);
+    const gitMetrics = stopGitCommandMetrics();
+    expect(gitMetrics.commands).toHaveLength(3);
+    expect(gitMetrics.commands.find((command) => command.args.includes("ls-files"))?.args).toEqual([
+      "ls-files",
+      "--cached",
+      "--others",
+      "--exclude-standard",
+      "-z",
+      "--",
+    ]);
+    await expect(
+      searchRelativeDirectoryEntries({
+        cwd: searchRoot,
+        query: "ignored-needle",
+        includeFiles: true,
+        includeDirectories: false,
+        respectGitIgnore: true,
+      }),
+    ).resolves.toEqual([]);
+  });
+
+  it("rejects truncated complete-workspace Git output", () => {
+    expect(
+      parseWorkspaceFilesResult({
+        stdout: "src/complete.ts\0src/incomplete",
+        stderr: "",
+        truncated: true,
+        exitCode: 0,
+        signal: null,
+      }),
+    ).toBeNull();
+    expect(
+      parseWorkspaceFilesResult({
+        stdout: "src/b.ts\0src/a.ts\0src/a.ts\0",
+        stderr: "",
+        truncated: false,
+        exitCode: 0,
+        signal: null,
+      }),
+    ).toEqual(["src/a.ts", "src/b.ts"]);
+  });
+
+  it("includes tracked hidden and ignored files in complete workspace search", async () => {
+    initGitRepo(searchRoot, ".hidden/\ngenerated/\n");
+    mkdirSync(path.join(searchRoot, ".hidden"), { recursive: true });
+    mkdirSync(path.join(searchRoot, "generated"), { recursive: true });
+    writeFileSync(path.join(searchRoot, ".hidden", "tracked-secret.ts"), "");
+    writeFileSync(path.join(searchRoot, "generated", "tracked-generated.ts"), "");
+    execFileSync(
+      "git",
+      ["add", "-f", ".hidden/tracked-secret.ts", "generated/tracked-generated.ts"],
+      { cwd: searchRoot },
+    );
+
+    const common = {
+      cwd: searchRoot,
+      includeFiles: true,
+      includeDirectories: false,
+      respectGitIgnore: true,
+    };
+    await expect(
+      searchRelativeDirectoryEntries({ ...common, query: "tracked-secret" }),
+    ).resolves.toEqual([{ path: ".hidden/tracked-secret.ts", kind: "file" }]);
+    await expect(
+      searchRelativeDirectoryEntries({ ...common, query: "tracked-generated" }),
+    ).resolves.toEqual([{ path: "generated/tracked-generated.ts", kind: "file" }]);
+  });
+
+  it("prepares and reuses one complete workspace index across queries", async () => {
+    initGitRepo(searchRoot, "");
+    writeFileSync(path.join(searchRoot, "prepared-search-file.ts"), "");
+
+    startGitCommandMetrics();
+    await expect(
+      searchDirectoryEntries({
+        root: searchRoot,
+        query: "",
+        pathFormat: "relative",
+        includeFiles: true,
+        includeDirectories: false,
+        matchMode: "fuzzy",
+        pathQueryPolicy: "slashes",
+        blankQueryBehavior: "children",
+        respectGitIgnore: true,
+        prepareOnly: true,
+      }),
+    ).resolves.toEqual([]);
+    await expect(
+      searchRelativeDirectoryEntries({
+        cwd: searchRoot,
+        query: "prepared-search",
+        includeFiles: true,
+        includeDirectories: false,
+        respectGitIgnore: true,
+      }),
+    ).resolves.toEqual([{ path: "prepared-search-file.ts", kind: "file" }]);
+    const gitMetrics = stopGitCommandMetrics();
+
+    expect(gitMetrics.commands.filter((command) => command.args.includes("ls-files"))).toHaveLength(
+      1,
+    );
+  });
+
+  it("stops ranking when a complete workspace search is superseded", async () => {
+    initGitRepo(searchRoot, "");
+    for (let index = 0; index < 100; index += 1) {
+      writeFileSync(
+        path.join(searchRoot, `cancellable-file-${String(index).padStart(3, "0")}.ts`),
+        "",
+      );
+    }
+    await searchDirectoryEntries({
+      root: searchRoot,
+      query: "",
+      pathFormat: "relative",
+      includeFiles: true,
+      includeDirectories: false,
+      matchMode: "fuzzy",
+      respectGitIgnore: true,
+      prepareOnly: true,
+    });
+
+    let cancellationChecks = 0;
+    await expect(
+      searchDirectoryEntries({
+        root: searchRoot,
+        query: "cancellable",
+        pathFormat: "relative",
+        includeFiles: true,
+        includeDirectories: false,
+        matchMode: "fuzzy",
+        respectGitIgnore: true,
+        isCancelled: () => {
+          cancellationChecks += 1;
+          return cancellationChecks > 5;
+        },
+      }),
+    ).resolves.toEqual([]);
+    expect(cancellationChecks).toBe(6);
+  });
+
+  it("refreshes ordinary workspace file-set changes in the background", async () => {
+    initGitRepo(searchRoot, "");
+    writeFileSync(path.join(searchRoot, "existing-file.ts"), "");
+    await searchRelativeDirectoryEntries({
+      cwd: searchRoot,
+      query: "existing-file",
+      includeFiles: true,
+      includeDirectories: false,
+      respectGitIgnore: true,
+    });
+
+    writeFileSync(path.join(searchRoot, "background-refresh-file.ts"), "");
+    await invalidateWorkspaceFileSearch(searchRoot, "soft");
+
+    let results: DirectorySuggestionEntry[] = [];
+    for (let attempt = 0; attempt < 20 && results.length === 0; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      results = await searchRelativeDirectoryEntries({
+        cwd: searchRoot,
+        query: "background-refresh",
+        includeFiles: true,
+        includeDirectories: false,
+        respectGitIgnore: true,
+      });
+    }
+    expect(results).toEqual([{ path: "background-refresh-file.ts", kind: "file" }]);
+  });
+
+  it("hard-invalidates an index across branch file-set changes", async () => {
+    initGitRepo(searchRoot, "");
+    execFileSync("git", ["config", "user.email", "paseito@example.invalid"], { cwd: searchRoot });
+    execFileSync("git", ["config", "user.name", "Paseito Test"], { cwd: searchRoot });
+    writeFileSync(path.join(searchRoot, "main-only-file.ts"), "");
+    execFileSync("git", ["add", "main-only-file.ts"], { cwd: searchRoot });
+    execFileSync("git", ["commit", "-qm", "main"], { cwd: searchRoot });
+    const mainBranch = execFileSync("git", ["branch", "--show-current"], {
+      cwd: searchRoot,
+      encoding: "utf8",
+    }).trim();
+    execFileSync("git", ["checkout", "-qb", "alternate"], { cwd: searchRoot });
+    unlinkSync(path.join(searchRoot, "main-only-file.ts"));
+    writeFileSync(path.join(searchRoot, "alternate-only-file.ts"), "");
+    execFileSync("git", ["add", "-A"], { cwd: searchRoot });
+    execFileSync("git", ["commit", "-qm", "alternate"], { cwd: searchRoot });
+
+    await expect(
+      searchRelativeDirectoryEntries({
+        cwd: searchRoot,
+        query: "alternate-only",
+        includeFiles: true,
+        includeDirectories: false,
+        respectGitIgnore: true,
+      }),
+    ).resolves.toEqual([{ path: "alternate-only-file.ts", kind: "file" }]);
+
+    execFileSync("git", ["checkout", "-q", mainBranch], { cwd: searchRoot });
+    await invalidateWorkspaceFileSearch(searchRoot, "hard");
+
+    await expect(
+      searchRelativeDirectoryEntries({
+        cwd: searchRoot,
+        query: "main-only",
+        includeFiles: true,
+        includeDirectories: false,
+        respectGitIgnore: true,
+      }),
+    ).resolves.toEqual([{ path: "main-only-file.ts", kind: "file" }]);
+    await expect(
+      searchRelativeDirectoryEntries({
+        cwd: searchRoot,
+        query: "alternate-only",
+        includeFiles: true,
+        includeDirectories: false,
+        respectGitIgnore: true,
+      }),
+    ).resolves.toEqual([]);
+  });
+
   it("configures raw blank queries independently from explicit root aliases", async () => {
     const rootEntries = [
       { path: "projects", kind: "directory" as const },
@@ -247,6 +490,26 @@ describe("searchDirectoryEntries", () => {
     await expect(searchDirectoryEntries({ ...common, query: absoluteQuery })).resolves.toEqual(
       expected,
     );
+  });
+
+  it("autocompletes absolute files from their parent without using the Git index", async () => {
+    const target = path.join(searchRoot, "src", "components", "message-renderer.tsx");
+    startGitCommandMetrics();
+
+    const results = await searchDirectoryEntries({
+      root: path.parse(searchRoot).root,
+      query: target.slice(0, -4),
+      pathFormat: "absolute",
+      includeFiles: true,
+      includeDirectories: false,
+      pathQueryPolicy: "rooted",
+      retrieveExactPath: true,
+      limit: 20,
+    });
+    const gitMetrics = stopGitCommandMetrics();
+
+    expect(results).toEqual([{ path: target, kind: "file" }]);
+    expect(gitMetrics.commands.filter((command) => command.args.includes("ls-files"))).toEqual([]);
   });
 
   it("browses an absolute root and an absolute directory ending in a separator", async () => {

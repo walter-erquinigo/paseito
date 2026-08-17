@@ -4353,6 +4353,7 @@ export class DaemonClient {
       query: string;
       limit?: number;
       cwd?: string;
+      filesystemPath?: boolean;
       includeFiles?: boolean;
       includeDirectories?: boolean;
       matchMode?: "fuzzy" | "suffix";
@@ -4366,6 +4367,7 @@ export class DaemonClient {
         type: "directory_suggestions_request",
         query: options.query,
         cwd: options.cwd,
+        filesystemPath: options.filesystemPath,
         includeFiles: options.includeFiles,
         includeDirectories: options.includeDirectories,
         matchMode: options.matchMode,
