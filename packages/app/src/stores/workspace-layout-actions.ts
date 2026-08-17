@@ -1084,10 +1084,26 @@ function isEphemeralTab(tab: WorkspaceTab): boolean {
   return tab.target.kind === "commit_diff" || tab.target.kind === "new_tab";
 }
 
+function stripEphemeralTargetFields(tab: WorkspaceTab): WorkspaceTab {
+  if (tab.target.kind !== "working_diff") return tab;
+  return {
+    ...tab,
+    target: {
+      kind: "working_diff",
+      ...(tab.target.focusPath ? { focusPath: tab.target.focusPath } : {}),
+      ...(tab.target.focusRequestId ? { focusRequestId: tab.target.focusRequestId } : {}),
+    },
+  };
+}
+
 function stripEphemeralTabsFromNode(node: SplitNodeInternal): SplitNodeInternal {
   if (node.kind === "pane") {
-    const nextTabs = node.pane.tabs.filter((tab) => !isEphemeralTab(tab));
-    if (nextTabs.length === node.pane.tabs.length) {
+    const retainedTabs = node.pane.tabs.filter((tab) => !isEphemeralTab(tab));
+    const nextTabs = retainedTabs.map(stripEphemeralTargetFields);
+    if (
+      nextTabs.length === node.pane.tabs.length &&
+      nextTabs.every((tab, index) => tab === node.pane.tabs[index])
+    ) {
       return node;
     }
     // createPaneNode repoints focusedTabId to a surviving tab (or null) when the
@@ -1660,12 +1676,13 @@ export function replaceTabTargetInLayout(
     };
   }
   let tabId = input.createTabId();
-  // File navigation is a retarget of one File tab, not a new panel instance. Keeping its
-  // identity preserves the mounted tab track and the File tab's local presentation state.
+  // File and Changes navigation retarget an existing surface rather than creating a new panel
+  // instance. Keeping the identity preserves the mounted surface and its presentation state.
   if (
     currentTab?.target.kind === "new_tab" ||
     currentTab?.target.kind === "draft" ||
-    (currentTab?.target.kind === "file" && input.target.kind === "file")
+    (currentTab?.target.kind === "file" && input.target.kind === "file") ||
+    (currentTab?.target.kind === "working_diff" && input.target.kind === "working_diff")
   ) {
     tabId = input.tabId;
   } else if (input.target.kind === "draft") {

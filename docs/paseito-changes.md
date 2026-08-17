@@ -153,11 +153,18 @@ switches discard the old index before searches resume, so results never cross br
 The index does not precompute the repository's ignored paths, and it rejects truncated Git output
 instead of presenting a partial file set. Older hosts show an update-host message before searching.
 
+An absolute path switches Command+P to host-filesystem autocomplete. The daemon searches matching
+files in the path's immediate parent without consulting the workspace Git index or recursively
+scanning the filesystem. Results keep their absolute paths, so files outside the active workspace
+open in the same editable file tab. Older hosts can still search the workspace but report that an
+update is required for absolute paths.
+
 `Enter` opens the selected result in a normal file tab. On desktop web, `Command+Enter` opens the
 right explorer, switches it to **Changes**, and checks the selected path against that surface's
 loaded comparison. A matching file expands and its header is centered only when outside the diff
 viewport. An existing full **Changes** tab remains open and untouched. An unchanged file leaves the
-command center open and reports that the file is not present in **Changes**.
+command center open and reports that the file is not present in **Changes**. Absolute paths inside
+the workspace resolve to the same Changes entry; paths outside it report that they are absent.
 
 ## Markdown preview source links
 
