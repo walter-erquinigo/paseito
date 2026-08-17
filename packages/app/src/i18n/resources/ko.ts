@@ -57,6 +57,8 @@ export const ko: TranslationResources = {
       placeholder: "명령, 파일, 워크스페이스 및 에이전트 검색...",
       filePlaceholder: "파일 검색...",
       searchingFiles: "파일 검색 중...",
+      fileNotPresentInChanges: "이 파일은 변경 사항에 없습니다.",
+      fileSearchRequiresHostUpdate: "모든 작업 영역 파일을 검색하려면 이 호스트를 업데이트하세요.",
       noMatches: "일치 항목 없음",
       actions: "작업",
       files: "파일",

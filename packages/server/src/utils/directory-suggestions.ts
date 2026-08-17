@@ -2,7 +2,7 @@ import type { Dirent, Stats } from "node:fs";
 import { readdir, realpath, stat } from "node:fs/promises";
 import path from "node:path";
 import { isPathInsideRoot } from "./path.js";
-import { runGitCommand } from "./run-git-command.js";
+import { runGitCommand, type GitCommandResult } from "./run-git-command.js";
 
 export type DirectorySuggestionKind = "file" | "directory";
 export type DirectorySuggestionPathFormat = "absolute" | "relative";
@@ -31,6 +31,8 @@ export interface SearchDirectoryEntriesOptions {
   maxEntriesScanned?: number;
   confidentResultScanThreshold?: number;
   respectGitIgnore?: boolean;
+  prepareOnly?: boolean;
+  isCancelled?: () => boolean;
 }
 
 interface QueryPlan {
@@ -77,6 +79,27 @@ interface GitIgnoredPathsCacheEntry {
   paths: Promise<Set<string>>;
 }
 
+interface WorkspaceFileIndexEntry {
+  path: string;
+  lowerPath: string;
+  lowerBasename: string;
+  depth: number;
+}
+
+interface WorkspaceFileIndex {
+  entries: WorkspaceFileIndexEntry[];
+  revision: string | null;
+}
+
+interface WorkspaceFileIndexCacheEntry {
+  root: string;
+  generation: number;
+  index: WorkspaceFileIndex | null;
+  build: Promise<WorkspaceFileIndex | null> | null;
+  refreshAfter: number;
+  lastUsedAt: number;
+}
+
 const DEFAULT_LIMIT = 30;
 const MAX_LIMIT = 100;
 const DEFAULT_MAX_DEPTH = 12;
@@ -85,6 +108,10 @@ const DIRECTORY_LIST_CACHE_TTL_MS = 8_000;
 const DIRECTORY_LIST_CACHE_MAX_ENTRIES = 4_000;
 const GIT_IGNORED_PATHS_CACHE_TTL_MS = 8_000;
 const GIT_IGNORED_PATHS_CACHE_MAX_ENTRIES = 256;
+const WORKSPACE_FILE_INDEX_REFRESH_MS = 30_000;
+const WORKSPACE_FILE_INDEX_MAX_RETAINED_ENTRIES = 500_000;
+const WORKSPACE_FILE_INDEX_SLICE_MS = 8;
+const WORKSPACE_FILES_MAX_OUTPUT_BYTES = 64 * 1024 * 1024;
 // Windows does not reliably update directory mtime/ctime when children change,
 // so metadata cannot safely validate a cross-request listing cache there.
 const CAN_VALIDATE_DIRECTORY_CACHE_FROM_METADATA = process.platform !== "win32";
@@ -118,6 +145,7 @@ const IGNORED_DIRECTORY_NAMES = new Set([
 ]);
 const directoryListCache = new Map<string, DirectoryListCacheEntry>();
 const gitIgnoredPathsCache = new Map<string, GitIgnoredPathsCacheEntry>();
+const workspaceFileIndexes = new Map<string, WorkspaceFileIndexCacheEntry>();
 
 // Discovery and retrieval filter differently, on purpose. Discovery — anything that ranks or
 // browses candidates the caller has not named — drops gitignored and hidden entries, so pickers
@@ -130,6 +158,30 @@ export async function searchDirectoryEntries(
   const root = await resolveDirectory(options.root);
   if (!root) return [];
 
+  const unfilteredInput = buildSearchInput(options, root, new Set<string>());
+  if (!unfilteredInput) return [];
+
+  const searchesCompleteWorkspaceFiles = shouldSearchCompleteWorkspaceFiles(
+    options,
+    unfilteredInput,
+  );
+  if (searchesCompleteWorkspaceFiles) {
+    const workspaceFileIndex = await loadWorkspaceFileIndex(root);
+    if (options.prepareOnly) return [];
+    if (options.isCancelled?.()) return [];
+    if (workspaceFileIndex) {
+      return searchWorkspaceFileIndex(workspaceFileIndex, unfilteredInput, options.isCancelled);
+    }
+  }
+
+  return searchDirectoryEntriesFromFilesystem(options, root, searchesCompleteWorkspaceFiles);
+}
+
+async function searchDirectoryEntriesFromFilesystem(
+  options: SearchDirectoryEntriesOptions,
+  root: string,
+  searchesCompleteWorkspaceFiles: boolean,
+): Promise<DirectorySuggestionEntry[]> {
   const gitIgnoredPaths = options.respectGitIgnore
     ? await loadGitIgnoredPaths(root)
     : new Set<string>();
@@ -143,14 +195,227 @@ export async function searchDirectoryEntries(
   if (exact && input.limit === 1) return [exact];
 
   const browsesRoot = input.plan.isPathQuery && !input.plan.normalizedQuery;
+  const searchInput = searchesCompleteWorkspaceFiles
+    ? {
+        ...input,
+        maxDepth: Number.MAX_SAFE_INTEGER,
+        maxEntriesScanned: Number.MAX_SAFE_INTEGER,
+      }
+    : input;
   const ranked =
-    input.plan.isPathQuery && (input.matchMode === "fuzzy" || browsesRoot)
-      ? await searchChildren(input)
-      : await searchTree(input);
+    searchInput.plan.isPathQuery && (searchInput.matchMode === "fuzzy" || browsesRoot)
+      ? await searchChildren(searchInput)
+      : await searchTree(searchInput);
   const results = sortAndFormat(ranked, input.root, input.pathFormat).slice(0, input.limit);
   return exact
     ? [exact, ...results.filter((entry) => !sameEntry(entry, exact))].slice(0, input.limit)
     : results;
+}
+
+function shouldSearchCompleteWorkspaceFiles(
+  options: SearchDirectoryEntriesOptions,
+  input: SearchInput,
+): boolean {
+  return (
+    options.respectGitIgnore === true &&
+    input.includeFiles &&
+    !input.includeDirectories &&
+    (Boolean(input.plan.normalizedQuery) || options.prepareOnly === true) &&
+    input.matchMode === "fuzzy"
+  );
+}
+
+async function searchWorkspaceFileIndex(
+  index: WorkspaceFileIndex,
+  input: SearchInput,
+  isCancelled: (() => boolean) | undefined,
+): Promise<DirectorySuggestionEntry[]> {
+  const ranked: RankedEntry[] = [];
+  let sliceStartedAt = performance.now();
+  for (const entry of index.entries) {
+    if (isCancelled?.()) return [];
+    if (!entry.lowerBasename.startsWith(".")) {
+      const candidate = rankWorkspaceFileIndexEntry(entry, input);
+      if (candidate.matchTier !== NO_MATCH_TIER) {
+        pushBoundedRankedEntry(ranked, candidate, input.limit);
+      }
+    }
+    if (performance.now() - sliceStartedAt >= WORKSPACE_FILE_INDEX_SLICE_MS) {
+      await yieldToEventLoop();
+      sliceStartedAt = performance.now();
+    }
+  }
+  return ranked.sort(compareRank).map((entry) => ({ path: entry.path, kind: entry.kind }));
+}
+
+async function loadWorkspaceFileIndex(root: string): Promise<WorkspaceFileIndex | null> {
+  const now = Date.now();
+  let cached = workspaceFileIndexes.get(root);
+  if (!cached) {
+    cached = {
+      root,
+      generation: 0,
+      index: null,
+      build: null,
+      refreshAfter: 0,
+      lastUsedAt: now,
+    };
+    workspaceFileIndexes.set(root, cached);
+  }
+  cached.lastUsedAt = now;
+  if (cached.index) {
+    if (cached.refreshAfter <= now && !cached.build) {
+      void startWorkspaceFileIndexBuild(cached);
+    }
+    return cached.index;
+  }
+  return startWorkspaceFileIndexBuild(cached);
+}
+
+async function startWorkspaceFileIndexBuild(
+  cached: WorkspaceFileIndexCacheEntry,
+): Promise<WorkspaceFileIndex | null> {
+  if (cached.build) return cached.build;
+  const generation = cached.generation;
+  const previous = cached.index;
+  const build = buildRevisionSafeWorkspaceFileIndex(cached.root)
+    .then((index) => {
+      if (cached.generation !== generation) return cached.index;
+      if (index) {
+        cached.index = index;
+        cached.refreshAfter = Date.now() + WORKSPACE_FILE_INDEX_REFRESH_MS;
+        cached.lastUsedAt = Date.now();
+        pruneWorkspaceFileIndexes(cached.root);
+        return index;
+      }
+      cached.refreshAfter = Date.now() + WORKSPACE_FILE_INDEX_REFRESH_MS;
+      return previous;
+    })
+    .catch(() => previous)
+    .finally(() => {
+      if (cached.build === build) cached.build = null;
+    });
+  cached.build = build;
+  return build;
+}
+
+async function buildRevisionSafeWorkspaceFileIndex(
+  root: string,
+): Promise<WorkspaceFileIndex | null> {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const before = await readWorkspaceRevision(root);
+    const result = await runGitCommand(
+      ["ls-files", "--cached", "--others", "--exclude-standard", "-z", "--"],
+      {
+        cwd: root,
+        envOverlay: { GIT_OPTIONAL_LOCKS: "0" },
+        timeout: 10_000,
+        maxOutputBytes: WORKSPACE_FILES_MAX_OUTPUT_BYTES,
+      },
+    ).catch(() => null);
+    if (!result || result.truncated) return null;
+    const entries = await parseWorkspaceFileIndex(result.stdout);
+    const after = await readWorkspaceRevision(root);
+    if (before === after) return { entries, revision: after };
+  }
+  return null;
+}
+
+async function readWorkspaceRevision(root: string): Promise<string | null> {
+  return runGitCommand(["rev-parse", "HEAD"], {
+    cwd: root,
+    envOverlay: { GIT_OPTIONAL_LOCKS: "0" },
+    timeout: 5_000,
+  })
+    .then((result) => result.stdout.trim() || null)
+    .catch(() => null);
+}
+
+async function parseWorkspaceFileIndex(stdout: string): Promise<WorkspaceFileIndexEntry[]> {
+  const entries: WorkspaceFileIndexEntry[] = [];
+  const seen = new Set<string>();
+  let pathStart = 0;
+  let sliceStartedAt = performance.now();
+  for (let cursor = 0; cursor <= stdout.length; cursor += 1) {
+    if (cursor !== stdout.length && stdout.charCodeAt(cursor) !== 0) continue;
+    if (cursor > pathStart) {
+      const relativePath = normalizeGitPath(stdout.slice(pathStart, cursor));
+      if (!seen.has(relativePath)) {
+        seen.add(relativePath);
+        const lowerPath = relativePath.toLowerCase();
+        const basenameOffset = lowerPath.lastIndexOf("/") + 1;
+        entries.push({
+          path: relativePath,
+          lowerPath,
+          lowerBasename: lowerPath.slice(basenameOffset),
+          depth: countPathDepth(relativePath),
+        });
+      }
+    }
+    pathStart = cursor + 1;
+    if (performance.now() - sliceStartedAt >= WORKSPACE_FILE_INDEX_SLICE_MS) {
+      await yieldToEventLoop();
+      sliceStartedAt = performance.now();
+    }
+  }
+  return entries;
+}
+
+function countPathDepth(relativePath: string): number {
+  let depth = 1;
+  for (let index = 0; index < relativePath.length; index += 1) {
+    if (relativePath.charCodeAt(index) === 47) depth += 1;
+  }
+  return depth;
+}
+
+function yieldToEventLoop(): Promise<void> {
+  return new Promise((resolve) => setImmediate(resolve));
+}
+
+function pruneWorkspaceFileIndexes(currentRoot: string): void {
+  let retainedEntries = 0;
+  for (const cached of workspaceFileIndexes.values()) {
+    retainedEntries += cached.index?.entries.length ?? 0;
+  }
+  if (retainedEntries <= WORKSPACE_FILE_INDEX_MAX_RETAINED_ENTRIES) return;
+  const candidates = [...workspaceFileIndexes.values()]
+    .filter((cached) => cached.root !== currentRoot && !cached.build && cached.index)
+    .sort((left, right) => left.lastUsedAt - right.lastUsedAt);
+  for (const cached of candidates) {
+    if (retainedEntries <= WORKSPACE_FILE_INDEX_MAX_RETAINED_ENTRIES) return;
+    retainedEntries -= cached.index?.entries.length ?? 0;
+    workspaceFileIndexes.delete(cached.root);
+  }
+}
+
+export async function invalidateWorkspaceFileSearch(
+  root: string,
+  mode: "soft" | "hard",
+): Promise<void> {
+  const resolvedRoot = await realpath(path.resolve(root)).catch(() => path.resolve(root));
+  const cached = workspaceFileIndexes.get(resolvedRoot);
+  if (!cached) return;
+  cached.generation += 1;
+  cached.build = null;
+  cached.refreshAfter = 0;
+  if (mode === "hard") {
+    cached.index = null;
+    await startWorkspaceFileIndexBuild(cached);
+    return;
+  }
+  void startWorkspaceFileIndexBuild(cached);
+}
+
+export function parseWorkspaceFilesResult(result: GitCommandResult): string[] | null {
+  if (result.truncated) return null;
+  return [...new Set(result.stdout.split("\0").filter(Boolean).map(normalizeGitPath))].sort(
+    (a, b) => a.localeCompare(b),
+  );
+}
+
+function normalizeGitPath(relativePath: string): string {
+  return relativePath.split(path.sep).join("/").replace(/^\.\//, "");
 }
 
 function buildSearchInput(
@@ -383,6 +648,103 @@ function rank(entry: TraversedEntry, input: SearchInput): RankedEntry {
     fuzzyScore: fuzzyScore ?? NO_FUZZY_SCORE,
     depth: relativePath === "." ? 0 : segments.length,
   };
+}
+
+function rankWorkspaceFileIndexEntry(
+  entry: WorkspaceFileIndexEntry,
+  input: SearchInput,
+): RankedEntry {
+  const query = input.plan.searchTerm.toLowerCase();
+  const matches = findWorkspaceFileSegmentMatches(entry.lowerPath, query);
+  const offset = entry.lowerPath.indexOf(query);
+  const fuzzyScore = scoreFuzzySubsequence(query, entry.lowerBasename);
+  let matchTier = NO_MATCH_TIER;
+  let segmentIndex = NO_SEGMENT_INDEX;
+  if (!query) matchTier = 3;
+  else if (matches.exact >= 0) {
+    matchTier = 0;
+    segmentIndex = matches.exact;
+  } else if (matches.prefix >= 0) {
+    matchTier = 1;
+    segmentIndex = matches.prefix;
+  } else if (matches.substring >= 0) {
+    matchTier = 2;
+    segmentIndex = matches.substring;
+  } else if (entry.lowerPath.startsWith(query)) matchTier = 3;
+  else if (fuzzyScore !== null) matchTier = 4;
+  return {
+    path: entry.path,
+    kind: "file",
+    matchTier,
+    segmentIndex,
+    matchOffset: offset >= 0 ? offset : NO_MATCH_OFFSET,
+    fuzzyScore: fuzzyScore ?? NO_FUZZY_SCORE,
+    depth: entry.depth,
+  };
+}
+
+function findWorkspaceFileSegmentMatches(
+  lowerPath: string,
+  query: string,
+): { exact: number; prefix: number; substring: number } {
+  let exact = -1;
+  let prefix = -1;
+  let substring = -1;
+  let segmentIndex = 0;
+  let segmentStart = 0;
+  while (segmentStart <= lowerPath.length) {
+    const slash = lowerPath.indexOf("/", segmentStart);
+    const segmentEnd = slash < 0 ? lowerPath.length : slash;
+    const segmentLength = segmentEnd - segmentStart;
+    const startsWithQuery = lowerPath.startsWith(query, segmentStart);
+    if (prefix < 0 && startsWithQuery) prefix = segmentIndex;
+    if (exact < 0 && startsWithQuery && segmentLength === query.length) {
+      exact = segmentIndex;
+    }
+    if (substring < 0) {
+      const matchOffset = lowerPath.indexOf(query, segmentStart);
+      if (matchOffset >= segmentStart && matchOffset < segmentEnd) substring = segmentIndex;
+    }
+    if (slash < 0) break;
+    segmentStart = slash + 1;
+    segmentIndex += 1;
+  }
+  return { exact, prefix, substring };
+}
+
+function pushBoundedRankedEntry(heap: RankedEntry[], entry: RankedEntry, limit: number): void {
+  if (heap.length < limit) {
+    heap.push(entry);
+    siftWorstRankedEntryUp(heap, heap.length - 1);
+    return;
+  }
+  if (compareRank(entry, heap[0]!) >= 0) return;
+  heap[0] = entry;
+  siftWorstRankedEntryDown(heap, 0);
+}
+
+function siftWorstRankedEntryUp(heap: RankedEntry[], startIndex: number): void {
+  let index = startIndex;
+  while (index > 0) {
+    const parent = Math.floor((index - 1) / 2);
+    if (compareRank(heap[parent]!, heap[index]!) >= 0) return;
+    [heap[parent], heap[index]] = [heap[index]!, heap[parent]!];
+    index = parent;
+  }
+}
+
+function siftWorstRankedEntryDown(heap: RankedEntry[], startIndex: number): void {
+  let index = startIndex;
+  while (true) {
+    const left = index * 2 + 1;
+    if (left >= heap.length) return;
+    const right = left + 1;
+    const worstChild =
+      right < heap.length && compareRank(heap[right]!, heap[left]!) > 0 ? right : left;
+    if (compareRank(heap[index]!, heap[worstChild]!) >= 0) return;
+    [heap[index], heap[worstChild]] = [heap[worstChild]!, heap[index]!];
+    index = worstChild;
+  }
 }
 
 function sortAndFormat(

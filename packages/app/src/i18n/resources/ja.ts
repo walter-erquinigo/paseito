@@ -57,6 +57,9 @@ export const ja: TranslationResources = {
       placeholder: "コマンド、ファイル、ワークスペース、エージェントを検索...",
       filePlaceholder: "ファイルを検索...",
       searchingFiles: "ファイルを検索中...",
+      fileNotPresentInChanges: "このファイルは変更に含まれていません。",
+      fileSearchRequiresHostUpdate:
+        "ワークスペース内のすべてのファイルを検索するには、このホストを更新してください。",
       noMatches: "一致なし",
       actions: "アクション",
       files: "ファイル",
