@@ -143,7 +143,8 @@ function secondaryWorkspaceTabTargetsEqual(
       left.focusRequestId === right.focusRequestId &&
       left.focusLineStart === right.focusLineStart &&
       left.focusLineEnd === right.focusLineEnd &&
-      left.focusColumn === right.focusColumn
+      left.focusColumn === right.focusColumn &&
+      left.focusReveal === right.focusReveal
     );
   }
   if (left.kind === "files" && right.kind === "files") {
@@ -273,6 +274,7 @@ function normalizeWorkingDiffTabTarget(
   const focusLineStart = normalizePositiveInteger(value.focusLineStart);
   const focusLineEnd = normalizePositiveInteger(value.focusLineEnd);
   const focusColumn = normalizePositiveInteger(value.focusColumn);
+  const focusReveal = value.focusReveal === "center-if-hidden" ? value.focusReveal : null;
   return {
     kind: "working_diff" as const,
     ...(focusPath ? { focusPath } : {}),
@@ -280,6 +282,7 @@ function normalizeWorkingDiffTabTarget(
     ...(focusLineStart ? { focusLineStart } : {}),
     ...(focusLineStart && focusLineEnd && focusLineEnd >= focusLineStart ? { focusLineEnd } : {}),
     ...(focusLineStart && focusColumn ? { focusColumn } : {}),
+    ...(focusReveal ? { focusReveal } : {}),
   };
 }
 

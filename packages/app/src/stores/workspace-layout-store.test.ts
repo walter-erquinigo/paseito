@@ -2923,6 +2923,10 @@ describe("workspace-layout-store actions", () => {
       target: {
         kind: "working_diff",
         focusPath: "src/a.ts",
+        focusRequestId: 9,
+        focusLineStart: 12,
+        focusColumn: 4,
+        focusReveal: "center-if-hidden",
       },
       intent: "reveal",
     });
@@ -2952,6 +2956,7 @@ describe("workspace-layout-store actions", () => {
       {
         kind: "working_diff",
         focusPath: "src/a.ts",
+        focusRequestId: 9,
       },
       { kind: "files" },
       { kind: "changes_tree" },

@@ -360,6 +360,7 @@ describe("shared messages stream parsing", () => {
       includeDirectories: true,
       matchMode: "suffix",
       limit: 20,
+      prepareOnly: true,
       requestId: "req-dir-1",
     });
     expect(requestParsed.success).toBe(true);
