@@ -3819,9 +3819,11 @@ test("requests directory suggestions via RPC", async () => {
       query: "proj",
       limit: 10,
       cwd: "/tmp/project",
+      filesystemPath: true,
       includeFiles: true,
       includeDirectories: true,
       matchMode: "suffix",
+      prepareOnly: true,
     },
     "req-directories",
   );
@@ -3831,9 +3833,11 @@ test("requests directory suggestions via RPC", async () => {
   expect(request.type).toBe("directory_suggestions_request");
   expect(request.query).toBe("proj");
   expect(request.cwd).toBe("/tmp/project");
+  expect(request.filesystemPath).toBe(true);
   expect(request.includeFiles).toBe(true);
   expect(request.includeDirectories).toBe(true);
   expect(request.matchMode).toBe("suffix");
+  expect(request.prepareOnly).toBe(true);
   expect(request.limit).toBe(10);
   expect(request.requestId).toBe("req-directories");
 
