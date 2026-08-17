@@ -88,6 +88,7 @@ interface RecordedHostCalls {
   emitWorkspaceUpdateForCwd: string[];
   handleWorkspaceGitBranchSnapshot: Array<{ cwd: string; branchName: string | null }>;
   renameCurrentBranch: Array<{ cwd: string; branch: string }>;
+  invalidateWorkspaceFileSearch: string[];
 }
 
 type GitMutationFake = Pick<GitMutationService, "checkoutExistingBranch" | "notifyGitMutation">;
@@ -120,6 +121,7 @@ function makeCheckoutSession(options?: {
     emitWorkspaceUpdateForCwd: [],
     handleWorkspaceGitBranchSnapshot: [],
     renameCurrentBranch: [],
+    invalidateWorkspaceFileSearch: [],
   };
   const gitMutationCalls: RecordedGitMutationCalls = {
     notifyGitMutation: [],
@@ -140,6 +142,9 @@ function makeCheckoutSession(options?: {
     renameCurrentBranch: async (cwd, branch) => {
       hostCalls.renameCurrentBranch.push({ cwd, branch });
       return { previousBranch: null, currentBranch: branch };
+    },
+    invalidateWorkspaceFileSearch: async (cwd) => {
+      hostCalls.invalidateWorkspaceFileSearch.push(cwd);
     },
     ...options?.host,
   };
@@ -700,6 +705,7 @@ describe("CheckoutSession", () => {
       ]);
       expect(refreshedCwds).toEqual(["/repo"]);
       expect(hostCalls.emitWorkspaceUpdateForCwd).toEqual(["/repo"]);
+      expect(hostCalls.invalidateWorkspaceFileSearch).toEqual(["/repo"]);
       expect(emitted).toEqual([
         {
           type: "checkout_switch_branch_response",
@@ -716,7 +722,7 @@ describe("CheckoutSession", () => {
     });
 
     it("emits an error response when the checkout fails", async () => {
-      const { checkout, emitted } = makeCheckoutSession({
+      const { checkout, emitted, hostCalls } = makeCheckoutSession({
         gitMutation: {
           checkoutExistingBranch: async () => {
             throw new Error("branch missing");
@@ -743,6 +749,7 @@ describe("CheckoutSession", () => {
           },
         },
       ]);
+      expect(hostCalls.invalidateWorkspaceFileSearch).toEqual([]);
     });
   });
 

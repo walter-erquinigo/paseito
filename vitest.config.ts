@@ -13,6 +13,10 @@ const resolvePackageEntry = (packageName: string) => {
 };
 
 export default defineConfig({
+  define: {
+    __DEV__: "false",
+    global: "globalThis",
+  },
   resolve: {
     extensions: [
       ".web.mjs",
@@ -41,6 +45,13 @@ export default defineConfig({
       { find: "@", replacement: path.resolve(appDir, "src") },
       { find: "@server", replacement: path.resolve(__dirname, "packages/server/src") },
       {
+        find: /^react-native-gesture-handler$/,
+        replacement: path.resolve(
+          rootNodeModules,
+          "react-native-gesture-handler/lib/module/index.js",
+        ),
+      },
+      {
         find: "react-native",
         replacement: path.resolve(rootNodeModules, "react-native-web/dist/index.js"),
       },
@@ -57,6 +68,30 @@ export default defineConfig({
       {
         find: /^lucide-react-native$/,
         replacement: path.resolve(appDir, "test-stubs/lucide-react-native.ts"),
+      },
+      {
+        find: /^react-native-unistyles$/,
+        replacement: path.resolve(appDir, "test-stubs/react-native-unistyles.ts"),
+      },
+      {
+        find: /^react-native-svg$/,
+        replacement: path.resolve(appDir, "test-stubs/react-native-svg.ts"),
+      },
+      {
+        find: /^react-native-safe-area-context$/,
+        replacement: path.resolve(appDir, "test-stubs/react-native-safe-area-context.ts"),
+      },
+      {
+        find: /^@gorhom\/bottom-sheet$/,
+        replacement: path.resolve(appDir, "test-stubs/gorhom-bottom-sheet.ts"),
+      },
+      {
+        find: /^react-native-reanimated\/scripts\/validate-worklets-version$/,
+        replacement: path.resolve(appDir, "test-stubs/reanimated-validate-worklets-version.ts"),
+      },
+      {
+        find: /^expo-linking$/,
+        replacement: path.resolve(appDir, "test-stubs/expo-linking.ts"),
       },
     ],
   },

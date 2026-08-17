@@ -1136,6 +1136,14 @@ test("returns typed relative suggestions within a requested directory", async ()
     mkdirSync(path.dirname(target), { recursive: true });
     writeFileSync(target, "");
 
+    const prepared = await ctx.client.getDirectorySuggestions({
+      cwd,
+      query: "",
+      includeFiles: true,
+      includeDirectories: false,
+      prepareOnly: true,
+      limit: 20,
+    });
     const result = await ctx.client.getDirectorySuggestions({
       cwd,
       query: "msgrndr",
@@ -1144,11 +1152,38 @@ test("returns typed relative suggestions within a requested directory", async ()
       limit: 20,
     });
 
+    expect(prepared.error).toBeNull();
+    expect(prepared.entries).toEqual([]);
     expect(result.error).toBeNull();
     expect(result.directories).toEqual([]);
     expect(result.entries).toEqual([{ path: "src/components/message-renderer.tsx", kind: "file" }]);
   } finally {
     rmSync(cwd, { recursive: true, force: true });
+  }
+}, 30000);
+
+test("autocompletes an absolute file path outside the requested workspace", async () => {
+  const cwd = mkdtempSync(path.join(tmpdir(), "paseo-workspace-absolute-suggestion-"));
+  const outside = mkdtempSync(path.join(tmpdir(), "paseo-outside-absolute-suggestion-"));
+  const target = path.join(outside, "AGENTS.md");
+
+  try {
+    writeFileSync(target, "# Host instructions\n");
+    const result = await ctx.client.getDirectorySuggestions({
+      cwd,
+      query: target.slice(0, -3),
+      filesystemPath: true,
+      includeFiles: true,
+      includeDirectories: false,
+      limit: 20,
+    });
+
+    expect(result.error).toBeNull();
+    expect(result.directories).toEqual([]);
+    expect(result.entries).toEqual([{ path: target, kind: "file" }]);
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+    rmSync(outside, { recursive: true, force: true });
   }
 }, 30000);
 

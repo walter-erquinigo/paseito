@@ -15,6 +15,15 @@ vi.mock("@react-native-async-storage/async-storage", () => {
   };
 });
 
+vi.mock("expo-router", () => ({
+  router: {
+    dismissTo: vi.fn(),
+    push: vi.fn(),
+  },
+  useLocalSearchParams: vi.fn(() => ({})),
+  usePathname: vi.fn(() => "/"),
+}));
+
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createViewedTimelineSync } from "@/timeline/viewed-timeline-sync";
 import { buildWorkspaceTabPersistenceKey, type WorkspaceTab } from "@/workspace-tabs/model";
@@ -3122,6 +3131,10 @@ describe("workspace-layout-store actions", () => {
       target: {
         kind: "working_diff",
         focusPath: "src/a.ts",
+        focusRequestId: 9,
+        focusLineStart: 12,
+        focusColumn: 4,
+        focusReveal: "center-if-hidden",
       },
       intent: "reveal",
     });
@@ -3153,6 +3166,7 @@ describe("workspace-layout-store actions", () => {
       {
         kind: "working_diff",
         focusPath: "src/a.ts",
+        focusRequestId: 9,
       },
       { kind: "files" },
       { kind: "changes_tree" },

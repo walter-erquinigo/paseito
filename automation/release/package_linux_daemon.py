@@ -79,6 +79,7 @@ def validate_local_workspace_resolution(stage: Path) -> None:
         "fileReviewV1",
         "workspaceLsp",
         "workspaceLspClangd",
+        "workspaceFileSearch",
         "checkoutDiffSearch",
     )
     missing_features = [feature for feature in required_features if feature not in feature_text]
@@ -172,6 +173,7 @@ def manifest(
             "fileReviewV1",
             "workspaceLsp",
             "workspaceLspClangd",
+            "workspaceFileSearch",
             "checkoutDiffSearch",
         ],
     }

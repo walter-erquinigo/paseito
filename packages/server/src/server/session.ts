@@ -11,7 +11,7 @@ import equal from "fast-deep-equal";
 import { SessionDelivery, type OwnedSubscription } from "./session/owned-subscriptions/index.js";
 import { v4 as uuidv4 } from "uuid";
 import { lstat, mkdir, mkdtemp, rename, rm, stat } from "node:fs/promises";
-import { basename, resolve, sep } from "path";
+import { basename, parse, resolve, sep } from "path";
 import { homedir } from "node:os";
 import { CLIENT_CAPS, type ClientCapability } from "@getpaseo/protocol/client-capabilities";
 import { formatPluginSourceReference } from "@getpaseo/protocol/plugin-source-reference";
@@ -211,6 +211,7 @@ import {
 } from "./session/agent-updates/agent-updates-service.js";
 import { expandTilde } from "../utils/path.js";
 import {
+  invalidateWorkspaceFileSearch,
   searchDirectoryEntries,
   WORKSPACE_SEARCH_HIDDEN_DIRECTORIES,
 } from "../utils/directory-suggestions.js";
@@ -760,6 +761,11 @@ export class Session {
     { owner: OwnedSubscription; events: Set<SessionEventSubscription>; notifications: boolean }
   >();
   private readonly workspaceUpdateTails = new Map<string, Promise<void>>();
+  private readonly workspaceFileSearchGenerations = new Map<string, number>();
+  private readonly workspaceFileSearchGitState = new Map<
+    string,
+    { branch: string | null; fingerprint: string }
+  >();
   private readonly terminalManager: TerminalManager | null;
   private readonly providerSnapshotManager: ProviderSnapshotManager;
   private readonly serviceProxy: ServiceProxySubsystem | null;
@@ -931,6 +937,7 @@ export class Session {
         handleWorkspaceGitBranchSnapshot: (cwd, branchName) =>
           this.workspaceGitObserver.handleBranchSnapshot(cwd, branchName),
         renameCurrentBranch: (cwd, branch) => this.renameCurrentBranch(cwd, branch),
+        invalidateWorkspaceFileSearch: (cwd) => invalidateWorkspaceFileSearch(cwd, "hard"),
       },
       gitMutation: this.gitMutation,
       workspaceGitService: this.workspaceGitService,
@@ -952,7 +959,10 @@ export class Session {
     this.workspaceGitObserver = createWorkspaceGitObserverService({
       workspaceGitService: this.workspaceGitService,
       emitWorkspaceUpdateForCwd: (cwd) => this.emitWorkspaceUpdateForCwd(cwd),
-      emitStatusUpdate: (cwd, snapshot) => this.checkoutSession.emitStatusUpdate(cwd, snapshot),
+      emitStatusUpdate: (cwd, snapshot) => {
+        this.refreshWorkspaceFileSearchIndex(cwd, snapshot);
+        this.checkoutSession.emitStatusUpdate(cwd, snapshot);
+      },
       onBranchChanged,
       logger: this.sessionLogger,
     });
@@ -5051,31 +5061,46 @@ export class Session {
       limit,
       requestId,
       cwd,
+      filesystemPath,
       includeFiles,
       includeDirectories,
       matchMode,
+      prepareOnly,
     } = msg;
 
     try {
       const workspaceCwd = cwd?.trim();
-      const searchesWorkspace = Boolean(workspaceCwd);
+      const filesystemRoot = filesystemPath ? parse(query.trim()).root : "";
+      if (filesystemPath && !filesystemRoot) {
+        throw new Error("Filesystem path search requires an absolute path.");
+      }
+      const searchesWorkspace = !filesystemPath && Boolean(workspaceCwd);
       const workspaceRoot = workspaceCwd ? expandTilde(workspaceCwd) : null;
+      const isCancelled = this.registerWorkspaceFileSearchRequest({
+        workspaceRoot: filesystemRoot || workspaceRoot,
+        includeFiles,
+        includeDirectories,
+        matchMode,
+      });
       const entries = await searchDirectoryEntries({
-        root: workspaceRoot ?? process.env.HOME ?? homedir(),
+        root: filesystemRoot || workspaceRoot || process.env.HOME || homedir(),
         query,
         pathFormat: searchesWorkspace ? "relative" : "absolute",
         pathQueryPolicy: searchesWorkspace ? "slashes" : "rooted",
         blankQueryBehavior: searchesWorkspace ? "children" : "none",
-        rootAliases: searchesWorkspace ? [] : ["~"],
+        rootAliases: searchesWorkspace || filesystemPath ? [] : ["~"],
         traversableHiddenDirectoryNames: searchesWorkspace
           ? WORKSPACE_SEARCH_HIDDEN_DIRECTORIES
           : [],
         confidentResultScanThreshold: searchesWorkspace ? undefined : 5_000,
         respectGitIgnore: searchesWorkspace,
+        retrieveExactPath: filesystemPath,
         includeFiles,
         includeDirectories,
         matchMode,
         limit,
+        prepareOnly,
+        isCancelled,
       });
       const directories = entries
         .filter((entry) => entry.kind === "directory")
@@ -5100,6 +5125,42 @@ export class Session {
         },
       });
     }
+  }
+
+  private registerWorkspaceFileSearchRequest(options: {
+    workspaceRoot: string | null;
+    includeFiles: boolean | undefined;
+    includeDirectories: boolean | undefined;
+    matchMode: "fuzzy" | "suffix" | undefined;
+  }): (() => boolean) | undefined {
+    const { workspaceRoot, includeFiles, includeDirectories, matchMode } = options;
+    if (
+      !workspaceRoot ||
+      includeFiles !== true ||
+      includeDirectories !== false ||
+      (matchMode ?? "fuzzy") !== "fuzzy"
+    ) {
+      return undefined;
+    }
+    const generation = (this.workspaceFileSearchGenerations.get(workspaceRoot) ?? 0) + 1;
+    this.workspaceFileSearchGenerations.set(workspaceRoot, generation);
+    return () => this.workspaceFileSearchGenerations.get(workspaceRoot) !== generation;
+  }
+
+  private refreshWorkspaceFileSearchIndex(
+    cwd: string,
+    snapshot: WorkspaceGitRuntimeSnapshot,
+  ): void {
+    const branch = snapshot.git.currentBranch;
+    const fingerprint = JSON.stringify({
+      branch,
+      dirty: snapshot.git.isDirty,
+      diffStat: snapshot.git.diffStat,
+    });
+    const previous = this.workspaceFileSearchGitState.get(cwd);
+    this.workspaceFileSearchGitState.set(cwd, { branch, fingerprint });
+    if (!previous || previous.fingerprint === fingerprint) return;
+    void invalidateWorkspaceFileSearch(cwd, previous.branch === branch ? "soft" : "hard");
   }
 
   private async handlePaseoWorktreeListRequest(

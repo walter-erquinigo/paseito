@@ -138,6 +138,29 @@ per file. Wide panes show language and provider labels; narrow panes use accessi
 LSP remains available with uncommitted changes, using the exact source revision displayed by each
 comparison. Conflicting unsaved editor buffers remain protected. See [paseito-lsp.md](paseito-lsp.md)
 for session ownership and retry behavior.
+## Workspace file search
+
+`Command+P` searches every tracked and non-ignored untracked file in the active workspace. Results
+come from the complete Git project file set rather than a depth- or entry-bounded directory walk;
+ignored generated and dependency trees remain excluded. The daemon keeps only a brief in-memory
+index, warms it when the workspace becomes active, and refreshes ordinary file changes in the
+background without requiring a persistent database or external file-search executable. Branch
+switches discard the old index before searches resume, so results never cross branch revisions.
+The index does not precompute the repository's ignored paths, and it rejects truncated Git output
+instead of presenting a partial file set. Older hosts show an update-host message before searching.
+
+An absolute path switches Command+P to host-filesystem autocomplete. The daemon searches matching
+files in the path's immediate parent without consulting the workspace Git index or recursively
+scanning the filesystem. Results keep their absolute paths, so files outside the active workspace
+open in the same editable file tab. Older hosts can still search the workspace but report that an
+update is required for absolute paths.
+
+`Enter` opens the selected result in a normal file tab. On desktop web, `Command+Enter` opens the
+right explorer, switches it to **Changes**, and checks the selected path against that surface's
+loaded comparison. A matching file expands and its header is centered only when outside the diff
+viewport. An existing full **Changes** tab remains open and untouched. An unchanged file leaves the
+command center open and reports that the file is not present in **Changes**. Absolute paths inside
+the workspace resolve to the same Changes entry; paths outside it report that they are absent.
 
 ## Markdown preview source links
 

@@ -188,6 +188,7 @@ class RemoteDeploymentTests(unittest.TestCase):
         self.assertIn("fileReviewV1", REMOTE_INSTALL)
         self.assertIn("workspaceLsp", REMOTE_INSTALL)
         self.assertIn("workspaceLspClangd", REMOTE_INSTALL)
+        self.assertIn("workspaceFileSearch", REMOTE_INSTALL)
         self.assertIn("remote-drift:", REMOTE_INSTALL)
         self.assertIn("runtime-integrity.json", REMOTE_INSTALL)
         self.assertIn('chmod -R a-w "$release"', REMOTE_INSTALL)

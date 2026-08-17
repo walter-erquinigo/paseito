@@ -81,6 +81,7 @@ describe("working diff tab identity", () => {
         focusLineStart: 10.9,
         focusLineEnd: 14.8,
         focusColumn: 5.4,
+        focusReveal: "center-if-hidden",
       }),
     ).toEqual({
       kind: "working_diff",
@@ -89,6 +90,7 @@ describe("working diff tab identity", () => {
       focusLineStart: 10,
       focusLineEnd: 14,
       focusColumn: 5,
+      focusReveal: "center-if-hidden",
     });
     expect(normalizeWorkspaceTabTarget({ kind: "working_diff" })).toEqual({
       kind: "working_diff",
@@ -99,6 +101,9 @@ describe("working diff tab identity", () => {
     expect(workspaceTabTargetsEqual(target, target)).toBe(true);
     expect(workspaceTabTargetsEqual(target, { ...target, focusPath: "src/other.ts" })).toBe(false);
     expect(workspaceTabTargetsEqual(target, { ...target, focusRequestId: 2 })).toBe(false);
+    expect(workspaceTabTargetsEqual(target, { ...target, focusReveal: "center-if-hidden" })).toBe(
+      false,
+    );
     const workingDiffId = buildDeterministicWorkspaceTabId(target);
     const otherFocusId = buildDeterministicWorkspaceTabId({
       ...target,
