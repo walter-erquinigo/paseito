@@ -19,6 +19,22 @@ export interface ChangesFileActivation {
   selectedPath: string;
 }
 
+export function resolveChangesHeaderFocusOffset(input: {
+  headerOffset: number;
+  headerHeight: number;
+  viewportOffset: number;
+  viewportHeight: number;
+  reveal?: "center-if-hidden";
+}): number | null {
+  if (input.reveal !== "center-if-hidden") return input.headerOffset;
+  const headerVisible =
+    input.headerOffset >= input.viewportOffset &&
+    input.headerOffset + input.headerHeight <= input.viewportOffset + input.viewportHeight;
+  return headerVisible
+    ? null
+    : Math.max(0, input.headerOffset - (input.viewportHeight - input.headerHeight) / 2);
+}
+
 export type ChangesFileStatus = "added" | "deleted" | "modified";
 
 export function getChangesFileStatus(file: ParsedDiffFile): ChangesFileStatus {

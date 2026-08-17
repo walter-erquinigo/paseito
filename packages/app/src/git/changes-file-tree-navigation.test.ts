@@ -3,6 +3,7 @@ import {
   activateChangesFile,
   buildChangesFileTreeRows,
   getChangesFileStatus,
+  resolveChangesHeaderFocusOffset,
   retainSelectedChangesFile,
 } from "./changes-file-tree-navigation";
 import type { ParsedDiffFile } from "@/git/use-diff-query";
@@ -22,6 +23,35 @@ function createFile(
 }
 
 describe("changes file tree navigation", () => {
+  it("centers hidden command-center targets without moving visible headers", () => {
+    expect(
+      resolveChangesHeaderFocusOffset({
+        headerOffset: 400,
+        headerHeight: 40,
+        viewportOffset: 0,
+        viewportHeight: 240,
+        reveal: "center-if-hidden",
+      }),
+    ).toBe(300);
+    expect(
+      resolveChangesHeaderFocusOffset({
+        headerOffset: 100,
+        headerHeight: 40,
+        viewportOffset: 80,
+        viewportHeight: 240,
+        reveal: "center-if-hidden",
+      }),
+    ).toBeNull();
+    expect(
+      resolveChangesHeaderFocusOffset({
+        headerOffset: 100,
+        headerHeight: 40,
+        viewportOffset: 80,
+        viewportHeight: 240,
+      }),
+    ).toBe(100);
+  });
+
   it("expands a collapsed target and advances repeated focus requests", () => {
     const first = activateChangesFile({
       expandedPaths: ["src/other.ts"],

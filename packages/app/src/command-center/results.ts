@@ -28,6 +28,7 @@ export interface CommandCenterFileResult {
   subtitle: string;
   searchText: string;
   run(): void;
+  runAlternate?(): Promise<"opened" | "absent">;
 }
 
 export interface CommandCenterContributionResult {
