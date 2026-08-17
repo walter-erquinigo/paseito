@@ -8,6 +8,10 @@ import { useWorkspaceLayoutStore } from "@/stores/workspace-layout-store";
 import { clearCommandCenterFocusRestoreElement } from "@/utils/command-center-focus-restore";
 import { buildWorkspaceTabPersistenceKey } from "@/workspace-tabs/model";
 import {
+  createWorkingDiffFileNavigationTarget,
+  waitForInlineWorkingDiffNavigationSnapshot,
+} from "@/workspace/markdown-changes-navigation";
+import {
   describeWorkspaceFilePath,
   type WorkspaceFileSearchEntry,
 } from "./workspace-file-search-model";
@@ -35,6 +39,36 @@ const EMPTY_STATE: WorkspaceFileSearchState = {
   error: null,
 };
 
+export function useWorkspaceFileSearchWarmup(): void {
+  const selection = useActiveWorkspaceSelection();
+  const serverId = selection?.serverId ?? null;
+  const workspaceId = selection?.workspaceId ?? null;
+  const cwd = useWorkspaceDirectory(serverId, workspaceId);
+  const client = useSessionStore((state) =>
+    serverId ? (state.sessions[serverId]?.client ?? null) : null,
+  );
+  const supportsWorkspaceFileSearch = useSessionStore(
+    (state) =>
+      (serverId ? state.sessions[serverId]?.serverInfo?.features?.workspaceFileSearch : false) ===
+      true,
+  );
+
+  useEffect(() => {
+    if (!client || !cwd || !supportsWorkspaceFileSearch) return;
+    void client
+      .getDirectorySuggestions({
+        cwd,
+        query: "",
+        includeFiles: true,
+        includeDirectories: false,
+        matchMode: "fuzzy",
+        prepareOnly: true,
+        limit: FILE_SEARCH_LIMIT,
+      })
+      .catch(() => undefined);
+  }, [client, cwd, supportsWorkspaceFileSearch]);
+}
+
 function errorMessage(error: unknown): string {
   if (!(error instanceof Error)) return String(error);
   if (error.name !== "DaemonRpcError") return error.message;
@@ -51,7 +85,9 @@ export function useWorkspaceFileSearch(input: { enabled: boolean; query: string 
   entries: readonly WorkspaceFileSearchEntry[];
   loading: boolean;
   error: string | null;
+  unsupportedHost: boolean;
   openFile(path: string): void;
+  openFileInChanges(path: string): Promise<"opened" | "absent">;
 } {
   const selection = useActiveWorkspaceSelection();
   const serverId = selection?.serverId ?? null;
@@ -60,14 +96,23 @@ export function useWorkspaceFileSearch(input: { enabled: boolean; query: string 
   const client = useSessionStore((state) =>
     serverId ? (state.sessions[serverId]?.client ?? null) : null,
   );
+  const serverInfo = useSessionStore((state) =>
+    serverId ? (state.sessions[serverId]?.serverInfo ?? null) : null,
+  );
+  // COMPAT(workspaceFileSearch): added in Paseito v0.4.0-paseito.20, remove after 2027-02-17.
+  const supportsWorkspaceFileSearch = serverInfo?.features?.workspaceFileSearch === true;
+  const unsupportedHost = Boolean(client && cwd && serverInfo && !supportsWorkspaceFileSearch);
   const [state, setState] = useState<WorkspaceFileSearchState>(EMPTY_STATE);
   const sourceKey = useMemo(
     () => (serverId && workspaceId && cwd && client ? `${serverId}\0${workspaceId}\0${cwd}` : null),
     [client, cwd, serverId, workspaceId],
   );
   const requestKey = useMemo(
-    () => (input.enabled && sourceKey ? `${sourceKey}\0${input.query}` : null),
-    [input.enabled, input.query, sourceKey],
+    () =>
+      input.enabled && supportsWorkspaceFileSearch && sourceKey
+        ? `${sourceKey}\0${input.query}`
+        : null,
+    [input.enabled, input.query, sourceKey, supportsWorkspaceFileSearch],
   );
 
   useEffect(() => {
@@ -139,10 +184,38 @@ export function useWorkspaceFileSearch(input: { enabled: boolean; query: string 
     [serverId, workspaceId],
   );
 
+  const openFileInChanges = useCallback(
+    async (path: string): Promise<"opened" | "absent"> => {
+      if (!serverId || !workspaceId || !cwd) {
+        throw new Error("The workspace is unavailable.");
+      }
+      const workspaceKey = buildWorkspaceTabPersistenceKey({ serverId, workspaceId });
+      if (!workspaceKey) {
+        throw new Error("The workspace is unavailable.");
+      }
+      const panelStore = usePanelStore.getState();
+      const checkout = { serverId, cwd, isGit: true };
+      panelStore.setExplorerTabForCheckout({ ...checkout, tab: "changes" });
+      panelStore.openFileExplorerForCheckout({ isCompact: false, checkout });
+      const snapshot = await waitForInlineWorkingDiffNavigationSnapshot({ workspaceKey });
+      if (!snapshot.files.some((file) => file.path === path)) {
+        return "absent";
+      }
+      clearCommandCenterFocusRestoreElement();
+      snapshot.navigate(
+        createWorkingDiffFileNavigationTarget({ current: { kind: "working_diff" }, path }),
+      );
+      return "opened";
+    },
+    [cwd, serverId, workspaceId],
+  );
+
   return {
     entries: requestKey && state.sourceKey === sourceKey ? state.entries : [],
     loading: Boolean(requestKey) && (state.requestKey !== requestKey || state.loading),
     error: state.requestKey === requestKey ? state.error : null,
+    unsupportedHost,
     openFile,
+    openFileInChanges,
   };
 }

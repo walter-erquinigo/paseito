@@ -88,6 +88,10 @@ const COMMAND_CENTER_SNAP_POINTS = ["60%", "90%"];
 const KEYBOARD_SHOULD_PERSIST_TAPS = "always" as const;
 const DEFAULT_CATEGORY_RESULT_LIMIT = 5;
 
+function describeCommandCenterError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 function sortAgents(left: AggregatedAgent, right: AggregatedAgent): number {
   const leftNeedsInput = (left.pendingPermissionCount ?? 0) > 0 ? 1 : 0;
   const rightNeedsInput = (right.pendingPermissionCount ?? 0) > 0 ? 1 : 0;
@@ -214,9 +218,12 @@ interface CommandCenterState {
   inputRef: React.RefObject<TextInput | null>;
   fileSearchLoading: boolean;
   fileSearchError: string | null;
+  fileSearchUnsupportedHost: boolean;
+  fileActionError: string | null;
+  fileActionLoading: boolean;
   close(): void;
   select(result: CommandCenterResult): void;
-  key(key: string): boolean;
+  key(input: { key: string; metaKey?: boolean }): boolean;
 }
 
 function useCommandCenterState(): CommandCenterState {
@@ -230,12 +237,18 @@ function useCommandCenterState(): CommandCenterState {
   const previousOpenRef = useRef(open);
   const [query, setQuery] = useState("");
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [fileActionError, setFileActionError] = useState<string | null>(null);
+  const [fileActionLoading, setFileActionLoading] = useState(false);
+  const fileActionRequestRef = useRef(0);
+  const fileActionPendingRef = useRef(false);
   const builtInSections = useBuiltInSections(open, query);
   const {
     entries: fileSearchEntries,
     loading: fileSearchLoading,
     error: fileSearchError,
+    unsupportedHost: fileSearchUnsupportedHost,
     openFile,
+    openFileInChanges,
   } = useWorkspaceFileSearch({
     enabled: open && (scope === "files" || Boolean(query.trim())),
     query,
@@ -249,9 +262,10 @@ function useCommandCenterState(): CommandCenterState {
       subtitle: entry.directory,
       searchText: entry.path.toLowerCase(),
       run: () => openFile(entry.path),
+      runAlternate: () => openFileInChanges(entry.path),
     }));
     return [{ id: "files", rank: 4, title: t("shell.commandCenter.files"), results }];
-  }, [fileSearchEntries, openFile, t]);
+  }, [fileSearchEntries, openFile, openFileInChanges, t]);
   const contributionSections = useMemo(
     () => buildContributionSections(snapshot.contributions, query),
     [query, snapshot.contributions],
@@ -275,8 +289,40 @@ function useCommandCenterState(): CommandCenterState {
     },
     [setOpen],
   );
+  const selectAlternate = useCallback(
+    (result: CommandCenterFileResult) => {
+      if (!result.runAlternate || fileActionPendingRef.current) return;
+      const requestId = fileActionRequestRef.current + 1;
+      fileActionRequestRef.current = requestId;
+      setFileActionError(null);
+      setFileActionLoading(true);
+      fileActionPendingRef.current = true;
+      void result
+        .runAlternate()
+        .then((status) => {
+          if (fileActionRequestRef.current !== requestId) return undefined;
+          if (status === "opened") {
+            setOpen(false);
+            return undefined;
+          }
+          setFileActionError(t("shell.commandCenter.fileNotPresentInChanges"));
+          return undefined;
+        })
+        .catch((error) => {
+          if (fileActionRequestRef.current !== requestId) return;
+          setFileActionError(describeCommandCenterError(error));
+        })
+        .finally(() => {
+          if (fileActionRequestRef.current === requestId) {
+            fileActionPendingRef.current = false;
+            setFileActionLoading(false);
+          }
+        });
+    },
+    [setOpen, t],
+  );
   const key = useCallback(
-    (pressed: string): boolean => {
+    ({ key: pressed, metaKey = false }: { key: string; metaKey?: boolean }): boolean => {
       if (!open) return false;
       const results = projection.selectableResults;
       if (pressed === "Escape") {
@@ -290,17 +336,41 @@ function useCommandCenterState(): CommandCenterState {
       if (pressed === "Enter") {
         const selected = results.find((result) => result.id === resolvedActiveId);
         if (!selected) return false;
+        if (metaKey) {
+          if (selected.kind !== "file") return false;
+          selectAlternate(selected);
+          return true;
+        }
         select(selected);
         return true;
       }
       if (pressed !== "ArrowDown" && pressed !== "ArrowUp") return false;
       if (results.length === 0) return false;
       const direction = pressed === "ArrowDown" ? "next" : "previous";
+      setFileActionError(null);
       setActiveId(moveActiveResultId(resolvedActiveId, results, direction));
       return true;
     },
-    [close, open, projection.selectableResults, query, resolvedActiveId, scope, select, setScope],
+    [
+      close,
+      open,
+      projection.selectableResults,
+      query,
+      resolvedActiveId,
+      scope,
+      select,
+      selectAlternate,
+      setScope,
+    ],
   );
+
+  const updateQuery = useCallback((nextQuery: string) => {
+    fileActionRequestRef.current += 1;
+    fileActionPendingRef.current = false;
+    setFileActionError(null);
+    setFileActionLoading(false);
+    setQuery(nextQuery);
+  }, []);
 
   useEffect(() => {
     const wasOpen = previousOpenRef.current;
@@ -311,6 +381,10 @@ function useCommandCenterState(): CommandCenterState {
     }
     setQuery("");
     setActiveId(null);
+    fileActionRequestRef.current += 1;
+    fileActionPendingRef.current = false;
+    setFileActionError(null);
+    setFileActionLoading(false);
     if (!wasOpen) return;
     const element = takeCommandCenterFocusRestoreElement();
     if (!element) return;
@@ -328,7 +402,7 @@ function useCommandCenterState(): CommandCenterState {
     scope,
     clearScope: () => setScope(null),
     query,
-    setQuery,
+    setQuery: updateQuery,
     activeId: resolvedActiveId,
     rows: projection.rows,
     results: projection.selectableResults,
@@ -337,6 +411,9 @@ function useCommandCenterState(): CommandCenterState {
     inputRef,
     fileSearchLoading,
     fileSearchError,
+    fileSearchUnsupportedHost,
+    fileActionError,
+    fileActionLoading,
     close,
     select,
     key,
@@ -625,10 +702,23 @@ export function CommandCenter() {
   const keyExtractor = useCallback((row: CommandCenterListRow) => row.key, []);
   const empty = useMemo(
     () =>
-      state.fileSearchError || state.fileSearchLoading ? null : (
+      state.fileSearchError || state.fileSearchLoading || state.fileSearchUnsupportedHost ? null : (
         <Text style={styles.emptyText}>{t("shell.commandCenter.noMatches")}</Text>
       ),
-    [state.fileSearchError, state.fileSearchLoading, t],
+    [state.fileSearchError, state.fileSearchLoading, state.fileSearchUnsupportedHost, t],
+  );
+  const fileSearchUnsupportedHost = useMemo(
+    () =>
+      state.fileSearchUnsupportedHost ? (
+        <Text
+          accessibilityLiveRegion="polite"
+          style={styles.errorText}
+          testID="command-center-file-search-unsupported-host"
+        >
+          {t("shell.commandCenter.fileSearchRequiresHostUpdate")}
+        </Text>
+      ) : null,
+    [state.fileSearchUnsupportedHost, t],
   );
   const fileSearchError = useMemo(
     () =>
@@ -642,6 +732,19 @@ export function CommandCenter() {
         </Text>
       ) : null,
     [state.fileSearchError, t],
+  );
+  const fileActionError = useMemo(
+    () =>
+      state.fileActionError ? (
+        <Text
+          accessibilityLiveRegion="polite"
+          style={styles.errorText}
+          testID="command-center-file-action-error"
+        >
+          {state.fileActionError}
+        </Text>
+      ) : null,
+    [state.fileActionError],
   );
   const commonListProps = {
     data: state.rows,
@@ -661,13 +764,13 @@ export function CommandCenter() {
     scrollEventThrottle: 16,
   };
   const keyPress = useCallback(
-    ({ nativeEvent: { key } }: { nativeEvent: { key: string } }) => state.key(key),
+    ({ nativeEvent: { key } }: { nativeEvent: { key: string } }) => state.key({ key }),
     [state],
   );
-  const submit = useCallback(() => state.key("Enter"), [state]);
+  const submit = useCallback(() => state.key({ key: "Enter" }), [state]);
   const handleWebOverlayKeyDown = useCallback(
     (event: KeyboardEvent) => {
-      if (!state.key(event.key)) return false;
+      if (!state.key({ key: event.key, metaKey: event.metaKey })) return false;
       event.preventDefault();
       return true;
     },
@@ -725,11 +828,13 @@ export function CommandCenter() {
             autoFocus
           />
           <FileSearchLoadingIndicator
-            loading={state.fileSearchLoading}
+            loading={state.fileSearchLoading || state.fileActionLoading}
             label={t("shell.commandCenter.searchingFiles")}
           />
         </View>
         {fileSearchError}
+        {fileSearchUnsupportedHost}
+        {fileActionError}
         <BottomSheetFlatList ref={bottomSheetListRef} {...commonListProps} />
       </IsolatedBottomSheetModal>
     );
@@ -761,11 +866,13 @@ export function CommandCenter() {
                 autoFocus
               />
               <FileSearchLoadingIndicator
-                loading={state.fileSearchLoading}
+                loading={state.fileSearchLoading || state.fileActionLoading}
                 label={t("shell.commandCenter.searchingFiles")}
               />
             </View>
             {fileSearchError}
+            {fileSearchUnsupportedHost}
+            {fileActionError}
             <FlatList ref={listRef} {...commonListProps} />
           </View>
         </View>

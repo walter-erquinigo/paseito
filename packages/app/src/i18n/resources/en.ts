@@ -55,6 +55,8 @@ export const en = {
       placeholder: "Search commands, files, workspaces, and agents...",
       filePlaceholder: "Search files...",
       searchingFiles: "Searching files...",
+      fileNotPresentInChanges: "This file is not present in Changes.",
+      fileSearchRequiresHostUpdate: "Update this host to search all workspace files.",
       noMatches: "No matches",
       actions: "Actions",
       files: "Files",

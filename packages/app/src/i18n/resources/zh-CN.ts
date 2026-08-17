@@ -57,6 +57,8 @@ export const zhCN: TranslationResources = {
       placeholder: "搜索命令、文件、工作区和 Agent...",
       filePlaceholder: "搜索文件...",
       searchingFiles: "正在搜索文件...",
+      fileNotPresentInChanges: "此文件不在更改中。",
+      fileSearchRequiresHostUpdate: "请更新此主机以搜索工作区中的所有文件。",
       noMatches: "没有匹配项",
       actions: "操作",
       files: "文件",

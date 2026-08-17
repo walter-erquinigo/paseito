@@ -5,6 +5,7 @@ import {
   expectOneLineTruncatedFileResult,
   expectStableCommandCenterLayout,
   failDirectorySuggestionRequests,
+  hideWorkspaceFileSearchCapability,
   startCommandCenterLayoutObservation,
 } from "../support/helpers/command-center-file-search";
 import { expectFileTabOpen } from "../support/helpers/file-explorer";
@@ -112,6 +113,80 @@ test("dropping the files scope leaves the search row the same height", async ({ 
   }
 });
 
+test("Command+Enter opens changed files in Changes and keeps missing files in the dialog", async ({
+  page,
+}) => {
+  test.setTimeout(120_000);
+  const changedPath = "src/command-center-changed.ts";
+  const secondChangedPath = "src/command-center-second-changed.ts";
+  const unchangedPath = "src/command-center-unchanged.ts";
+  const seeded = await seedWorkspace({
+    repoPrefix: "command-center-open-changes-",
+    title: "Command Center Changes navigation",
+    repo: {
+      files: [
+        { path: changedPath, content: "export const changed = 1;\n" },
+        { path: secondChangedPath, content: "export const secondChanged = 1;\n" },
+        { path: unchangedPath, content: "export const unchanged = true;\n" },
+      ],
+    },
+  });
+
+  try {
+    await writeFile(path.join(seeded.repoPath, changedPath), "export const changed = 2;\n");
+    await writeFile(
+      path.join(seeded.repoPath, secondChangedPath),
+      "export const secondChanged = 2;\n",
+    );
+    await gotoWorkspace(page, seeded.workspaceId);
+    await page.keyboard.press("Meta+P");
+
+    let panel = page.getByTestId("command-center-panel");
+    await panel.getByTestId("command-center-input").fill("command-center-changed");
+    await expect(panel.getByRole("button", { name: /command-center-changed\.ts/ })).toBeVisible();
+    await page.keyboard.press("Meta+Enter");
+
+    await expect(panel).toBeHidden({ timeout: 30_000 });
+    const changes = page.getByTestId("explorer-content-area");
+    await expect(changes).toBeVisible();
+    await expect(
+      changes.getByTestId("diff-file-0-toggle").getByText("command-center-changed.ts", {
+        exact: true,
+      }),
+    ).toBeInViewport();
+    await expect(page.getByTestId("working-diff-panel")).toHaveCount(0);
+
+    await page.getByTestId("changes-open-tab").click();
+    await expect(page.getByTestId("working-diff-panel")).toBeVisible();
+    await page.getByTestId("explorer-tab-files").click();
+    await page.keyboard.press("Meta+P");
+    panel = page.getByTestId("command-center-panel");
+    await panel.getByTestId("command-center-input").fill("command-center-second-changed");
+    await expect(
+      panel.getByRole("button", { name: /command-center-second-changed\.ts/ }),
+    ).toBeVisible();
+    await page.keyboard.press("Meta+Enter");
+    await expect(panel).toBeHidden({ timeout: 30_000 });
+    await expect(page.getByTestId("explorer-tab-changes")).toBeVisible();
+    await expect(
+      changes.getByText("command-center-second-changed.ts", { exact: true }).first(),
+    ).toBeInViewport();
+
+    await page.keyboard.press("Meta+P");
+    panel = page.getByTestId("command-center-panel");
+    await panel.getByTestId("command-center-input").fill("command-center-unchanged");
+    await expect(panel.getByRole("button", { name: /command-center-unchanged\.ts/ })).toBeVisible();
+    await page.keyboard.press("Meta+Enter");
+
+    await expect(panel).toBeVisible();
+    await expect(panel.getByTestId("command-center-file-action-error")).toHaveText(
+      "This file is not present in Changes.",
+    );
+  } finally {
+    await seeded.cleanup();
+  }
+});
+
 test("unscoped command search keeps commands visible and reports file-search failures", async ({
   page,
 }) => {
@@ -137,3 +212,28 @@ test("unscoped command search keeps commands visible and reports file-search fai
     await Promise.allSettled(seeded.map((workspace) => workspace.cleanup()));
   }
 });
+
+test("an older host reports that exhaustive file search requires an update", async ({ page }) => {
+  const seeded = await seedWorkspace({
+    repoPrefix: "command-center-file-search-old-host-",
+    title: "Old file-search host",
+  });
+
+  try {
+    const gate = await hideWorkspaceFileSearchCapability(page);
+    await gotoWorkspace(page, seeded.workspaceId);
+    await page.keyboard.press("Meta+P");
+
+    const panel = page.getByTestId("command-center-panel");
+    await panel.getByTestId("command-center-input").fill("README.md");
+    await expect(panel.getByTestId("command-center-file-search-unsupported-host")).toHaveText(
+      "Update this host to search all workspace files.",
+    );
+    await expect(panel.getByText("No matches", { exact: true })).toHaveCount(0);
+    expect(gate.requestCount()).toBe(0);
+  } finally {
+    await seeded.cleanup();
+  }
+});
+import { writeFile } from "node:fs/promises";
+import path from "node:path";

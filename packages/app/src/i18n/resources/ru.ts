@@ -57,6 +57,9 @@ export const ru: TranslationResources = {
       placeholder: "Поиск команд, файлов, рабочих пространств и агентов...",
       filePlaceholder: "Поиск файлов...",
       searchingFiles: "Поиск файлов...",
+      fileNotPresentInChanges: "Этого файла нет в изменениях.",
+      fileSearchRequiresHostUpdate:
+        "Обновите этот хост, чтобы искать во всех файлах рабочего пространства.",
       noMatches: "Нет совпадений",
       actions: "Действия",
       files: "Файлы",

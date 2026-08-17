@@ -167,6 +167,17 @@ describe("project command-center protocol", () => {
     expect(parsed.features?.workspaceGithubRepositorySearch).toBeUndefined();
     expect(parsed.features?.projectGithubClone).toBeUndefined();
     expect(parsed.features?.projectCreateDirectory).toBeUndefined();
+    expect(parsed.features?.workspaceFileSearch).toBeUndefined();
+  });
+
+  it("parses the exhaustive workspace-file-search capability", () => {
+    const parsed = parseServerInfoStatusPayload({
+      status: "server_info",
+      serverId: "server-new",
+      features: { workspaceFileSearch: true },
+    });
+
+    expect(parsed.features?.workspaceFileSearch).toBe(true);
   });
 
   it("parses the agent thinking update capability", () => {
