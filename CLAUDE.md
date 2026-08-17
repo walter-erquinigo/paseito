@@ -264,5 +264,12 @@ instead of editing the list by hand.
   - Fix: Keep exhaustive project-file search fast and preserve alternate navigation into the active Changes comparison.
   - Fix: Gate exhaustive search on daemon support, bypass redundant ignored-path enumeration, and reject truncated Git file corpora.
   - Fix: Route Command+Enter to the right Changes sidebar even when a full Changes tab exists.
+  - Fix: Keep absolute host-path autocomplete outside the Git index and preserve editable absolute file tabs.
+- `desktop-gitlab-mr-tracker` — Track GitLab merge requests in a read-only desktop sidebar surface without porting MR Tracker automations or personal configuration.
+  - Fix: Keep GitLab access tokens outside renderer-visible state and the repository, stored locally with owner-only permissions without Keychain, and preserve credentials across ordinary desktop upgrades.
+  - Fix: Keep the unconfigured tracker free of dead controls and provide direct, security-explained setup actions.
+  - Fix: Keep every local triage label understandable through concise desktop hover and keyboard-focus explanations.
+  - Fix: Keep MR triage left-anchored while summary navigation, detail expansion, and importance controls remain independent interactions.
+  - Fix: Keep MR triage binary as Important or Ignore, normalize legacy local choices to Ignore, and provide an accessible Important-only filter beside search.
 
 <!-- PASEITO-LOCAL-FEATURES:END -->
