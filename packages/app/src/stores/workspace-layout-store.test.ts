@@ -526,6 +526,42 @@ describe("workspace-layout-store actions", () => {
     ).toEqual(override);
   });
 
+  it("keeps Changes identity and state while retargeting navigation", () => {
+    const workspaceKey = createWorkspaceKey();
+    const store = workspaceLayoutStore.getState();
+    const changesTabId = store.openTab({
+      workspaceKey,
+      target: { kind: "working_diff" },
+      intent: "new",
+    })!;
+    const changesState: ChangesState = { ...defaultChangesState, wrapLines: true };
+    store.setTabState(workspaceKey, changesTabId, changesState);
+
+    const replacementTabId = store.replaceTab(workspaceKey, changesTabId, {
+      kind: "working_diff",
+      focusPath: "src/example.ts",
+      focusRequestId: 7,
+      focusLineStart: 40,
+      focusColumn: 180,
+    });
+    const replacement = collectAllTabs(
+      workspaceLayoutStore.getState().layoutByWorkspace[workspaceKey].root,
+    ).find((tab) => tab.tabId === changesTabId);
+
+    expect(replacementTabId).toBe(changesTabId);
+    expect(replacement).toMatchObject({
+      tabId: changesTabId,
+      target: {
+        kind: "working_diff",
+        focusPath: "src/example.ts",
+        focusRequestId: 7,
+        focusLineStart: 40,
+        focusColumn: 180,
+      },
+      state: changesState,
+    });
+  });
+
   it("keeps every Changes presentation field independent across explicit instances", () => {
     const workspaceKey = createWorkspaceKey();
     const store = workspaceLayoutStore.getState();
@@ -2627,6 +2663,10 @@ describe("workspace-layout-store actions", () => {
       target: {
         kind: "working_diff",
         focusPath: "src/a.ts",
+        focusRequestId: 9,
+        focusLineStart: 12,
+        focusColumn: 4,
+        focusReveal: "center-if-hidden",
       },
       intent: "reveal",
     });
@@ -2655,6 +2695,7 @@ describe("workspace-layout-store actions", () => {
       {
         kind: "working_diff",
         focusPath: "src/a.ts",
+        focusRequestId: 9,
       },
     ]);
   });
