@@ -69,6 +69,7 @@ export interface CommandCenterFileResult {
   title: string;
   subtitle: string;
   run(): void;
+  runAlternate?(): Promise<"opened" | "absent">;
 }
 
 export interface CommandCenterContributionResult {

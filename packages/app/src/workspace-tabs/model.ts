@@ -18,6 +18,7 @@ export interface WorkspaceWorkingDiffTabTarget {
   focusLineStart?: number;
   focusLineEnd?: number;
   focusColumn?: number;
+  focusReveal?: "center-if-hidden";
 }
 
 export type PluginWorkspaceTabTarget =

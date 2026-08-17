@@ -4,6 +4,20 @@ export interface WorkspaceFileSearchEntry {
   directory: string;
 }
 
+export type UnsupportedFileSearchHost = "workspace" | "absolute" | null;
+
+export function resolveUnsupportedFileSearchHost(input: {
+  hostAvailable: boolean;
+  supportsWorkspaceFileSearch: boolean;
+  searchesAbsolutePath: boolean;
+  supportsAbsolutePathSearch: boolean;
+}): UnsupportedFileSearchHost {
+  if (!input.hostAvailable) return null;
+  if (!input.supportsWorkspaceFileSearch) return "workspace";
+  if (input.searchesAbsolutePath && !input.supportsAbsolutePathSearch) return "absolute";
+  return null;
+}
+
 export function describeWorkspaceFilePath(path: string): WorkspaceFileSearchEntry {
   const normalized = path.replace(/\\/g, "/");
   const separator = normalized.lastIndexOf("/");

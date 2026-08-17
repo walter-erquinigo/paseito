@@ -3,7 +3,7 @@ import type { AgentRequests } from "./agent/requests/index.js";
 import equal from "fast-deep-equal";
 import { v4 as uuidv4 } from "uuid";
 import { lstat, mkdir, mkdtemp, rename, rm, stat } from "node:fs/promises";
-import { basename, resolve, sep } from "path";
+import { basename, parse, resolve, sep } from "path";
 import { homedir } from "node:os";
 import { CLIENT_CAPS, type ClientCapability } from "@getpaseo/protocol/client-capabilities";
 import { formatPluginSourceReference } from "@getpaseo/protocol/plugin-source-reference";
@@ -4478,6 +4478,7 @@ export class Session {
       limit,
       requestId,
       cwd,
+      filesystemPath,
       includeFiles,
       includeDirectories,
       matchMode,
@@ -4486,26 +4487,31 @@ export class Session {
 
     try {
       const workspaceCwd = cwd?.trim();
-      const searchesWorkspace = Boolean(workspaceCwd);
+      const filesystemRoot = filesystemPath ? parse(query.trim()).root : "";
+      if (filesystemPath && !filesystemRoot) {
+        throw new Error("Filesystem path search requires an absolute path.");
+      }
+      const searchesWorkspace = !filesystemPath && Boolean(workspaceCwd);
       const workspaceRoot = workspaceCwd ? expandTilde(workspaceCwd) : null;
       const isCancelled = this.registerWorkspaceFileSearchRequest({
-        workspaceRoot,
+        workspaceRoot: filesystemRoot || workspaceRoot,
         includeFiles,
         includeDirectories,
         matchMode,
       });
       const entries = await searchDirectoryEntries({
-        root: workspaceRoot ?? process.env.HOME ?? homedir(),
+        root: filesystemRoot || workspaceRoot || process.env.HOME || homedir(),
         query,
         pathFormat: searchesWorkspace ? "relative" : "absolute",
         pathQueryPolicy: searchesWorkspace ? "slashes" : "rooted",
         blankQueryBehavior: searchesWorkspace ? "children" : "none",
-        rootAliases: searchesWorkspace ? [] : ["~"],
+        rootAliases: searchesWorkspace || filesystemPath ? [] : ["~"],
         traversableHiddenDirectoryNames: searchesWorkspace
           ? WORKSPACE_SEARCH_HIDDEN_DIRECTORIES
           : [],
         confidentResultScanThreshold: searchesWorkspace ? undefined : 5_000,
         respectGitIgnore: searchesWorkspace,
+        retrieveExactPath: filesystemPath,
         includeFiles,
         includeDirectories,
         matchMode,
