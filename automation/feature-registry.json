@@ -391,6 +391,36 @@
         "packages/protocol/src/messages.ts",
         "packages/server/src/server/agent"
       ]
+    },
+    {
+      "id": "workspace-file-search-navigation",
+      "commitSubject": "feat(command-center): search every workspace file",
+      "preservationFixes": [
+        "Keep exhaustive project-file search fast and preserve alternate navigation into the active Changes comparison.",
+        "Gate exhaustive search on daemon support, bypass redundant ignored-path enumeration, and reject truncated Git file corpora."
+      ],
+      "permanent": false,
+      "intent": "Find every eligible workspace file from Command+P and open it either as source or in Changes.",
+      "invariants": [
+        "Workspace file search ranks the complete tracked and non-ignored untracked Git file set while returning only a bounded result window; ignored generated and dependency output stays excluded.",
+        "The daemon prewarms a bounded in-memory project-file index for the active workspace without adding a persistent database or external search-tool dependency, and non-Git workspaces retain an exhaustive filesystem fallback.",
+        "Superseded searches yield cooperatively and stop ranking, ordinary file changes refresh in the background, and branch switches hard-invalidate the previous revision before search resumes.",
+        "Complete Git file search starts without enumerating ignored paths, treats truncated Git output as unusable, and old hosts show an update-required state instead of incomplete results.",
+        "Enter and pointer activation open the normal file tab, while Command+Enter on web opens or reuses the full Changes tab and checks the file against its exact loaded comparison.",
+        "A present Changes file expands and centers its header only when hidden; an already-visible header does not move, and file-tree navigation retains top alignment.",
+        "An absent file leaves Command+P open with an accessible inline error, while loading and transport failures remain distinct from absence."
+      ],
+      "contracts": [
+        "npx vitest run packages/server/src/utils/directory-suggestions.test.ts packages/app/src/workspace/markdown-changes-navigation.test.ts packages/app/src/git/changes-file-tree-navigation.test.ts packages/app/src/workspace-tabs/identity.test.ts packages/app/src/stores/workspace-layout-store.test.ts --bail=1",
+        "npm run test:e2e --workspace=@getpaseo/app -- e2e/browser/command-center-file-search.spec.ts"
+      ],
+      "paths": [
+        "packages/server/src/utils/directory-suggestions.ts",
+        "packages/app/src/command-center",
+        "packages/app/src/workspace/markdown-changes-navigation.ts",
+        "packages/app/src/git/diff-pane.tsx",
+        "docs/paseito-changes.md"
+      ]
     }
   ]
 }

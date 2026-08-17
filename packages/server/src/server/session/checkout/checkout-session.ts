@@ -74,6 +74,7 @@ export interface CheckoutSessionHost {
     cwd: string,
     branch: string,
   ): Promise<{ previousBranch: string | null; currentBranch: string | null }>;
+  invalidateWorkspaceFileSearch?(cwd: string): Promise<void>;
 }
 
 type CurrentWorkspacePullRequest = NonNullable<
@@ -568,6 +569,7 @@ export class CheckoutSession {
 
     try {
       const checkoutResult = await this.gitMutation.checkoutExistingBranch(cwd, branch);
+      await this.host.invalidateWorkspaceFileSearch?.(cwd);
       this.scheduleDiffRefresh(cwd);
 
       // Push a workspace_update immediately so the sidebar/header reflect

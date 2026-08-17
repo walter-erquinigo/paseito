@@ -24,6 +24,10 @@ interface RegisteredWorkingDiffSnapshot {
 }
 
 const workingDiffSnapshots = new Map<string, RegisteredWorkingDiffSnapshot>();
+const workingDiffSnapshotListeners = new Map<
+  string,
+  Set<(snapshot: WorkingDiffNavigationSnapshot) => void>
+>();
 const inlineWorkingDiffSnapshots = new Map<
   string,
   { owner: object; snapshot: InlineWorkingDiffNavigationSnapshot }
@@ -36,6 +40,9 @@ export function publishWorkingDiffNavigationSnapshot(
   snapshot: WorkingDiffNavigationSnapshot,
 ): void {
   workingDiffSnapshots.set(workspaceKey, { owner, snapshot });
+  for (const listener of workingDiffSnapshotListeners.get(workspaceKey) ?? []) {
+    listener(snapshot);
+  }
 }
 
 export function clearWorkingDiffNavigationSnapshot(workspaceKey: string, owner: object): void {
@@ -48,6 +55,34 @@ export function getWorkingDiffNavigationSnapshot(
   workspaceKey: string,
 ): WorkingDiffNavigationSnapshot | null {
   return workingDiffSnapshots.get(workspaceKey)?.snapshot ?? null;
+}
+
+export function waitForWorkingDiffNavigationSnapshot(input: {
+  workspaceKey: string;
+  tabId: string;
+  timeoutMs?: number;
+}): Promise<WorkingDiffNavigationSnapshot> {
+  const current = getWorkingDiffNavigationSnapshot(input.workspaceKey);
+  if (current?.tabId === input.tabId && !current.isLoading) {
+    return Promise.resolve(current);
+  }
+  return new Promise((resolve, reject) => {
+    const listeners = workingDiffSnapshotListeners.get(input.workspaceKey) ?? new Set();
+    const finish = (snapshot: WorkingDiffNavigationSnapshot) => {
+      if (snapshot.tabId !== input.tabId || snapshot.isLoading) return;
+      clearTimeout(timeout);
+      listeners.delete(finish);
+      if (listeners.size === 0) workingDiffSnapshotListeners.delete(input.workspaceKey);
+      resolve(snapshot);
+    };
+    const timeout = setTimeout(() => {
+      listeners.delete(finish);
+      if (listeners.size === 0) workingDiffSnapshotListeners.delete(input.workspaceKey);
+      reject(new Error("Changes did not finish loading."));
+    }, input.timeoutMs ?? 15_000);
+    listeners.add(finish);
+    workingDiffSnapshotListeners.set(input.workspaceKey, listeners);
+  });
 }
 
 export function publishInlineWorkingDiffNavigationSnapshot(
@@ -155,6 +190,20 @@ export function createWorkingDiffNavigationTarget(input: {
     focusLineStart: lineStart,
     ...(lineEnd && lineEnd >= lineStart ? { focusLineEnd: lineEnd } : {}),
     ...(column ? { focusColumn: column } : {}),
+  };
+}
+
+export function createWorkingDiffFileNavigationTarget(input: {
+  current: WorkspaceWorkingDiffTabTarget;
+  path: string;
+}): WorkspaceWorkingDiffTabTarget {
+  const currentRequestId = normalizePositiveInteger(input.current.focusRequestId) ?? 0;
+  lastWorkingDiffFocusRequestId = Math.max(lastWorkingDiffFocusRequestId, currentRequestId) + 1;
+  return {
+    kind: "working_diff",
+    focusPath: input.path,
+    focusRequestId: lastWorkingDiffFocusRequestId,
+    focusReveal: "center-if-hidden",
   };
 }
 

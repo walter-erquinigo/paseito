@@ -3,11 +3,15 @@ import type { ParsedDiffFile } from "@getpaseo/protocol/messages";
 import {
   canNavigateToCurrentLine,
   clearInlineWorkingDiffNavigationSnapshot,
+  clearWorkingDiffNavigationSnapshot,
+  createWorkingDiffFileNavigationTarget,
   createWorkingDiffNavigationTarget,
   getInlineWorkingDiffNavigationSnapshot,
   publishInlineWorkingDiffNavigationSnapshot,
+  publishWorkingDiffNavigationSnapshot,
   resolveMarkdownChangesNavigation,
   resolveMarkdownInlineChangesNavigation,
+  waitForWorkingDiffNavigationSnapshot,
   type InlineWorkingDiffNavigationSnapshot,
   type WorkingDiffNavigationSnapshot,
 } from "./markdown-changes-navigation";
@@ -178,5 +182,38 @@ describe("Markdown Changes navigation", () => {
     });
     expect(first.focusRequestId).toBeGreaterThan(0);
     expect(second.focusRequestId).toBeGreaterThan(first.focusRequestId ?? 0);
+  });
+
+  it("creates a center-if-hidden file-header target without line navigation", () => {
+    const target = createWorkingDiffFileNavigationTarget({
+      current: { kind: "working_diff", focusRequestId: 12, focusLineStart: 99 },
+      path: "src/example.ts",
+    });
+    expect(target).toEqual({
+      kind: "working_diff",
+      focusPath: "src/example.ts",
+      focusRequestId: expect.any(Number),
+      focusReveal: "center-if-hidden",
+    });
+    expect(target.focusRequestId).toBeGreaterThan(12);
+  });
+
+  it("waits for the requested Changes tab to finish loading", async () => {
+    const workspaceKey = "server:waiting-workspace";
+    const owner = {};
+    const pending = waitForWorkingDiffNavigationSnapshot({ workspaceKey, tabId: "target" });
+    publishWorkingDiffNavigationSnapshot(workspaceKey, owner, {
+      ...snapshot(),
+      tabId: "other",
+    });
+    publishWorkingDiffNavigationSnapshot(workspaceKey, owner, {
+      ...snapshot(),
+      tabId: "target",
+      isLoading: true,
+    });
+    const ready = { ...snapshot(), tabId: "target" };
+    publishWorkingDiffNavigationSnapshot(workspaceKey, owner, ready);
+    await expect(pending).resolves.toBe(ready);
+    clearWorkingDiffNavigationSnapshot(workspaceKey, owner);
   });
 });

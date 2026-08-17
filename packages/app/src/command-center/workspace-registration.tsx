@@ -22,6 +22,7 @@ import {
   buildWorkspaceCommandCenterContributions,
   type WorkspaceCommandCenterShortcuts,
 } from "./workspace-contributions";
+import { useWorkspaceFileSearchWarmup } from "./workspace-file-search";
 
 const WORKSPACE_COMMAND_CENTER_ICONS = {
   newAgent: getCommandCenterIcon(SquarePen),
@@ -107,6 +108,7 @@ export function useWorkspaceCommandCenterActions(): void {
 }
 
 export function CommandCenterWorkspaceActions() {
+  useWorkspaceFileSearchWarmup();
   useWorkspaceCommandCenterActions();
   return null;
 }

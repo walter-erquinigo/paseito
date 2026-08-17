@@ -188,14 +188,14 @@ test "$(jq -r .version "$extract/paseito-daemon/manifest.json")" = "$version"
 daemon_version="$(jq -r .daemonVersion "$extract/paseito-daemon/manifest.json")"
 test -n "$daemon_version"
 test "$(jq -r .feature "$extract/paseito-daemon/manifest.json")" = changesBaseSelector
-test "$(jq -r '.features // [.feature] | contains(["changesContextExpansion", "reviewSuggestionsV1", "fileReviewV1", "workspaceLsp", "workspaceLspClangd"])' "$extract/paseito-daemon/manifest.json")" = true
+test "$(jq -r '.features // [.feature] | contains(["changesContextExpansion", "reviewSuggestionsV1", "fileReviewV1", "workspaceLsp", "workspaceLspClangd", "workspaceFileSearch"])' "$extract/paseito-daemon/manifest.json")" = true
 test -x "$extract/paseito-daemon/$entry"
 if test -e "$release"; then
   test "$(jq -r .commit "$release/manifest.json")" = "$commit"
   test "$(jq -r .version "$release/manifest.json")" = "$version"
   test "$(jq -r .daemonVersion "$release/manifest.json")" = "$daemon_version"
   test "$(jq -r .feature "$release/manifest.json")" = changesBaseSelector
-  test "$(jq -r '.features // [.feature] | contains(["changesContextExpansion", "reviewSuggestionsV1", "fileReviewV1", "workspaceLsp", "workspaceLspClangd"])' "$release/manifest.json")" = true
+  test "$(jq -r '.features // [.feature] | contains(["changesContextExpansion", "reviewSuggestionsV1", "fileReviewV1", "workspaceLsp", "workspaceLspClangd", "workspaceFileSearch"])' "$release/manifest.json")" = true
   test -x "$release/$entry"
 else
   mv "$extract/paseito-daemon" "$release"

@@ -1136,6 +1136,14 @@ test("returns typed relative suggestions within a requested directory", async ()
     mkdirSync(path.dirname(target), { recursive: true });
     writeFileSync(target, "");
 
+    const prepared = await ctx.client.getDirectorySuggestions({
+      cwd,
+      query: "",
+      includeFiles: true,
+      includeDirectories: false,
+      prepareOnly: true,
+      limit: 20,
+    });
     const result = await ctx.client.getDirectorySuggestions({
       cwd,
       query: "msgrndr",
@@ -1144,6 +1152,8 @@ test("returns typed relative suggestions within a requested directory", async ()
       limit: 20,
     });
 
+    expect(prepared.error).toBeNull();
+    expect(prepared.entries).toEqual([]);
     expect(result.error).toBeNull();
     expect(result.directories).toEqual([]);
     expect(result.entries).toEqual([{ path: "src/components/message-renderer.tsx", kind: "file" }]);

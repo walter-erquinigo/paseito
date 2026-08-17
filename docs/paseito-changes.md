@@ -119,6 +119,22 @@ the shared session's provider and retry state without adding format-on-save cont
 these sessions and actions whenever the live workspace has uncommitted changes, then resumes visible
 files after the workspace is clean.
 
+## Workspace file search
+
+`Command+P` searches every tracked and non-ignored untracked file in the active workspace. Results
+come from the complete Git project file set rather than a depth- or entry-bounded directory walk;
+ignored generated and dependency trees remain excluded. The daemon keeps only a brief in-memory
+index, warms it when the workspace becomes active, and refreshes ordinary file changes in the
+background without requiring a persistent database or external file-search executable. Branch
+switches discard the old index before searches resume, so results never cross branch revisions.
+The index does not precompute the repository's ignored paths, and it rejects truncated Git output
+instead of presenting a partial file set. Older hosts show an update-host message before searching.
+
+`Enter` opens the selected result in a normal file tab. On desktop web, `Command+Enter` opens or
+reuses the full **Changes** tab and checks the selected path against that tab's loaded comparison. A
+matching file expands and its header is centered only when outside the diff viewport. An unchanged
+file leaves the command center open and reports that the file is not present in **Changes**.
+
 ## Markdown preview source links
 
 Markdown file previews recognize source locations in ordinary prose and inline code. Relative paths

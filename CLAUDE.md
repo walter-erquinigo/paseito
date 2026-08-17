@@ -242,5 +242,8 @@ instead of editing the list by hand.
   - Fix: Open weekly work in iTerm2 and finish locally when GitHub Actions quota is exhausted.
 - `agent-message-delivery-control` — Let users queue durable follow-up messages or explicitly steer an active agent run without conflating the two actions.
   - Fix: Restore failed sends to their original queue position and preserve legacy replacement behavior.
+- `workspace-file-search-navigation` — Find every eligible workspace file from Command+P and open it either as source or in Changes.
+  - Fix: Keep exhaustive project-file search fast and preserve alternate navigation into the active Changes comparison.
+  - Fix: Gate exhaustive search on daemon support, bypass redundant ignored-path enumeration, and reject truncated Git file corpora.
 
 <!-- PASEITO-LOCAL-FEATURES:END -->

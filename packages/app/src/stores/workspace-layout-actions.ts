@@ -983,10 +983,26 @@ function isEphemeralTab(tab: WorkspaceTab): boolean {
   return tab.target.kind === "commit_diff";
 }
 
+function stripEphemeralTargetFields(tab: WorkspaceTab): WorkspaceTab {
+  if (tab.target.kind !== "working_diff") return tab;
+  return {
+    ...tab,
+    target: {
+      kind: "working_diff",
+      ...(tab.target.focusPath ? { focusPath: tab.target.focusPath } : {}),
+      ...(tab.target.focusRequestId ? { focusRequestId: tab.target.focusRequestId } : {}),
+    },
+  };
+}
+
 function stripEphemeralTabsFromNode(node: SplitNodeInternal): SplitNodeInternal {
   if (node.kind === "pane") {
-    const nextTabs = node.pane.tabs.filter((tab) => !isEphemeralTab(tab));
-    if (nextTabs.length === node.pane.tabs.length) {
+    const retainedTabs = node.pane.tabs.filter((tab) => !isEphemeralTab(tab));
+    const nextTabs = retainedTabs.map(stripEphemeralTargetFields);
+    if (
+      nextTabs.length === node.pane.tabs.length &&
+      nextTabs.every((tab, index) => tab === node.pane.tabs[index])
+    ) {
       return node;
     }
     // createPaneNode repoints focusedTabId to a surviving tab (or null) when the

@@ -93,6 +93,7 @@ class RemoteDeploymentTests(unittest.TestCase):
         self.assertIn("fileReviewV1", REMOTE_INSTALL)
         self.assertIn("workspaceLsp", REMOTE_INSTALL)
         self.assertIn("workspaceLspClangd", REMOTE_INSTALL)
+        self.assertIn("workspaceFileSearch", REMOTE_INSTALL)
         self.assertGreaterEqual(REMOTE_INSTALL.count("ensure_idle"), 3)
 
     def test_vpn_upload_has_a_bounded_slow_link_allowance(self) -> None:

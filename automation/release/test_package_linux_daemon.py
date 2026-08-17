@@ -44,6 +44,7 @@ class PackageLinuxDaemonTests(unittest.TestCase):
                     "fileReviewV1",
                     "workspaceLsp",
                     "workspaceLspClangd",
+                    "workspaceFileSearch",
                 ],
             },
         )

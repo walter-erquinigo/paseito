@@ -76,6 +76,7 @@ import { DiffScroll } from "@/components/diff-scroll";
 import { syntaxTokenStyleFor } from "@/styles/syntax-token-styles";
 import { CODE_SURFACE_DATASET } from "@/styles/code-surface";
 import { shouldAnchorHeaderBeforeCollapse } from "@/git/diff-scroll";
+import { resolveChangesHeaderFocusOffset } from "@/git/changes-file-tree-navigation";
 import {
   buildSplitDiffRows,
   buildUnifiedDiffLines,
@@ -2237,7 +2238,12 @@ interface GitDiffPaneProps {
 function useInlineChangesNavigationTarget(): {
   focus: Pick<
     WorkspaceWorkingDiffTabTarget,
-    "focusPath" | "focusRequestId" | "focusLineStart" | "focusLineEnd" | "focusColumn"
+    | "focusPath"
+    | "focusRequestId"
+    | "focusLineStart"
+    | "focusLineEnd"
+    | "focusColumn"
+    | "focusReveal"
   >;
   requestedLine: { filePath: string; lineNumber: number } | undefined;
   navigate: (target: WorkspaceWorkingDiffTabTarget) => void;
@@ -2260,6 +2266,7 @@ function useInlineChangesNavigationTarget(): {
       focusLineStart: target?.focusLineStart,
       focusLineEnd: target?.focusLineEnd,
       focusColumn: target?.focusColumn,
+      focusReveal: target?.focusReveal,
     }),
     [target],
   );
@@ -3010,6 +3017,7 @@ interface SharedDiffViewProps {
         focusLineStart?: number;
         focusLineEnd?: number;
         focusColumn?: number;
+        focusReveal?: "center-if-hidden";
       }
     | {
         kind: "working_tab";
@@ -3021,6 +3029,7 @@ interface SharedDiffViewProps {
         focusLineStart?: number;
         focusLineEnd?: number;
         focusColumn?: number;
+        focusReveal?: "center-if-hidden";
         onExpandedPathsChange: (paths: string[]) => void;
         onEditLine?: (line: ReviewableChangedLine) => void;
         keyboardEnabled?: boolean;
@@ -3061,6 +3070,7 @@ function resolveSharedDiffMode(
       focusLineStart: undefined,
       focusLineEnd: undefined,
       focusColumn: undefined,
+      focusReveal: undefined,
       onOpenFile: undefined,
       onAddToChat: undefined,
       workspaceFileDragScope: undefined,
@@ -3088,6 +3098,7 @@ function resolveSharedDiffMode(
     focusLineStart: mode.focusLineStart,
     focusLineEnd: mode.focusLineEnd,
     focusColumn: mode.focusColumn,
+    focusReveal: mode.focusReveal,
     onEditLine: mode.onEditLine,
     keyboardEnabled: mode.keyboardEnabled !== false,
     focusShortcutEnabled: mode.focusShortcutEnabled !== false,
@@ -3156,6 +3167,7 @@ export function SharedDiffView({ files, displayPreferences, mode }: SharedDiffVi
     focusLineStart,
     focusLineEnd,
     focusColumn,
+    focusReveal,
     onOpenFile,
     onAddToChat,
     workspaceFileDragScope,
@@ -4053,12 +4065,30 @@ export function SharedDiffView({ files, displayPreferences, mode }: SharedDiffVi
     if (!hasTarget) {
       return;
     }
+    if (focusReveal === "center-if-hidden" && !expandedPaths.has(focusPath)) {
+      setReviewFileExpanded(focusPath, true);
+      return;
+    }
     pendingFocusRequestRef.current = focusRequestKey;
     const frame = requestAnimationFrame(() => {
-      diffListRef.current?.scrollToOffset({
-        offset: computeHeaderOffset(focusPath),
-        animated: false,
+      const headerOffset = computeHeaderOffset(focusPath);
+      const headerHeight =
+        headerHeightByPathRef.current[focusPath] ?? defaultHeaderHeightRef.current;
+      const viewportOffset = diffListScrollOffsetRef.current;
+      const viewportHeight = diffListViewportHeightRef.current;
+      const offset = resolveChangesHeaderFocusOffset({
+        headerOffset,
+        headerHeight,
+        viewportOffset,
+        viewportHeight,
+        reveal: focusReveal,
       });
+      if (offset !== null) {
+        diffListRef.current?.scrollToOffset({
+          offset,
+          animated: false,
+        });
+      }
       focusDiffScrollSurface();
       consumedFocusRequestRef.current = focusRequestKey;
       pendingFocusRequestRef.current = null;
@@ -4071,11 +4101,14 @@ export function SharedDiffView({ files, displayPreferences, mode }: SharedDiffVi
     };
   }, [
     computeHeaderOffset,
+    expandedPaths,
     flatItems,
     focusDiffScrollSurface,
     focusLineStart,
     focusPath,
+    focusReveal,
     focusRequestId,
+    setReviewFileExpanded,
   ]);
 
   useEffect(() => {

@@ -197,6 +197,7 @@ import {
 } from "./session/agent-updates/agent-updates-service.js";
 import { expandTilde } from "../utils/path.js";
 import {
+  invalidateWorkspaceFileSearch,
   searchDirectoryEntries,
   WORKSPACE_SEARCH_HIDDEN_DIRECTORIES,
 } from "../utils/directory-suggestions.js";
@@ -642,6 +643,11 @@ export class Session {
   private readonly agentUpdates: AgentUpdatesService;
   private workspaceUpdatesSubscription: WorkspaceUpdatesSubscriptionState | null = null;
   private readonly workspaceUpdateTails = new Map<string, Promise<void>>();
+  private readonly workspaceFileSearchGenerations = new Map<string, number>();
+  private readonly workspaceFileSearchGitState = new Map<
+    string,
+    { branch: string | null; fingerprint: string }
+  >();
   private clientActivity: {
     deviceType: "web" | "mobile";
     focusedAgentId: string | null;
@@ -806,6 +812,7 @@ export class Session {
         handleWorkspaceGitBranchSnapshot: (cwd, branchName) =>
           this.workspaceGitObserver.handleBranchSnapshot(cwd, branchName),
         renameCurrentBranch: (cwd, branch) => this.renameCurrentBranch(cwd, branch),
+        invalidateWorkspaceFileSearch: (cwd) => invalidateWorkspaceFileSearch(cwd, "hard"),
       },
       gitMutation: this.gitMutation,
       workspaceGitService: this.workspaceGitService,
@@ -831,7 +838,10 @@ export class Session {
       emitWorkspaceUpdateForCwd: (cwd) => this.emitWorkspaceUpdateForCwd(cwd),
       emitWorkspaceUpdateForWorkspaceId: (workspaceId) =>
         this.emitWorkspaceUpdateForWorkspaceId(workspaceId),
-      emitStatusUpdate: (cwd, snapshot) => this.checkoutSession.emitStatusUpdate(cwd, snapshot),
+      emitStatusUpdate: (cwd, snapshot) => {
+        this.refreshWorkspaceFileSearchIndex(cwd, snapshot);
+        this.checkoutSession.emitStatusUpdate(cwd, snapshot);
+      },
       onBranchChanged,
       logger: this.sessionLogger,
     });
@@ -3894,13 +3904,29 @@ export class Session {
   }
 
   private async handleDirectorySuggestionsRequest(msg: DirectorySuggestionsRequest): Promise<void> {
-    const { query, limit, requestId, cwd, includeFiles, includeDirectories, matchMode } = msg;
+    const {
+      query,
+      limit,
+      requestId,
+      cwd,
+      includeFiles,
+      includeDirectories,
+      matchMode,
+      prepareOnly,
+    } = msg;
 
     try {
       const workspaceCwd = cwd?.trim();
       const searchesWorkspace = Boolean(workspaceCwd);
+      const workspaceRoot = workspaceCwd ? expandTilde(workspaceCwd) : null;
+      const isCancelled = this.registerWorkspaceFileSearchRequest({
+        workspaceRoot,
+        includeFiles,
+        includeDirectories,
+        matchMode,
+      });
       const entries = await searchDirectoryEntries({
-        root: workspaceCwd ? expandTilde(workspaceCwd) : (process.env.HOME ?? homedir()),
+        root: workspaceRoot ?? process.env.HOME ?? homedir(),
         query,
         pathFormat: searchesWorkspace ? "relative" : "absolute",
         pathQueryPolicy: searchesWorkspace ? "slashes" : "rooted",
@@ -3915,6 +3941,8 @@ export class Session {
         includeDirectories,
         matchMode,
         limit,
+        prepareOnly,
+        isCancelled,
       });
       const directories = entries
         .filter((entry) => entry.kind === "directory")
@@ -3939,6 +3967,42 @@ export class Session {
         },
       });
     }
+  }
+
+  private registerWorkspaceFileSearchRequest(options: {
+    workspaceRoot: string | null;
+    includeFiles: boolean | undefined;
+    includeDirectories: boolean | undefined;
+    matchMode: "fuzzy" | "suffix" | undefined;
+  }): (() => boolean) | undefined {
+    const { workspaceRoot, includeFiles, includeDirectories, matchMode } = options;
+    if (
+      !workspaceRoot ||
+      includeFiles !== true ||
+      includeDirectories !== false ||
+      (matchMode ?? "fuzzy") !== "fuzzy"
+    ) {
+      return undefined;
+    }
+    const generation = (this.workspaceFileSearchGenerations.get(workspaceRoot) ?? 0) + 1;
+    this.workspaceFileSearchGenerations.set(workspaceRoot, generation);
+    return () => this.workspaceFileSearchGenerations.get(workspaceRoot) !== generation;
+  }
+
+  private refreshWorkspaceFileSearchIndex(
+    cwd: string,
+    snapshot: WorkspaceGitRuntimeSnapshot,
+  ): void {
+    const branch = snapshot.git.currentBranch;
+    const fingerprint = JSON.stringify({
+      branch,
+      dirty: snapshot.git.isDirty,
+      diffStat: snapshot.git.diffStat,
+    });
+    const previous = this.workspaceFileSearchGitState.get(cwd);
+    this.workspaceFileSearchGitState.set(cwd, { branch, fingerprint });
+    if (!previous || previous.fingerprint === fingerprint) return;
+    void invalidateWorkspaceFileSearch(cwd, previous.branch === branch ? "soft" : "hard");
   }
 
   private async handlePaseoWorktreeListRequest(
