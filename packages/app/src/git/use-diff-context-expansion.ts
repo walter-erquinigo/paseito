@@ -8,7 +8,7 @@ import {
   buildDiffContextRegions,
   withExpandedDiffContext,
 } from "@/git/diff-context-expansion";
-import { searchChangesFiles } from "@/git/changes-search";
+import type { ChangesSearchResult } from "@/git/changes-search";
 import { reconstructRevisionedSource } from "@/git/revisioned-source";
 
 type ExpandDirection = "up" | "down" | "all";
@@ -49,6 +49,7 @@ export function useDiffContextExpansion(input: {
   compare: { mode: "uncommitted" | "base"; baseRef?: string; ignoreWhitespace?: boolean };
   files: ParsedDiffFile[];
   supported: boolean;
+  searchSupported: boolean;
   requestedLines?: ReadonlyArray<{ filePath: string; lineNumber: number }>;
 }) {
   const client = useHostRuntimeClient(input.serverId);
@@ -184,6 +185,35 @@ export function useDiffContextExpansion(input: {
     ],
   );
 
+  const expandLine = useCallback(
+    async (filePath: string, lineNumber: number) => {
+      if (!input.supported) return;
+      const file = input.files.find((candidate) => candidate.path === filePath);
+      if (!file) return;
+      const alreadyLoaded = (activeState.linesByFile[file.path] ?? []).some(
+        (line) => line.newLineNumber === lineNumber,
+      );
+      if (alreadyLoaded) return;
+      const region = buildDiffContextRegions(file).find(
+        (candidate) =>
+          lineNumber >= candidate.newStart && lineNumber < candidate.newStart + candidate.lineCount,
+      );
+      if (!region) return;
+      const relativeLine = lineNumber - region.newStart;
+      const offset = Math.max(0, Math.min(relativeLine - 10, region.lineCount - 20));
+      await expand(
+        file.path,
+        {
+          oldStart: region.oldStart + offset,
+          newStart: region.newStart + offset,
+          lineCount: Math.min(20, region.lineCount - offset),
+        },
+        "all",
+      );
+    },
+    [activeState.linesByFile, expand, input.files, input.supported],
+  );
+
   const loadSourceLines = useCallback(
     async (file: ParsedDiffFile): Promise<string[] | null> => {
       if (
@@ -223,16 +253,22 @@ export function useDiffContextExpansion(input: {
   );
 
   const search = useCallback(
-    async (query: string) => {
-      const searchable = await Promise.all(
-        input.files.map(async (file) => ({
+    async (query: string): Promise<ChangesSearchResult> => {
+      if (!input.searchSupported || !client) {
+        throw new Error("Update this host to search Changes.");
+      }
+      const payload = await client.searchCheckoutDiff(input.cwd, {
+        compare: input.compare,
+        query,
+        files: input.files.map((file) => ({
           path: file.path,
-          lines: await loadSourceLines(file),
+          ...(file.revision ? { expectedRevision: file.revision } : {}),
         })),
-      );
-      return searchChangesFiles(searchable, query);
+        limit: 10_000,
+      });
+      return { matches: payload.matches, truncated: payload.truncated };
     },
-    [input.files, loadSourceLines],
+    [client, input.compare, input.cwd, input.files, input.searchSupported],
   );
 
   const loadSource = useCallback(
@@ -253,29 +289,10 @@ export function useDiffContextExpansion(input: {
   useEffect(() => {
     if (!input.supported || activeState.loadingKeys.length > 0) return;
     for (const requested of input.requestedLines ?? []) {
-      const file = input.files.find((candidate) => candidate.path === requested.filePath);
-      if (!file) continue;
-      const alreadyLoaded = (activeState.linesByFile[file.path] ?? []).some(
-        (line) => line.newLineNumber === requested.lineNumber,
-      );
-      if (alreadyLoaded) continue;
-      const region = buildDiffContextRegions(file).find(
-        (candidate) =>
-          requested.lineNumber >= candidate.newStart &&
-          requested.lineNumber < candidate.newStart + candidate.lineCount,
-      );
-      if (!region) continue;
-      const relativeLine = requested.lineNumber - region.newStart;
-      const offset = Math.max(0, Math.min(relativeLine - 10, region.lineCount - 20));
-      const segment = {
-        oldStart: region.oldStart + offset,
-        newStart: region.newStart + offset,
-        lineCount: Math.min(20, region.lineCount - offset),
-      };
-      void expand(file.path, segment, "all").catch(() => undefined);
+      void expandLine(requested.filePath, requested.lineNumber).catch(() => undefined);
       break;
     }
-  }, [activeState, expand, input.files, input.requestedLines, input.supported]);
+  }, [activeState.loadingKeys, expandLine, input.requestedLines, input.supported]);
 
   const expandingFilePaths = useMemo(
     () =>
@@ -287,6 +304,7 @@ export function useDiffContextExpansion(input: {
     files,
     expand,
     expandFile,
+    expandLine,
     search,
     loadSource,
     expandingFilePaths,

@@ -19,6 +19,7 @@ import {
   __resetCheckoutShortstatCacheForTests,
   __resetPullRequestStatusCacheForTests,
   __setPullRequestStatusCacheTtlForTests,
+  amendCommit,
   commitAll,
   discardChanges,
   CHECKOUT_DIFF_MAX_STRUCTURED_BYTES,
@@ -3735,6 +3736,77 @@ const x = 1;
     it("is case insensitive on Windows paths", () => {
       expect(isDescendantPath("c:\\repo\\child", "C:\\repo")).toBe(true);
     });
+  });
+});
+
+describe("amendCommit", () => {
+  it("stages the entire worktree and rewrites HEAD without changing its message", async () => {
+    const { tempDir, repoDir } = initRepo();
+    try {
+      writeFileSync(join(repoDir, "deleted.txt"), "delete me\n");
+      execFileSync("git", ["add", "deleted.txt"], { cwd: repoDir });
+      execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "--amend", "--no-edit"], {
+        cwd: repoDir,
+      });
+      const originalSha = execFileSync("git", ["rev-parse", "HEAD"], { cwd: repoDir })
+        .toString()
+        .trim();
+      const originalCount = execFileSync("git", ["rev-list", "--count", "HEAD"], {
+        cwd: repoDir,
+      })
+        .toString()
+        .trim();
+      writeFileSync(join(repoDir, "file.txt"), "changed\n");
+      writeFileSync(join(repoDir, "new.txt"), "new\n");
+      rmSync(join(repoDir, "deleted.txt"));
+
+      await amendCommit(repoDir);
+
+      const amendedSha = execFileSync("git", ["rev-parse", "HEAD"], { cwd: repoDir })
+        .toString()
+        .trim();
+      expect(amendedSha).not.toBe(originalSha);
+      expect(
+        execFileSync("git", ["rev-list", "--count", "HEAD"], { cwd: repoDir }).toString().trim(),
+      ).toBe(originalCount);
+      expect(
+        execFileSync("git", ["log", "-1", "--format=%s"], { cwd: repoDir }).toString().trim(),
+      ).toBe("initial");
+      expect(execFileSync("git", ["show", "HEAD:file.txt"], { cwd: repoDir }).toString()).toBe(
+        "changed\n",
+      );
+      expect(execFileSync("git", ["show", "HEAD:new.txt"], { cwd: repoDir }).toString()).toBe(
+        "new\n",
+      );
+      expect(
+        spawnSync("git", ["cat-file", "-e", "HEAD:deleted.txt"], { cwd: repoDir }).status,
+      ).not.toBe(0);
+      expect(execFileSync("git", ["status", "--porcelain"], { cwd: repoDir }).toString()).toBe("");
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects a clean worktree", async () => {
+    const { tempDir, repoDir } = initRepo();
+    try {
+      await expect(amendCommit(repoDir)).rejects.toThrow("No changes to amend");
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects a repository with no commit", async () => {
+    const tempDir = realpathSync.native(mkdtempSync(join(tmpdir(), "checkout-git-amend-unborn-")));
+    const repoDir = join(tempDir, "repo");
+    mkdirSync(repoDir, { recursive: true });
+    try {
+      execFileSync("git", ["init", "-b", "main"], { cwd: repoDir });
+      writeFileSync(join(repoDir, "new.txt"), "new\n");
+      await expect(amendCommit(repoDir)).rejects.toThrow("No commit exists to amend");
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
   });
 });
 

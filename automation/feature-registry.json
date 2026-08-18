@@ -29,7 +29,8 @@
       "commitSubject": "feat(changes): select and preserve comparison bases",
       "preservationFixes": [
         "Default ahead branches to their committed branch diff without hiding the explicit Uncommitted view.",
-        "Sort every werquinigo/ branch first in literal name order on both current and legacy hosts."
+        "Sort every werquinigo/ branch first in literal name order on both current and legacy hosts.",
+        "Keep branch search focused while revealing and activating the selected branch, including when it is absent from the bounded suggestion response."
       ],
       "permanent": false,
       "intent": "Let the Changes tab select and remember a read-only comparison base without changing merge, update or pull-request targets.",
@@ -39,13 +40,17 @@
         "When a branch is ahead of its base, Changes defaults to the committed branch diff even if the working tree is dirty; an explicit Uncommitted selection is still honored.",
         "Diffs, review attachments and commit history use the selected validated base.",
         "Branch dropdowns rank every werquinigo/ branch first in literal name order, then the remaining current ancestry stack from base to tip, then other branches by recency.",
+        "Opening the current-branch dropdown focuses search and scrolls its active selected row into view without moving keyboard focus to the option.",
         "Missing refs fall back safely, and hosts without the advertised capability show an explicit update-host state without a degraded fallback."
       ],
       "contracts": [
         "npx vitest run packages/app/src/git/changes-base-selection.test.ts packages/protocol/src/messages.checkout-commits.test.ts packages/server/src/utils/checkout-git.commits.test.ts"
       ],
       "paths": [
+        "packages/app/src/components/branch-switcher.tsx",
+        "packages/app/src/components/ui/combobox.tsx",
         "packages/app/src/git",
+        "packages/app/src/hooks/use-branch-switcher.ts",
         "packages/protocol/src/messages.ts",
         "packages/server/src/utils/checkout-git.ts"
       ]
@@ -75,6 +80,36 @@
       ]
     },
     {
+      "id": "changes-amend-current-commit",
+      "commitSubject": "feat(changes): amend the current commit",
+      "preservationFixes": [
+        "Keep the one-click amend action tied to the live uncommitted badge and daemon capability."
+      ],
+      "permanent": false,
+      "intent": "Amend every current working-tree change into the current commit directly from Changes.",
+      "invariants": [
+        "A compact Amend button appears immediately after the Uncommitted badge for dirty named branches in either Changes surface.",
+        "The action stages tracked, deleted and non-ignored untracked changes, preserves the current message and commit count, and never pushes.",
+        "The action runs immediately without confirmation, exposes pending, success and failure UI, and refreshes checkout status and diffs after success.",
+        "The daemon rejects clean and unborn repositories, and older hosts keep the action visible with an explicit update-host error."
+      ],
+      "contracts": [
+        "npx vitest run packages/protocol/src/messages.checkout-commit-amend.test.ts packages/client/src/daemon-client.test.ts packages/app/src/git/actions-store.test.ts packages/server/src/utils/checkout-git.test.ts packages/server/src/server/session/checkout/checkout-session.test.ts --bail=1",
+        "npm run test:e2e --workspace=@getpaseo/app -- e2e/browser/paseito-changes-uncommitted-branch-badge.spec.ts"
+      ],
+      "paths": [
+        "packages/app/src/git/actions-store.ts",
+        "packages/app/src/git/diff-pane.tsx",
+        "packages/client/src/daemon-client.ts",
+        "packages/protocol/src/messages.ts",
+        "packages/server/src/server/session/checkout/checkout-session.ts",
+        "packages/server/src/utils/checkout-git.ts",
+        "automation/release/package_linux_daemon.py",
+        "automation/remote/deploy_remote_daemons.py",
+        "docs/paseito-changes.md"
+      ]
+    },
+    {
       "id": "changes-context-expansion",
       "commitSubject": "feat(changes): expand omitted diff context",
       "preservationFixes": [
@@ -95,7 +130,9 @@
         "packages/app/src/git",
         "packages/client/src/daemon-client.ts",
         "packages/protocol/src/messages.ts",
-        "packages/server/src/utils/checkout-git.ts"
+        "packages/server/src/utils/checkout-git.ts",
+        "automation/release/package_linux_daemon.py",
+        "automation/remote/deploy_remote_daemons.py"
       ]
     },
     {
@@ -137,7 +174,9 @@
       "commitSubject": "feat(changes): persist branch file and line review state",
       "preservationFixes": [
         "Expand a file when it is marked unreviewed.",
-        "Require the review-state capability in packaged and remote releases."
+        "Require the review-state capability in packaged and remote releases.",
+        "Preserve repeated reviewed edits only when their uniquely anchored sequence mapping is unambiguous.",
+        "Show the live Changes-focus binding in the selected-line shortcut widget."
       ],
       "permanent": false,
       "intent": "Let reviewers mark branch files or individual edited lines reviewed while preserving checks only for identical branch-side content.",
@@ -151,17 +190,19 @@
         "A dedicated toolbar action expands every incomplete file, collapses every fully reviewed file, and opens ancestor folders in tree view.",
         "Keyboard review uses lowercase m to approve and move down and comma to approve and move up; Shift+M expands the next hidden block below and Shift+. expands the previous hidden block above. A compact accent marker follows the selected line, and a destination with fewer than five visible same-file rows below is centered only when the file actually has five later rows.",
         "Command+semicolon focuses the last selected Changes line, then the first unreviewed line, then any reviewable line or file header; Command+L remains the counterpart that focuses the message input.",
-        "Line identity includes side, change type, exact content and surrounding context; unique unchanged edits survive revisions while changed or ambiguous duplicate edits are cleared.",
+        "The selected-line shortcut widget resolves the current Changes-focus binding from the shortcut registry so user overrides are displayed accurately.",
+        "Line identity includes side, change type, exact content and surrounding context; unique unchanged edits survive revisions, and repeated edits survive only when their count and ordinal position inside unchanged unique anchors prove the mapping.",
         "The feature is capability-gated and never infers unreliable content identity from an older daemon."
       ],
       "contracts": [
         "npx vitest run packages/app/src/review/file-review.test.ts packages/app/src/review/line-review.test.ts packages/app/src/review/line-review-navigation.test.ts packages/app/src/git/file-review-expansion.test.ts packages/server/src/utils/checkout-git.context.test.ts packages/server/src/utils/checkout-git.test.ts",
-        "npm run test:e2e --workspace=@getpaseo/app -- e2e/browser/changes-pane.spec.ts"
+        "npm run test:e2e --workspace=@getpaseo/app -- e2e/browser/changes-pane.spec.ts e2e/browser/branch-switcher.spec.ts"
       ],
       "paths": [
         "packages/app/src/review/file-review.ts",
         "packages/app/src/review/line-review-navigation.ts",
         "packages/app/src/git/diff-pane.tsx",
+        "packages/app/src/i18n/resources",
         "packages/protocol/src/messages.ts",
         "packages/server/src/utils/checkout-git.ts"
       ]
@@ -172,14 +213,16 @@
       "preservationFixes": [
         "Share revision-safe LSP sessions with the editor and suppress stale buffers.",
         "Anchor LSP positions to current-side source text and pause Changes intelligence while the workspace is dirty.",
-        "Preserve the exact terminal-newline form when rebuilding paged source for shared LSP sessions."
+        "Preserve the exact terminal-newline form when rebuilding paged source for shared LSP sessions.",
+        "Search complete changed-file source on the daemon without transferring every file before results."
       ],
       "permanent": false,
       "intent": "Search complete current-side changed files and use shared language intelligence directly from Changes.",
       "invariants": [
         "Slash opens a literal smart-case search over changed filenames and complete current-side source; Enter commits the query, n and N wrap through results, and Escape closes it.",
-        "A hidden text match fully expands its file and is centered; deleted, binary and oversized files remain filename-searchable.",
+        "A hidden text match loads only bounded surrounding context and is centered; deleted, binary and oversized files remain filename-searchable.",
         "Search and expansion use the active comparison's exact content revision and reject stale source.",
+        "Search is capability-gated, returns at most 10,000 smart-case matches, and sends no source-file corpus to the client.",
         "LSP hover, F12, Command/Ctrl-click and the Electron definition context menu operate only on current-side lines and share a reference-counted document session with the editor.",
         "LSP columns are measured from rendered source text in unified, wrapped and split layouts; review and line-number gutters, hunk controls, deleted-side lines and other chrome are ineligible.",
         "Eligible non-deleted C/C++ and Python headers acquire visibility-scoped sessions and show off, connecting, provider, unavailable, error and retry states without format-on-save controls.",
@@ -189,7 +232,7 @@
         "Changes exposes the same opt-in workspace language-intelligence preference and explicit old-host state as the editor."
       ],
       "contracts": [
-        "npx vitest run packages/app/src/git/changes-search.test.ts packages/app/src/git/changes-lsp-controller.test.ts packages/app/src/git/revisioned-source.test.ts packages/app/src/file-pane/editor/lsp-session-pool.test.ts --bail=1",
+        "npx vitest run packages/protocol/src/messages.checkout-diff-context.test.ts packages/server/src/utils/checkout-git.context.test.ts packages/app/src/git/changes-search.test.ts packages/app/src/git/changes-lsp-controller.test.ts packages/app/src/git/revisioned-source.test.ts packages/app/src/file-pane/editor/lsp-session-pool.test.ts --bail=1",
         "npm run test:browser --workspace=@getpaseo/app -- src/git/changes-lsp-target.browser.test.ts --bail=1",
         "npm run test:e2e --workspace=@getpaseo/app -- e2e/browser/changes-pane.spec.ts --grep 'Changes LSP'"
       ],
@@ -202,21 +245,25 @@
         "packages/app/src/git/use-changes-lsp.web.ts",
         "packages/app/src/git/diff-pane.tsx",
         "packages/app/src/file-pane/editor/lsp-session-pool.ts",
-        "packages/app/src/file-pane/lsp-status-menu.tsx"
+        "packages/app/src/file-pane/lsp-status-menu.tsx",
+        "packages/client/src/daemon-client.ts",
+        "packages/protocol/src/messages.ts",
+        "packages/server/src/utils/checkout-git.ts"
       ]
     },
     {
       "id": "changes-file-tree-navigator",
       "commitSubject": "feat(changes): add the file-tree navigator",
       "preservationFixes": [
-        "Keep repeated file selections monotonic and independent from manual diff scrolling."
+        "Keep repeated file selections monotonic and independent from manual diff scrolling.",
+        "Keep the wide inline Changes navigator responsive and independent from the full Changes tab."
       ],
       "permanent": false,
-      "intent": "Navigate large working diffs from a dedicated right-hand file tree in the full desktop Changes tab.",
+      "intent": "Navigate large working diffs from a dedicated right-hand file tree in either desktop Changes surface.",
       "invariants": [
-        "Only the full working Changes tab on desktop renders the 240px right-hand navigator; commit diffs, inline Changes and compact layouts remain unchanged.",
+        "The full working Changes tab and a wide inline right Changes sidebar render the 240px right-hand navigator; commit diffs and compact layouts remain unchanged.",
         "The navigator starts open, persists only its whole-rail collapsed preference and suppresses itself below an 800px containing-pane width without changing that preference.",
-        "Compressed directory folders expand independently and retain their local state for the lifetime of the retained Changes tab.",
+        "Compressed directory folders and file selection remain independent between retained Changes surfaces.",
         "Selecting a file expands its diff, reissues a monotonic focus request, aligns its header to the top and focuses the diff scroll surface; repeated selections work.",
         "Manual diff scrolling does not follow-select another tree row, and selection clears only when the selected path disappears from the active comparison."
       ],
@@ -397,7 +444,8 @@
       "commitSubject": "feat(command-center): search every workspace file",
       "preservationFixes": [
         "Keep exhaustive project-file search fast and preserve alternate navigation into the active Changes comparison.",
-        "Gate exhaustive search on daemon support, bypass redundant ignored-path enumeration, and reject truncated Git file corpora."
+        "Gate exhaustive search on daemon support, bypass redundant ignored-path enumeration, and reject truncated Git file corpora.",
+        "Route Command+Enter to the right Changes sidebar even when a full Changes tab exists."
       ],
       "permanent": false,
       "intent": "Find every eligible workspace file from Command+P and open it either as source or in Changes.",
@@ -406,7 +454,7 @@
         "The daemon prewarms a bounded in-memory project-file index for the active workspace without adding a persistent database or external search-tool dependency, and non-Git workspaces retain an exhaustive filesystem fallback.",
         "Superseded searches yield cooperatively and stop ranking, ordinary file changes refresh in the background, and branch switches hard-invalidate the previous revision before search resumes.",
         "Complete Git file search starts without enumerating ignored paths, treats truncated Git output as unusable, and old hosts show an update-required state instead of incomplete results.",
-        "Enter and pointer activation open the normal file tab, while Command+Enter on web opens or reuses the full Changes tab and checks the file against its exact loaded comparison.",
+        "Enter and pointer activation open the normal file tab, while Command+Enter on web opens the right Changes sidebar and checks the file against its exact loaded comparison without creating or focusing a full Changes tab.",
         "A present Changes file expands and centers its header only when hidden; an already-visible header does not move, and file-tree navigation retains top alignment.",
         "An absent file leaves Command+P open with an accessible inline error, while loading and transport failures remain distinct from absence."
       ],

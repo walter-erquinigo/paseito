@@ -154,7 +154,7 @@ describe("line review identity", () => {
     expect(snapshot.invalidatedPaths).toEqual(["src/example.ts"]);
   });
 
-  it("does not remap ambiguous duplicate edits after the diff changes", () => {
+  it("keeps duplicate edits reviewed when their anchored group is unchanged", () => {
     const original = buildReviewableChangedFile(
       diff([
         { type: "context", content: " before" },
@@ -179,6 +179,129 @@ describe("line review identity", () => {
     const snapshot = getFileReviewSnapshot({ "src/example.ts": reviewedRecord(original!) }, [
       changed!,
     ]);
+    expect(snapshot.reviewedLineCount).toBe(2);
+  });
+
+  it("preserves the reviewed ordinal within an unchanged duplicate group", () => {
+    const original = buildReviewableChangedFile(
+      diff([
+        { type: "context", content: " before" },
+        { type: "add", content: "+same" },
+        { type: "add", content: "+same" },
+        { type: "context", content: " after" },
+      ]),
+    );
+    const changed = buildReviewableChangedFile(
+      diff(
+        [
+          { type: "add", content: "+unrelated" },
+          { type: "context", content: " before" },
+          { type: "add", content: "+same" },
+          { type: "add", content: "+same" },
+          { type: "context", content: " after" },
+        ],
+        { contentRevision: "revision-2" },
+      ),
+    );
+    expect(original).not.toBeNull();
+    expect(changed).not.toBeNull();
+    const record = reviewedRecord(original!);
+    record.reviewedRevision = "";
+    record.reviewedLines = [original!.lines[1]!];
+
+    const snapshot = getFileReviewSnapshot({ "src/example.ts": record }, [changed!]);
+    expect(snapshot.reviewedLineCount).toBe(1);
+    expect(snapshot.reviewedLineIds.has(changed!.lines[2]!.id)).toBe(true);
+  });
+
+  it("clears a duplicate group when an identical edit is inserted", () => {
+    const original = buildReviewableChangedFile(
+      diff([
+        { type: "context", content: " before" },
+        { type: "add", content: "+same" },
+        { type: "add", content: "+same" },
+        { type: "context", content: " after" },
+      ]),
+    );
+    const changed = buildReviewableChangedFile(
+      diff(
+        [
+          { type: "context", content: " before" },
+          { type: "add", content: "+same" },
+          { type: "add", content: "+same" },
+          { type: "add", content: "+same" },
+          { type: "context", content: " after" },
+        ],
+        { contentRevision: "revision-2" },
+      ),
+    );
+
+    const snapshot = getFileReviewSnapshot({ "src/example.ts": reviewedRecord(original!) }, [
+      changed!,
+    ]);
     expect(snapshot.reviewedLineCount).toBe(0);
+  });
+
+  it("clears duplicate edits that move across a stable anchor", () => {
+    const original = buildReviewableChangedFile(
+      diff([
+        { type: "context", content: " before" },
+        { type: "add", content: "+same" },
+        { type: "add", content: "+anchor" },
+        { type: "add", content: "+same" },
+        { type: "context", content: " after" },
+      ]),
+    );
+    const changed = buildReviewableChangedFile(
+      diff(
+        [
+          { type: "context", content: " before" },
+          { type: "add", content: "+same" },
+          { type: "add", content: "+same" },
+          { type: "add", content: "+anchor" },
+          { type: "context", content: " after" },
+        ],
+        { contentRevision: "revision-2" },
+      ),
+    );
+    const record = reviewedRecord(original!);
+    const duplicateFingerprint = original!.lines[0]!.fingerprint;
+    record.reviewedLines = record.reviewedLines!.filter(
+      (line) => line.fingerprint === duplicateFingerprint,
+    );
+
+    const snapshot = getFileReviewSnapshot({ "src/example.ts": record }, [changed!]);
+    expect(snapshot.reviewedLineCount).toBe(0);
+  });
+
+  it("falls back to unique-only remapping for a malformed prior signature", () => {
+    const original = buildReviewableChangedFile(
+      diff([
+        { type: "context", content: " before" },
+        { type: "add", content: "+unique" },
+        { type: "add", content: "+same" },
+        { type: "add", content: "+same" },
+        { type: "context", content: " after" },
+      ]),
+    );
+    const changed = buildReviewableChangedFile(
+      diff(
+        [
+          { type: "context", content: " before" },
+          { type: "add", content: "+unique" },
+          { type: "add", content: "+same" },
+          { type: "add", content: "+same" },
+          { type: "add", content: "+different" },
+          { type: "context", content: " after" },
+        ],
+        { contentRevision: "revision-2" },
+      ),
+    );
+    const record = reviewedRecord(original!);
+    record.lastSeenDiffSignature = "not-json";
+
+    const snapshot = getFileReviewSnapshot({ "src/example.ts": record }, [changed!]);
+    expect(snapshot.reviewedLineCount).toBe(1);
+    expect(snapshot.reviewedLineIds.has(changed!.lines[0]!.id)).toBe(true);
   });
 });

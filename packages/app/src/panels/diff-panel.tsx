@@ -407,6 +407,9 @@ function WorkingDiffPanel() {
       onExpandedPathsChange: setExpandedPaths,
       onExpandContext: workingDiff.contextExpansionSupported ? expandContext : undefined,
       onExpandFile: workingDiff.contextExpansionSupported ? expandFile : undefined,
+      onRevealLine: workingDiff.contextExpansionSupported
+        ? workingDiff.contextExpansion.expandLine
+        : undefined,
       expandingFilePaths: workingDiff.contextExpansion.expandingFilePaths,
       onSearch: workingDiff.contextExpansionSupported
         ? workingDiff.contextExpansion.search
@@ -431,6 +434,7 @@ function WorkingDiffPanel() {
       workingDiff.fileReviews,
       workingDiff.reviewActions,
       workingDiff.contextExpansion.expandingFilePaths,
+      workingDiff.contextExpansion.expandLine,
       workingDiff.contextExpansion.search,
       changesLsp,
       workingDiff.contextExpansionSupported,

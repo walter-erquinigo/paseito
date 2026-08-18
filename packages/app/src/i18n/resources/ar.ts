@@ -888,6 +888,11 @@ export const ar: TranslationResources = {
         notRepository: "ليس مستودع جيت",
         diffMode: "وضع الفرق",
         uncommitted: "غير ملتزم",
+        amend: "تعديل الالتزام",
+        amending: "جارٍ تعديل الالتزام…",
+        amendSuccess: "تم تعديل الالتزام",
+        failedAmend: "فشل تعديل الالتزام",
+        amendUpdateHost: "حدّث المضيف لتعديل التغييرات",
         committed: "ملتزم",
         baseSelectorLabel: "مقارنة التغييرات الملتزم بها مع {{baseRef}}",
         baseSelectorTitle: "المقارنة مع فرع",
@@ -908,6 +913,7 @@ export const ar: TranslationResources = {
         markLineUnreviewed: "إلغاء علامة مراجعة السطر {{line}}",
         editLineUnavailable: "لا يمكن فتح هذا السطر في المحرر المدمج",
         noUncheckedLines: "لا توجد أسطر غير مراجعة في هذا الاتجاه",
+        focusChangesShortcut: "{{shortcut}} للتركيز على التغييرات",
         lineReviewShortcuts:
           "m / , للمراجعة والتنقل · Shift+M / Shift+. لإظهار السياق · مسافة للتبديل · E للتحرير · U للتراجع · Esc للمسح",
         context: {

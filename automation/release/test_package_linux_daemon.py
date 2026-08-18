@@ -45,6 +45,8 @@ class PackageLinuxDaemonTests(unittest.TestCase):
                     "workspaceLsp",
                     "workspaceLspClangd",
                     "workspaceFileSearch",
+                    "checkoutDiffSearch",
+                    "checkoutCommitAmend",
                 ],
             },
         )

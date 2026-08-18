@@ -14,10 +14,13 @@ import {
   type CheckoutDiffCompare,
   type CheckoutDiffContextRequest,
   type CheckoutDiffContextResult,
+  type CheckoutDiffSearchRequest,
+  type CheckoutDiffSearchResult,
   type CheckoutDiffResult,
   getCheckoutDiff,
   getCheckoutRefDerivedState,
   getCheckoutDiffContext,
+  searchCheckoutDiff,
   getCheckoutSnapshotFacts,
   getCheckoutShortstat,
   getCheckoutStatus,
@@ -200,6 +203,10 @@ export interface WorkspaceGitService {
     cwd: string,
     request: CheckoutDiffContextRequest,
   ): Promise<CheckoutDiffContextResult>;
+  searchCheckoutDiff(
+    cwd: string,
+    request: CheckoutDiffSearchRequest,
+  ): Promise<CheckoutDiffSearchResult>;
   validateBranchRef(
     cwd: string,
     ref: string,
@@ -348,6 +355,7 @@ interface WorkspaceGitServiceDependencies {
   getCheckoutWorktreeState: typeof getCheckoutWorktreeState;
   getCheckoutDiff: typeof getCheckoutDiff;
   getCheckoutDiffContext: typeof getCheckoutDiffContext;
+  searchCheckoutDiff: typeof searchCheckoutDiff;
   getPullRequestStatus: typeof getPullRequestStatus;
   resolveBranchCheckout: typeof resolveBranchCheckout;
   resolveRepositoryDefaultBranch: typeof resolveRepositoryDefaultBranch;
@@ -504,6 +512,7 @@ function buildDefaultWorkspaceGitServiceDeps(
     getCheckoutWorktreeState,
     getCheckoutDiff,
     getCheckoutDiffContext,
+    searchCheckoutDiff,
     getPullRequestStatus,
     resolveBranchCheckout,
     resolveRepositoryDefaultBranch,
@@ -761,6 +770,27 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
       paseoHome: this.paseoHome,
       worktreesRoot: this.worktreesRoot,
     });
+  }
+
+  async searchCheckoutDiff(
+    cwd: string,
+    request: CheckoutDiffSearchRequest,
+  ): Promise<CheckoutDiffSearchResult> {
+    const normalizedCwd = resolve(cwd);
+    const compare = this.normalizeCheckoutDiffOptions({
+      ...request.compare,
+      includeStructured: true,
+    });
+    const diff = await this.getCheckoutDiff(normalizedCwd, compare);
+    if (diff.diffTooLarge || !diff.structured) {
+      throw new Error("Changes are too large to search");
+    }
+    return this.deps.searchCheckoutDiff(
+      normalizedCwd,
+      { ...request, compare },
+      { paseoHome: this.paseoHome, worktreesRoot: this.worktreesRoot },
+      diff.structured,
+    );
   }
 
   private normalizeCheckoutDiffOptions(options: CheckoutDiffCompare): CheckoutDiffCompare {

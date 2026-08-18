@@ -880,6 +880,11 @@ export const zhCN: TranslationResources = {
         notRepository: "不是 git repository",
         diffMode: "Diff 模式",
         uncommitted: "未 commit",
+        amend: "修订",
+        amending: "正在修订…",
+        amendSuccess: "已修订 commit",
+        failedAmend: "修订 commit 失败",
+        amendUpdateHost: "更新主机后才能修订更改",
         committed: "已 commit",
         baseSelectorLabel: "将已提交的更改与 {{baseRef}} 比较",
         baseSelectorTitle: "与分支比较",
@@ -900,6 +905,7 @@ export const zhCN: TranslationResources = {
         markLineUnreviewed: "将第 {{line}} 行标记为未审阅",
         editLineUnavailable: "无法在内置编辑器中打开此行",
         noUncheckedLines: "该方向没有未审阅的行",
+        focusChangesShortcut: "{{shortcut}} 聚焦更改视图",
         lineReviewShortcuts:
           "m / , 审阅并移动 · Shift+M / Shift+. 展开上下文 · 空格切换 · E 编辑 · U 撤销 · Esc 清除",
         context: {

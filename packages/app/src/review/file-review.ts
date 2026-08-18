@@ -86,6 +86,144 @@ function allLineRecords(file: ReviewableChangedFile): ReviewedLineRecord[] {
   return file.lines.map(({ fingerprint, occurrence }) => ({ fingerprint, occurrence }));
 }
 
+function parseDiffSignature(signature: string | undefined): ReviewedLineRecord[] | null {
+  if (!signature) return null;
+  try {
+    const parsed: unknown = JSON.parse(signature);
+    if (!Array.isArray(parsed)) return null;
+    const records: ReviewedLineRecord[] = [];
+    for (const entry of parsed) {
+      if (
+        !Array.isArray(entry) ||
+        entry.length !== 2 ||
+        typeof entry[0] !== "string" ||
+        !Number.isInteger(entry[1]) ||
+        (entry[1] as number) < 0
+      ) {
+        return null;
+      }
+      records.push({ fingerprint: entry[0], occurrence: entry[1] as number });
+    }
+    return records;
+  } catch {
+    return null;
+  }
+}
+
+function countFingerprints(lines: readonly ReviewedLineRecord[]): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const line of lines) {
+    counts.set(line.fingerprint, (counts.get(line.fingerprint) ?? 0) + 1);
+  }
+  return counts;
+}
+
+function reviewedLineKey(line: ReviewedLineRecord): string {
+  return JSON.stringify([line.fingerprint, line.occurrence]);
+}
+
+interface StableAnchorBounds {
+  previous: readonly (string | null)[];
+  next: readonly (string | null)[];
+}
+
+function stableAnchorBounds(
+  lines: readonly ReviewedLineRecord[],
+  stableFingerprints: ReadonlySet<string>,
+): StableAnchorBounds {
+  const previous: (string | null)[] = [];
+  const next: (string | null)[] = [];
+  let anchor: string | null = null;
+  for (const [index, line] of lines.entries()) {
+    previous[index] = anchor;
+    if (stableFingerprints.has(line.fingerprint)) anchor = line.fingerprint;
+  }
+  anchor = null;
+  for (let index = lines.length - 1; index >= 0; index -= 1) {
+    const line = lines[index];
+    if (!line) continue;
+    next[index] = anchor;
+    if (stableFingerprints.has(line.fingerprint)) anchor = line.fingerprint;
+  }
+  return { previous, next };
+}
+
+function anchoredGroupKey(
+  line: ReviewedLineRecord,
+  index: number,
+  bounds: StableAnchorBounds,
+): string {
+  return JSON.stringify([
+    line.fingerprint,
+    bounds.previous[index] ?? "START",
+    bounds.next[index] ?? "END",
+  ]);
+}
+
+function groupUnstableLines(
+  lines: readonly ReviewedLineRecord[],
+  stableFingerprints: ReadonlySet<string>,
+): Map<string, ReviewedLineRecord[]> {
+  const bounds = stableAnchorBounds(lines, stableFingerprints);
+  const groups = new Map<string, ReviewedLineRecord[]>();
+  for (const [index, line] of lines.entries()) {
+    if (stableFingerprints.has(line.fingerprint)) continue;
+    const key = anchoredGroupKey(line, index, bounds);
+    const group = groups.get(key) ?? [];
+    group.push(line);
+    groups.set(key, group);
+  }
+  return groups;
+}
+
+function buildSequenceRemapping(
+  previousLines: readonly ReviewedLineRecord[],
+  currentLines: readonly ReviewedLineRecord[],
+): Map<string, ReviewedLineRecord> {
+  const previousCounts = countFingerprints(previousLines);
+  const currentCounts = countFingerprints(currentLines);
+  const stableFingerprints = new Set(
+    [...previousCounts.entries()].flatMap(([fingerprint, count]) =>
+      count === 1 && currentCounts.get(fingerprint) === 1 ? [fingerprint] : [],
+    ),
+  );
+  const remapping = new Map<string, ReviewedLineRecord>();
+  const currentByFingerprint = new Map(currentLines.map((line) => [line.fingerprint, line]));
+
+  for (const previous of previousLines) {
+    if (!stableFingerprints.has(previous.fingerprint)) continue;
+    const current = currentByFingerprint.get(previous.fingerprint);
+    if (current) remapping.set(reviewedLineKey(previous), current);
+  }
+
+  const previousGroups = groupUnstableLines(previousLines, stableFingerprints);
+  const currentGroups = groupUnstableLines(currentLines, stableFingerprints);
+  for (const [key, previousGroup] of previousGroups) {
+    const currentGroup = currentGroups.get(key);
+    if (!currentGroup || currentGroup.length !== previousGroup.length) continue;
+    for (const [index, previous] of previousGroup.entries()) {
+      const current = currentGroup[index];
+      if (current) remapping.set(reviewedLineKey(previous), current);
+    }
+  }
+
+  return remapping;
+}
+
+function remapReviewedLinesWithoutSequence(
+  record: FileReviewRecord,
+  file: ReviewableChangedFile,
+): ReviewedLineRecord[] {
+  const previousCounts = record.lastSeenFingerprintCounts ?? {};
+  return (record.reviewedLines ?? []).flatMap((line) => {
+    const currentCount = file.fingerprintCounts[line.fingerprint];
+    if (currentCount === undefined) return [line];
+    return previousCounts[line.fingerprint] === 1 && currentCount === 1
+      ? [{ fingerprint: line.fingerprint, occurrence: 0 }]
+      : [];
+  });
+}
+
 function remapReviewedLines(
   record: FileReviewRecord,
   file: ReviewableChangedFile,
@@ -95,10 +233,19 @@ function remapReviewedLines(
   }
   if (record.lastSeenDiffSignature === file.diffSignature) return record.reviewedLines;
 
+  const previousLines = parseDiffSignature(record.lastSeenDiffSignature);
+  if (!previousLines) return remapReviewedLinesWithoutSequence(record, file);
+
+  const currentLines = allLineRecords(file);
+  const previousLineKeys = new Set(previousLines.map(reviewedLineKey));
+  const remapping = buildSequenceRemapping(previousLines, currentLines);
   const previousCounts = record.lastSeenFingerprintCounts ?? {};
   return record.reviewedLines.flatMap((line) => {
     const currentCount = file.fingerprintCounts[line.fingerprint];
+    const remapped = remapping.get(reviewedLineKey(line));
+    if (remapped) return [remapped];
     if (currentCount === undefined) return [line];
+    if (previousLineKeys.has(reviewedLineKey(line))) return [];
     return previousCounts[line.fingerprint] === 1 && currentCount === 1
       ? [{ fingerprint: line.fingerprint, occurrence: 0 }]
       : [];

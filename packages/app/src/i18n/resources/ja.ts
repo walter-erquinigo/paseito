@@ -900,6 +900,11 @@ export const ja: TranslationResources = {
         notRepository: "gitリポジトリではありません",
         diffMode: "差分モード",
         uncommitted: "未コミット",
+        amend: "修正",
+        amending: "修正中…",
+        amendSuccess: "コミットを修正しました",
+        failedAmend: "コミットの修正に失敗しました",
+        amendUpdateHost: "変更を修正するにはホストを更新してください",
         committed: "コミット済み",
         baseSelectorLabel: "コミット済みの変更を {{baseRef}} と比較",
         baseSelectorTitle: "比較するブランチ",
@@ -921,6 +926,7 @@ export const ja: TranslationResources = {
         markLineUnreviewed: "{{line}}行目を未レビューにする",
         editLineUnavailable: "この行は内蔵エディターで開けません",
         noUncheckedLines: "この方向に未レビューの行はありません",
+        focusChangesShortcut: "{{shortcut}} 変更ビューにフォーカス",
         lineReviewShortcuts:
           "m / , 承認して移動 · Shift+M / Shift+. コンテキスト表示 · Space 切替 · E 編集 · U 元に戻す · Esc 解除",
         context: {

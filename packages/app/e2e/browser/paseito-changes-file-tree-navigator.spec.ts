@@ -26,10 +26,20 @@ test("full Changes tab navigates files from a responsive persistent right rail",
       (storageKey) => localStorage.removeItem(storageKey),
       CHANGES_PREFERENCES_KEY,
     );
+    await page.addInitScript(() => {
+      localStorage.setItem(
+        "panel-state",
+        JSON.stringify({ state: { explorerWidth: 1100 }, version: 12 }),
+      );
+    });
     await openInlineChanges(page, workspace.id);
 
-    await expect(page.getByTestId("changes-file-tree-navigator")).toHaveCount(0);
+    const explorer = page.getByTestId("explorer-content-area");
     await expect(page.getByTestId("changes-toggle-view-mode")).toBeVisible();
+    await expect
+      .poll(async () => (await explorer.boundingBox())?.width ?? 0)
+      .toBeGreaterThanOrEqual(800);
+    await expect(explorer.getByTestId("changes-file-tree-navigator")).toBeVisible();
     await page.getByTestId("changes-open-tab").click();
 
     const panel = page.getByTestId("working-diff-panel").filter({ visible: true });
@@ -79,11 +89,11 @@ test("full Changes tab navigates files from a responsive persistent right rail",
     await page.setViewportSize({ width: 900, height: 900 });
     await expect(panel.getByTestId("changes-file-tree-navigator")).toHaveCount(0);
     await expectStoredNavigatorPreference(page, false);
-    await page.setViewportSize({ width: 1800, height: 900 });
+    await page.setViewportSize({ width: 2600, height: 900 });
     await expect(panel.getByTestId("changes-file-tree-navigator")).toBeVisible();
 
     await page.getByTestId("changes-open-tab").click();
-    await expect(page.getByTestId("changes-file-tree-navigator")).toHaveCount(0);
+    await expect(explorer.getByTestId("changes-file-tree-navigator")).toBeVisible();
     await expect(
       page.getByTestId("explorer-content-area").getByTestId("changes-toggle-view-mode"),
     ).toBeVisible();
@@ -131,12 +141,17 @@ async function createNavigatorWorkspace(): Promise<NavigatorWorkspace> {
 }
 
 async function openInlineChanges(page: Page, workspaceId: string): Promise<void> {
-  await page.setViewportSize({ width: 1800, height: 900 });
+  await page.setViewportSize({ width: 2600, height: 900 });
   await page.goto(buildHostWorkspaceRoute(getServerId(), workspaceId));
   await waitForWorkspaceTabsVisible(page);
   await page.getByRole("button", { name: "Open explorer" }).click();
   await expect(page.getByTestId("explorer-tab-changes")).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByText("file-00.ts", { exact: true })).toBeVisible({ timeout: 30_000 });
+  await expect(
+    page
+      .getByTestId("explorer-content-area")
+      .getByTestId("diff-file-0-toggle")
+      .getByText("file-00.ts", { exact: true }),
+  ).toBeVisible({ timeout: 30_000 });
 }
 
 async function expectHeaderAlignedToTop(panel: ReturnType<Page["getByTestId"]>, index: number) {
