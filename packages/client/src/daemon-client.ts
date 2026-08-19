@@ -4136,6 +4136,14 @@ export class DaemonClient {
     });
   }
 
+  async checkoutAmendCommit(
+    cwd: string,
+  ): Promise<CorrelatedResponsePayload<"checkout.commit.amend.response">> {
+    return this.sendNamespacedCorrelatedSessionRequest<"checkout.commit.amend.response">({
+      message: { type: "checkout.commit.amend.request", cwd },
+    });
+  }
+
   async checkoutMerge(
     cwd: string,
     input: { baseRef?: string; strategy?: "merge" | "squash"; requireCleanTarget?: boolean },

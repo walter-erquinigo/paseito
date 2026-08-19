@@ -101,6 +101,48 @@ describe("checkout-git-actions-store", () => {
     ).toBe("success");
   });
 
+  it("amends through the shared checkout action workflow", async () => {
+    const checkoutAmendCommit = vi.fn(async () => ({ success: true, error: null }));
+    const client = { checkoutAmendCommit };
+    useSessionStore.setState((state) => ({
+      ...state,
+      sessions: {
+        ...state.sessions,
+        [serverId]: { client } as unknown as (typeof state.sessions)[string],
+      },
+    }));
+
+    await useCheckoutGitActionsStore.getState().amend({ serverId, cwd });
+
+    expect(checkoutAmendCommit).toHaveBeenCalledWith(cwd);
+    expect(
+      useCheckoutGitActionsStore.getState().getStatus({ serverId, cwd, actionId: "amend" }),
+    ).toBe("success");
+  });
+
+  it("surfaces amend errors and returns to idle", async () => {
+    const client = {
+      checkoutAmendCommit: vi.fn(async () => ({
+        success: false,
+        error: { message: "No commit exists to amend" },
+      })),
+    };
+    useSessionStore.setState((state) => ({
+      ...state,
+      sessions: {
+        ...state.sessions,
+        [serverId]: { client } as unknown as (typeof state.sessions)[string],
+      },
+    }));
+
+    await expect(useCheckoutGitActionsStore.getState().amend({ serverId, cwd })).rejects.toThrow(
+      "No commit exists to amend",
+    );
+    expect(
+      useCheckoutGitActionsStore.getState().getStatus({ serverId, cwd, actionId: "amend" }),
+    ).toBe("idle");
+  });
+
   it("does not push when pull fails for pull-and-push", async () => {
     const client = {
       checkoutPull: vi.fn(async () => ({ error: { message: "pull conflict" } })),

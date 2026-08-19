@@ -22,7 +22,9 @@ badge beside the base selector until the top commit is corrected.
 
 A muted **Uncommitted** badge reports the selected branch's live working-tree state. It remains
 visible while Changes displays the **Committed** comparison and also appears in the standalone Diff
-view.
+view. An **Amend** button beside the badge stages the complete working tree and immediately amends
+the current commit without changing its message. Paseito refreshes the status and diff after the
+amend; older hosts leave the action visible and report that the host must be updated.
 
 ## Hidden context
 
@@ -138,6 +140,7 @@ per file. Wide panes show language and provider labels; narrow panes use accessi
 LSP remains available with uncommitted changes, using the exact source revision displayed by each
 comparison. Conflicting unsaved editor buffers remain protected. See [paseito-lsp.md](paseito-lsp.md)
 for session ownership and retry behavior.
+
 ## Workspace file search
 
 `Command+P` searches every tracked and non-ignored untracked file in the active workspace. Results
