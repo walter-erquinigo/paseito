@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   CheckoutDiffGetContextRequestSchema,
   CheckoutDiffGetContextResponseSchema,
+  CheckoutDiffSearchRequestSchema,
+  CheckoutDiffSearchResponseSchema,
   ReviewAttachmentSchema,
   SubscribeCheckoutDiffResponseSchema,
 } from "./messages";
@@ -36,6 +38,40 @@ describe("checkout diff context protocol", () => {
         },
       }).payload.error,
     ).toBeNull();
+  });
+
+  it("accepts bounded revisioned Changes search messages", () => {
+    expect(
+      CheckoutDiffSearchRequestSchema.parse({
+        type: "checkout.diff.search.request",
+        cwd: "/repo",
+        compare: { mode: "uncommitted" },
+        query: "needle",
+        files: [{ path: "src/a.ts", expectedRevision: "abc" }],
+        limit: 10_000,
+        requestId: "request-search",
+      }).files,
+    ).toHaveLength(1);
+    expect(
+      CheckoutDiffSearchResponseSchema.parse({
+        type: "checkout.diff.search.response",
+        payload: {
+          cwd: "/repo",
+          matches: [
+            {
+              kind: "text",
+              filePath: "src/a.ts",
+              lineNumber: 4,
+              columnStart: 2,
+              preview: " needle",
+            },
+          ],
+          truncated: false,
+          error: null,
+          requestId: "request-search",
+        },
+      }).payload.matches[0]?.kind,
+    ).toBe("text");
   });
 
   it("keeps legacy reviews valid and accepts structured suggestions and comment ranges", () => {

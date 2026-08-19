@@ -911,6 +911,11 @@ export const ru: TranslationResources = {
         notRepository: "Не git- репозиторий",
         diffMode: "Режим разницы",
         uncommitted: "Незафиксированный",
+        amend: "Изменить коммит",
+        amending: "Изменение…",
+        amendSuccess: "Коммит изменён",
+        failedAmend: "Не удалось изменить коммит",
+        amendUpdateHost: "Обновите хост, чтобы изменить коммит",
         committed: "Преданный идее",
         baseSelectorLabel: "Сравнить зафиксированные изменения с {{baseRef}}",
         baseSelectorTitle: "Сравнить с веткой",
@@ -931,6 +936,7 @@ export const ru: TranslationResources = {
         markLineUnreviewed: "Отметить строку {{line}} как непросмотренную",
         editLineUnavailable: "Эту строку нельзя открыть во встроенном редакторе",
         noUncheckedLines: "В этом направлении нет непросмотренных строк",
+        focusChangesShortcut: "{{shortcut}} перейти к изменениям",
         lineReviewShortcuts:
           "m / , принять и перейти · Shift+M / Shift+. показать контекст · Пробел переключить · E изменить · U отменить · Esc очистить",
         context: {

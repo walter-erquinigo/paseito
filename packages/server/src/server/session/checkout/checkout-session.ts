@@ -8,6 +8,7 @@ import type {
   CheckoutCommitsListRequest,
   CheckoutCommitFileDiffRequest,
   CheckoutDiffGetContextRequest,
+  CheckoutDiffSearchRequest,
   CheckoutRefreshRequest,
   CheckoutRenameBranchRequest,
   CheckoutStatusRequest,
@@ -41,6 +42,7 @@ import type {
   SearchResult,
 } from "../../../services/forge-service.js";
 import {
+  amendCommit,
   commitChanges,
   createPullRequest,
   discardChanges,
@@ -493,6 +495,38 @@ export class CheckoutSession {
     }
   }
 
+  async handleDiffSearchRequest(msg: CheckoutDiffSearchRequest): Promise<void> {
+    const cwd = expandTilde(msg.cwd);
+    try {
+      const result = await this.workspaceGitService.searchCheckoutDiff(cwd, {
+        compare: msg.compare,
+        query: msg.query,
+        files: msg.files,
+        limit: msg.limit,
+      });
+      this.host.emit({
+        type: "checkout.diff.search.response",
+        payload: {
+          cwd: msg.cwd,
+          ...result,
+          error: null,
+          requestId: msg.requestId,
+        },
+      });
+    } catch (error) {
+      this.host.emit({
+        type: "checkout.diff.search.response",
+        payload: {
+          cwd: msg.cwd,
+          matches: [],
+          truncated: false,
+          error: toCheckoutError(error),
+          requestId: msg.requestId,
+        },
+      });
+    }
+  }
+
   async handleRefreshRequest(msg: CheckoutRefreshRequest): Promise<void> {
     const { cwd, requestId } = msg;
     const resolvedCwd = expandTilde(cwd);
@@ -786,6 +820,28 @@ export class CheckoutSession {
           error: toCheckoutError(error),
           requestId,
         },
+      });
+    }
+  }
+
+  async handleCheckoutCommitAmendRequest(
+    msg: Extract<SessionInboundMessage, { type: "checkout.commit.amend.request" }>,
+  ): Promise<void> {
+    const { cwd, requestId } = msg;
+
+    try {
+      await amendCommit(cwd);
+      await this.gitMutation.notifyGitMutation(cwd, "amend-commit");
+      this.scheduleDiffRefresh(cwd);
+
+      this.host.emit({
+        type: "checkout.commit.amend.response",
+        payload: { cwd, success: true, error: null, requestId },
+      });
+    } catch (error) {
+      this.host.emit({
+        type: "checkout.commit.amend.response",
+        payload: { cwd, success: false, error: toCheckoutError(error), requestId },
       });
     }
   }

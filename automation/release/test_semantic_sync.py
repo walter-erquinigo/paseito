@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import hashlib
 import importlib.util
+import io
 import json
 import os
 import subprocess
+import tarfile
 import tempfile
 import unittest
 from pathlib import Path
@@ -464,8 +466,35 @@ class SemanticSyncTests(unittest.TestCase):
             checksum = artifact.with_name(artifact.name + ".sha256")
             checksum.write_text(f"{digest}  {artifact.name}\n", encoding="utf-8")
             linux_artifact = root / "Paseito-daemon-1.0.0-paseito.1-linux-x64.tar.gz"
-            linux_artifact.write_bytes(b"linux candidate")
-            linux_digest = hashlib.sha256(b"linux candidate").hexdigest()
+            inventory = b'{"entries":[],"schemaVersion":1}\n'
+            inventory_digest = hashlib.sha256(inventory).hexdigest()
+            manifest = json.dumps(
+                {
+                    "schemaVersion": 3,
+                    "commit": "c" * 40,
+                    "version": "1.0.0-paseito.1",
+                    "source": {
+                        "repository": "walter-erquinigo/paseito",
+                        "commit": "c" * 40,
+                        "releaseTag": "paseito-v1.0.0-paseito.1",
+                    },
+                    "runtimeIntegrity": {
+                        "algorithm": "sha256",
+                        "entryCount": 0,
+                        "path": "runtime-integrity.json",
+                        "sha256": inventory_digest,
+                    },
+                }
+            ).encode()
+            manifest_digest = hashlib.sha256(manifest).hexdigest()
+            with tarfile.open(linux_artifact, "w:gz") as archive:
+                info = tarfile.TarInfo("paseito-daemon/manifest.json")
+                info.size = len(manifest)
+                archive.addfile(info, io.BytesIO(manifest))
+                info = tarfile.TarInfo("paseito-daemon/runtime-integrity.json")
+                info.size = len(inventory)
+                archive.addfile(info, io.BytesIO(inventory))
+            linux_digest = hashlib.sha256(linux_artifact.read_bytes()).hexdigest()
             linux_checksum = linux_artifact.with_name(linux_artifact.name + ".sha256")
             linux_checksum.write_text(
                 f"{linux_digest}  {linux_artifact.name}\n", encoding="utf-8"
@@ -494,7 +523,8 @@ class SemanticSyncTests(unittest.TestCase):
                 )
             }
             provenance = {
-                "schemaVersion": 2,
+                "schemaVersion": 3,
+                "paseitoRepository": "walter-erquinigo/paseito",
                 "upstreamTag": values["upstream_tag"],
                 "upstreamCommit": values["upstream_commit"],
                 "paseitoCommit": commit,
@@ -515,8 +545,14 @@ class SemanticSyncTests(unittest.TestCase):
                         "architecture": "x64",
                         "name": linux_artifact.name,
                         "sha256": linux_digest,
+                        "manifestSha256": manifest_digest,
+                        "runtimeIntegritySha256": inventory_digest,
                     },
                 ],
+                "daemonRuntime": {
+                    "manifestSha256": manifest_digest,
+                    "runtimeIntegritySha256": inventory_digest,
+                },
                 "tests": tests,
                 "semanticDecision": {"sha256": hashlib.sha256(decision.read_bytes()).hexdigest()},
             }

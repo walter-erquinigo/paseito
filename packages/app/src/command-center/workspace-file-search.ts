@@ -9,7 +9,7 @@ import { clearCommandCenterFocusRestoreElement } from "@/utils/command-center-fo
 import { buildWorkspaceTabPersistenceKey } from "@/workspace-tabs/model";
 import {
   createWorkingDiffFileNavigationTarget,
-  waitForWorkingDiffNavigationSnapshot,
+  waitForInlineWorkingDiffNavigationSnapshot,
 } from "@/workspace/markdown-changes-navigation";
 import {
   describeWorkspaceFilePath,
@@ -186,41 +186,28 @@ export function useWorkspaceFileSearch(input: { enabled: boolean; query: string 
 
   const openFileInChanges = useCallback(
     async (path: string): Promise<"opened" | "absent"> => {
-      if (!serverId || !workspaceId) {
+      if (!serverId || !workspaceId || !cwd) {
         throw new Error("The workspace is unavailable.");
       }
       const workspaceKey = buildWorkspaceTabPersistenceKey({ serverId, workspaceId });
       if (!workspaceKey) {
         throw new Error("The workspace is unavailable.");
       }
-      const layoutStore = useWorkspaceLayoutStore.getState();
-      const tabId = layoutStore.openTabFocused(workspaceKey, { kind: "working_diff" });
-      if (!tabId) {
-        throw new Error("Changes could not be opened.");
-      }
-      const snapshot = await waitForWorkingDiffNavigationSnapshot({ workspaceKey, tabId });
+      const panelStore = usePanelStore.getState();
+      const checkout = { serverId, cwd, isGit: true };
+      panelStore.setExplorerTabForCheckout({ ...checkout, tab: "changes" });
+      panelStore.openFileExplorerForCheckout({ isCompact: false, checkout });
+      const snapshot = await waitForInlineWorkingDiffNavigationSnapshot({ workspaceKey });
       if (!snapshot.files.some((file) => file.path === path)) {
         return "absent";
       }
-      const tab = useWorkspaceLayoutStore
-        .getState()
-        .getWorkspaceTabs(workspaceKey)
-        .find((candidate) => candidate.tabId === tabId);
-      if (!tab || tab.target.kind !== "working_diff") {
-        throw new Error("Changes is unavailable.");
-      }
       clearCommandCenterFocusRestoreElement();
-      useWorkspaceLayoutStore
-        .getState()
-        .retargetTab(
-          workspaceKey,
-          tabId,
-          createWorkingDiffFileNavigationTarget({ current: tab.target, path }),
-        );
-      useWorkspaceLayoutStore.getState().focusTab(workspaceKey, tabId);
+      snapshot.navigate(
+        createWorkingDiffFileNavigationTarget({ current: { kind: "working_diff" }, path }),
+      );
       return "opened";
     },
-    [serverId, workspaceId],
+    [cwd, serverId, workspaceId],
   );
 
   return {

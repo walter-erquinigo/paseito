@@ -192,6 +192,7 @@ Source changes are not visible in an already-running packaged Paseito app. Befor
 4. Validate the new bundle in an isolated development profile and on non-production ports when possible. A source checkout, passing unit tests, or an Expo export alone is not proof that the user's packaged app has been updated.
 5. State the relaunch/install requirement explicitly in the handoff. Do not imply that an existing Electron process hot-reloads a newly built bundle.
 6. Never replace, quit, or relaunch the packaged app—and never restart its daemon on port `6767`—without the user's permission. Building an artifact is allowed; activating it is a separate step.
+7. When an improvement results in a new local Paseito installation, do not report it complete until the installed build is verified, the complete improvement is committed, and the commit is pushed to `fork/paseito`. A recovery tag is not a substitute for the branch push. If unrelated or mixed worktree changes prevent a coherent commit, separate them before installing; if that cannot be done safely, stop and report the blocker.
 
 For capability-gated UI, verify both sides of the runtime contract: the client bundle must contain the feature and the connected daemon must advertise the required `server_info.features.*` capability. When the capability is absent, the UI must show an explicit upgrade message rather than silently hiding the feature.
 
@@ -210,8 +211,11 @@ instead of editing the list by hand.
 - `changes-base-selector` — Let the Changes tab select and remember a read-only comparison base without changing merge, update or pull-request targets.
   - Fix: Default ahead branches to their committed branch diff without hiding the explicit Uncommitted view.
   - Fix: Sort every werquinigo/ branch first in literal name order on both current and legacy hosts.
+  - Fix: Keep branch search focused while revealing and activating the selected branch, including when it is absent from the bounded suggestion response.
 - `changes-uncommitted-branch-badge` — Show the selected branch's uncommitted working-tree state beside the Changes branch switcher.
   - Fix: Keep the branch badge tied to live checkout dirtiness while Changes displays either comparison mode.
+- `changes-amend-current-commit` — Amend every current working-tree change into the current commit directly from Changes.
+  - Fix: Keep the one-click amend action tied to the live uncommitted badge and daemon capability.
 - `changes-context-expansion` — Load and review omitted source context on demand from the Changes diff without transferring entire files by default.
   - Fix: Keep context expansion bounded, revision-validated and available to comments and suggestions.
 - `review-suggestions-v1` — Let a reviewer send persisted, structured one- or multi-line replacement suggestions to the destination agent from Changes.
@@ -221,12 +225,16 @@ instead of editing the list by hand.
 - `branch-file-review-state` — Let reviewers mark branch files or individual edited lines reviewed while preserving checks only for identical branch-side content.
   - Fix: Expand a file when it is marked unreviewed.
   - Fix: Require the review-state capability in packaged and remote releases.
+  - Fix: Preserve repeated reviewed edits only when their uniquely anchored sequence mapping is unambiguous.
+  - Fix: Show the live Changes-focus binding in the selected-line shortcut widget.
 - `changes-source-navigation` — Search complete current-side changed files and use shared language intelligence directly from Changes.
   - Fix: Share revision-safe LSP sessions with the editor and suppress stale buffers.
   - Fix: Anchor LSP positions to current-side source text and pause Changes intelligence while the workspace is dirty.
   - Fix: Preserve the exact terminal-newline form when rebuilding paged source for shared LSP sessions.
-- `changes-file-tree-navigator` — Navigate large working diffs from a dedicated right-hand file tree in the full desktop Changes tab.
+  - Fix: Search complete changed-file source on the daemon without transferring every file before results.
+- `changes-file-tree-navigator` — Navigate large working diffs from a dedicated right-hand file tree in either desktop Changes surface.
   - Fix: Keep repeated file selections monotonic and independent from manual diff scrolling.
+  - Fix: Keep the wide inline Changes navigator responsive and independent from the full Changes tab.
 - `lens-shared-editor-lsp` — Provide editor intelligence through the existing Lens language server when available and a daemon-owned clangd fallback for ordinary C/C++ workspaces.
   - Fix: Keep cold-index deadlines, document-version rejection and safe save fallback behavior.
   - Fix: Replay pooled LSP state to late editor leases and keep backend failures visible with retry.
@@ -240,10 +248,12 @@ instead of editing the list by hand.
   - Fix: Verify deferred browser contracts, release provenance, installers and remote-daemon rollback before promotion.
   - Fix: Keep weekly overlap decisions interactive and scheduled publication credentials local.
   - Fix: Open weekly work in iTerm2 and finish locally when GitHub Actions quota is exhausted.
+  - Fix: Bind every remote daemon to immutable GitHub release evidence and block cutover on runtime or service-unit drift without explicit restart approval.
 - `agent-message-delivery-control` — Let users queue durable follow-up messages or explicitly steer an active agent run without conflating the two actions.
   - Fix: Restore failed sends to their original queue position and preserve legacy replacement behavior.
 - `workspace-file-search-navigation` — Find every eligible workspace file from Command+P and open it either as source or in Changes.
   - Fix: Keep exhaustive project-file search fast and preserve alternate navigation into the active Changes comparison.
   - Fix: Gate exhaustive search on daemon support, bypass redundant ignored-path enumeration, and reject truncated Git file corpora.
+  - Fix: Route Command+Enter to the right Changes sidebar even when a full Changes tab exists.
 
 <!-- PASEITO-LOCAL-FEATURES:END -->

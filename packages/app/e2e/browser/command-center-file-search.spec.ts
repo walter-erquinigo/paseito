@@ -118,6 +118,7 @@ test("Command+Enter opens changed files in Changes and keeps missing files in th
 }) => {
   test.setTimeout(120_000);
   const changedPath = "src/command-center-changed.ts";
+  const secondChangedPath = "src/command-center-second-changed.ts";
   const unchangedPath = "src/command-center-unchanged.ts";
   const seeded = await seedWorkspace({
     repoPrefix: "command-center-open-changes-",
@@ -125,6 +126,7 @@ test("Command+Enter opens changed files in Changes and keeps missing files in th
     repo: {
       files: [
         { path: changedPath, content: "export const changed = 1;\n" },
+        { path: secondChangedPath, content: "export const secondChanged = 1;\n" },
         { path: unchangedPath, content: "export const unchanged = true;\n" },
       ],
     },
@@ -132,6 +134,10 @@ test("Command+Enter opens changed files in Changes and keeps missing files in th
 
   try {
     await writeFile(path.join(seeded.repoPath, changedPath), "export const changed = 2;\n");
+    await writeFile(
+      path.join(seeded.repoPath, secondChangedPath),
+      "export const secondChanged = 2;\n",
+    );
     await gotoWorkspace(page, seeded.workspaceId);
     await page.keyboard.press("Meta+P");
 
@@ -141,12 +147,29 @@ test("Command+Enter opens changed files in Changes and keeps missing files in th
     await page.keyboard.press("Meta+Enter");
 
     await expect(panel).toBeHidden({ timeout: 30_000 });
-    const changes = page.getByTestId("working-diff-panel");
+    const changes = page.getByTestId("explorer-content-area");
     await expect(changes).toBeVisible();
     await expect(
       changes.getByTestId("diff-file-0-toggle").getByText("command-center-changed.ts", {
         exact: true,
       }),
+    ).toBeInViewport();
+    await expect(page.getByTestId("working-diff-panel")).toHaveCount(0);
+
+    await page.getByTestId("changes-open-tab").click();
+    await expect(page.getByTestId("working-diff-panel")).toBeVisible();
+    await page.getByTestId("explorer-tab-files").click();
+    await page.keyboard.press("Meta+P");
+    panel = page.getByTestId("command-center-panel");
+    await panel.getByTestId("command-center-input").fill("command-center-second-changed");
+    await expect(
+      panel.getByRole("button", { name: /command-center-second-changed\.ts/ }),
+    ).toBeVisible();
+    await page.keyboard.press("Meta+Enter");
+    await expect(panel).toBeHidden({ timeout: 30_000 });
+    await expect(page.getByTestId("explorer-tab-changes")).toBeVisible();
+    await expect(
+      changes.getByText("command-center-second-changed.ts", { exact: true }).first(),
     ).toBeInViewport();
 
     await page.keyboard.press("Meta+P");

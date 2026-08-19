@@ -808,6 +808,28 @@ describe("CheckoutSession", () => {
         },
       ]);
     });
+
+    it("reports amend failures through the correlated response", async () => {
+      const { checkout, emitted } = makeCheckoutSession();
+
+      await checkout.handleCheckoutCommitAmendRequest({
+        type: "checkout.commit.amend.request",
+        cwd: "/repo",
+        requestId: "amend-1",
+      });
+
+      expect(emitted).toEqual([
+        {
+          type: "checkout.commit.amend.response",
+          payload: {
+            cwd: "/repo",
+            success: false,
+            error: { code: "NOT_GIT_REPO", message: "Not a git repository: /repo" },
+            requestId: "amend-1",
+          },
+        },
+      ]);
+    });
   });
 
   describe("merge preflight", () => {

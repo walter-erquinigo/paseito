@@ -36,8 +36,9 @@ the session shows the feature ID, evidence, and remaining differences, then wait
 choose carry-forward, adaptation, or retirement. It never infers that choice from passing tests or
 apparent equivalence. After those decisions, it performs the semantic rebase while preserving the
 feature registry and local work. Successful runs push the branch, publish and verify a release,
-install it locally, and deploy registered remote daemons. Restarting the desktop app or its managed
-daemon still requires explicit permission because it interrupts active agents.
+install it locally, and deploy registered remote daemons only after explicit restart approval.
+Restarting either a desktop-managed or remote daemon requires permission because it interrupts active
+agents.
 
 The retained semantic controller remains the implementation available to the interactive session when
 its fail-closed candidate workflow is appropriate. The controller owns
@@ -67,8 +68,15 @@ tag, publishes a release, or installs the app. Separate macOS arm64 and Linux x6
 exact candidate SHA with persisted credentials disabled. They repeat deterministic tests, build the
 unsigned desktop app and self-contained daemon runtime, and smoke-test each artifact. A final job
 emits provenance only after both jobs succeed. The local controller verifies the artifact set and
-advances the branch and annotated tag atomically with `--force-with-lease`. It then uploads the
-release, runs the local installer, and makes one deployment attempt for each registered remote host.
+advances the branch and annotated tag atomically with `--force-with-lease`. It uploads the release,
+re-downloads every asset, and verifies the published bytes before running the local installer. Remote
+deployment stays deferred unless the controller invocation records explicit restart approval.
+
+The `paseito` branch is intentionally replaceable because semantic rebases rewrite its history.
+Annotated `paseito-v*` release tags and `paseito-recovery-*` snapshots are immutable under the GitHub
+tag ruleset and retain every deployed source commit across later rebases. This protects against source
+checkout, server and branch loss inside the single canonical GitHub fork; repository or account loss
+is outside this durability boundary.
 
 When GitHub rejects a run because the monthly Actions quota or spending limit is exhausted, the
 interactive session stops using Actions for that run. It completes focused and required checks on
@@ -89,8 +97,9 @@ Each release publishes:
 - the unsigned arm64 ZIP;
 - the self-contained Linux x64 daemon archive;
 - an exact SHA-256 checksum file for each artifact;
-- `provenance.json`, binding the upstream tag and commit, Paseito commit, workflow run,
-  architectures, version, artifact digests, semantic decisions, and verification results.
+- `provenance.json`, binding the upstream tag and commit, Paseito commit, immutable release tag,
+  workflow run, architectures, version, artifact and runtime-manifest digests, semantic decisions,
+  and verification results.
 
 Linux daemon manifests retain the legacy singular `feature` field for old deployers and add a
 `features` list for capability-complete releases. New Paseito releases require the base selector,
@@ -107,14 +116,24 @@ binaries, runtime roots, systemd user units, daemon homes, and listen addresses.
 rebased, or selected independently on a remote host; the deployer accepts only the Linux artifact
 bound into the promoted candidate's provenance.
 
-The deployer stages under the registered runtime root, checks the archive digest and manifest, and
-refuses cutover while an agent has an active foreground turn. Otherwise it atomically switches the
-`current` symlink and service unit and verifies the live version, PID, server ID, websocket status,
-and relay connection. It retains the existing `~/.paseo`, port, and server identity. A failed
-post-cutover check restores the previous unit and runtime. Remote failure does not undo an already
-successful Mac release, is not automatically retried, and is written to
-`remote-deployment-state.json` for the daily report. A later release or an explicit manual deploy is
-required for another attempt.
+The deployer first resolves the provenance commit through its immutable GitHub tag, downloads the
+published Linux artifact, checksum and provenance, and compares them with the controller's copies.
+The artifact's schema-v3 manifest binds its source repository, commit, release tag and deterministic
+inventory of every runtime file and symlink.
+
+Before upload or restart, the deployer verifies the active runtime inventory, the registered systemd
+unit and absence of drop-ins. Any drift reports the affected paths and stops without changing the
+host. A verified release is made read-only, then the deployer refuses cutover while an agent has an
+active foreground turn. With explicit `--restart-approved`, it atomically switches the `current`
+symlink and service unit and verifies the live version, PID, server ID, websocket status, and relay
+connection. It retains the existing `~/.paseo`, port, and server identity. A failed post-cutover check
+restores the previous unit and runtime. Every attempt is mirrored to the GitHub Deployments API and
+written to `remote-deployment-state.json`; failures are not retried automatically.
+
+A pre-schema-v3 runtime cannot prove that it is unchanged. The first hardened deployment must compare
+that live tree with a fresh build of its recovery-tagged commit, then name the exact commit through
+`--allow-legacy-current-commit`. That exception applies to one known current runtime only; later
+deployments always require the embedded inventory.
 
 ## Installer and local watcher
 

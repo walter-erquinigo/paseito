@@ -11,6 +11,7 @@ import {
   publishWorkingDiffNavigationSnapshot,
   resolveMarkdownChangesNavigation,
   resolveMarkdownInlineChangesNavigation,
+  waitForInlineWorkingDiffNavigationSnapshot,
   waitForWorkingDiffNavigationSnapshot,
   type InlineWorkingDiffNavigationSnapshot,
   type WorkingDiffNavigationSnapshot,
@@ -128,6 +129,23 @@ describe("Markdown Changes navigation", () => {
     expect(getInlineWorkingDiffNavigationSnapshot(workspaceKey)).toBe(second);
     clearInlineWorkingDiffNavigationSnapshot(workspaceKey, secondOwner);
     expect(getInlineWorkingDiffNavigationSnapshot(workspaceKey)).toBeNull();
+  });
+
+  it("waits for the right Changes snapshot to finish loading", async () => {
+    const workspaceKey = "server:inline-wait";
+    const owner = {};
+    const loading: InlineWorkingDiffNavigationSnapshot = {
+      files: [],
+      isLoading: true,
+      contextExpansionSupported: true,
+      navigate: () => undefined,
+    };
+    const ready = { ...loading, files: [diffFile()], isLoading: false };
+    publishInlineWorkingDiffNavigationSnapshot(workspaceKey, owner, loading);
+    const pending = waitForInlineWorkingDiffNavigationSnapshot({ workspaceKey });
+    publishInlineWorkingDiffNavigationSnapshot(workspaceKey, owner, ready);
+    await expect(pending).resolves.toBe(ready);
+    clearInlineWorkingDiffNavigationSnapshot(workspaceKey, owner);
   });
 
   it("falls back when the Changes tab or its current snapshot is absent", () => {

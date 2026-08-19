@@ -3683,6 +3683,14 @@ export class DaemonClient {
     });
   }
 
+  async checkoutAmendCommit(
+    cwd: string,
+  ): Promise<CorrelatedResponsePayload<"checkout.commit.amend.response">> {
+    return this.sendNamespacedCorrelatedSessionRequest<"checkout.commit.amend.response">({
+      message: { type: "checkout.commit.amend.request", cwd },
+    });
+  }
+
   async checkoutMerge(
     cwd: string,
     input: { baseRef?: string; strategy?: "merge" | "squash"; requireCleanTarget?: boolean },
@@ -3817,6 +3825,35 @@ export class DaemonClient {
           ...(input.expectedRevision ? { expectedRevision: input.expectedRevision } : {}),
           region: input.region,
           offset: input.offset,
+          limit: input.limit,
+        },
+        timeout: 60_000,
+      });
+    if (payload.error) {
+      throw new Error(payload.error.message);
+    }
+    return payload;
+  }
+
+  async searchCheckoutDiff(
+    cwd: string,
+    input: {
+      compare: { mode: "uncommitted" | "base"; baseRef?: string; ignoreWhitespace?: boolean };
+      query: string;
+      files: Array<{ path: string; expectedRevision?: string }>;
+      limit: number;
+    },
+    requestId?: string,
+  ) {
+    const payload =
+      await this.sendNamespacedCorrelatedSessionRequest<"checkout.diff.search.response">({
+        requestId,
+        message: {
+          type: "checkout.diff.search.request",
+          cwd,
+          compare: this.normalizeCheckoutDiffCompare(input.compare),
+          query: input.query,
+          files: input.files,
           limit: input.limit,
         },
         timeout: 60_000,

@@ -254,6 +254,7 @@ test("line review controls stay in the fixed gutter across diff layouts", async 
   const reviewFocusMarker = page.getByTestId(/^diff-review-focus-/);
   await reviewCheckboxes.nth(1).click();
   await expect(reviewCheckboxes.nth(1)).toHaveAccessibleName(/unreviewed$/);
+  await expect(page.getByTestId("line-review-shortcut-hint")).toContainText("⌘; focus Changes");
   await expect(reviewFocusMarker).toHaveCount(1);
   await expect(reviewFocusMarker).toHaveAttribute(
     "data-testid",
