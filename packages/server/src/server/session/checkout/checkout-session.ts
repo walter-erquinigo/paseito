@@ -42,6 +42,7 @@ import type {
   SearchResult,
 } from "../../../services/forge-service.js";
 import {
+  amendCommit,
   commitChanges,
   createPullRequest,
   discardChanges,
@@ -819,6 +820,28 @@ export class CheckoutSession {
           error: toCheckoutError(error),
           requestId,
         },
+      });
+    }
+  }
+
+  async handleCheckoutCommitAmendRequest(
+    msg: Extract<SessionInboundMessage, { type: "checkout.commit.amend.request" }>,
+  ): Promise<void> {
+    const { cwd, requestId } = msg;
+
+    try {
+      await amendCommit(cwd);
+      await this.gitMutation.notifyGitMutation(cwd, "amend-commit");
+      this.scheduleDiffRefresh(cwd);
+
+      this.host.emit({
+        type: "checkout.commit.amend.response",
+        payload: { cwd, success: true, error: null, requestId },
+      });
+    } catch (error) {
+      this.host.emit({
+        type: "checkout.commit.amend.response",
+        payload: { cwd, success: false, error: toCheckoutError(error), requestId },
       });
     }
   }

@@ -888,6 +888,11 @@ export const ko: TranslationResources = {
         notRepository: "Git 저장소가 아닙니다",
         diffMode: "Diff 모드",
         uncommitted: "커밋되지 않음",
+        amend: "수정",
+        amending: "수정 중…",
+        amendSuccess: "커밋을 수정했습니다",
+        failedAmend: "커밋을 수정하지 못했습니다",
+        amendUpdateHost: "변경 사항을 수정하려면 호스트를 업데이트하세요",
         committed: "커밋됨",
         search: {
           placeholder: "변경된 파일 검색",

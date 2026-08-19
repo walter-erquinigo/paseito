@@ -11,6 +11,7 @@ export type CheckoutGitActionStatus = "idle" | "pending" | "success";
 
 export type CheckoutGitAsyncActionId =
   | "commit"
+  | "amend"
   | "pull"
   | "push"
   | "pull-and-push"
@@ -102,6 +103,7 @@ interface CheckoutGitActionsStoreState {
   }) => CheckoutGitActionStatus;
 
   commit: (params: { serverId: string; cwd: string }) => Promise<void>;
+  amend: (params: { serverId: string; cwd: string }) => Promise<void>;
   pull: (params: { serverId: string; cwd: string }) => Promise<void>;
   push: (params: { serverId: string; cwd: string }) => Promise<void>;
   pullAndPush: (params: { serverId: string; cwd: string }) => Promise<void>;
@@ -191,6 +193,21 @@ export const useCheckoutGitActionsStore = create<CheckoutGitActionsStoreState>()
         const payload = await client.checkoutCommit(cwd, { addAll: true });
         if (payload.error) {
           throw new Error(payload.error.message);
+        }
+      },
+    });
+  },
+
+  amend: async ({ serverId, cwd }) => {
+    await runCheckoutAction({
+      serverId,
+      cwd,
+      actionId: "amend",
+      run: async () => {
+        const client = resolveClient(serverId);
+        const payload = await client.checkoutAmendCommit(cwd);
+        if (!payload.success) {
+          throw new Error(payload.error?.message ?? i18n.t("workspace.git.diff.failedAmend"));
         }
       },
     });

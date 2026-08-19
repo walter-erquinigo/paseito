@@ -919,6 +919,11 @@ export const fr: TranslationResources = {
         notRepository: "Pas un dépôt git",
         diffMode: "Mode différentiel",
         uncommitted: "Non engagé",
+        amend: "Amender",
+        amending: "Amendement…",
+        amendSuccess: "Commit amendé",
+        failedAmend: "Échec de l’amendement du commit",
+        amendUpdateHost: "Mettez à jour l’hôte pour amender les modifications",
         committed: "Engagé",
         baseSelectorLabel: "Comparer les modifications validées à {{baseRef}}",
         baseSelectorTitle: "Comparer à la branche",
@@ -939,6 +944,7 @@ export const fr: TranslationResources = {
         markLineUnreviewed: "Marquer la ligne {{line}} comme non révisée",
         editLineUnavailable: "Cette ligne ne peut pas être ouverte dans l’éditeur intégré",
         noUncheckedLines: "Aucune ligne non cochée dans cette direction",
+        focusChangesShortcut: "{{shortcut}} cibler les modifications",
         lineReviewShortcuts:
           "m / , valider et avancer · Shift+M / Shift+. afficher le contexte · Espace basculer · E modifier · U annuler · Échap effacer",
         context: {
