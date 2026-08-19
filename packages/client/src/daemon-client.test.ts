@@ -2076,6 +2076,43 @@ test("serializes plugin source suffixes through the legacy path field", async ()
   await expect(installPromise).resolves.toMatchObject({ id: "review", status: "running" });
 });
 
+test("checkoutAmendCommit sends and correlates the namespaced amend RPC", async () => {
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "clsk_amend_commit",
+    logger: createMockLogger(),
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+
+  const connectPromise = client.connect();
+  mock.triggerOpen();
+  await connectPromise;
+
+  const amendPromise = client.checkoutAmendCommit("/tmp/project");
+  const amendRequest = parseSentFrame(mock.sent.at(-1));
+  expect(amendRequest).toEqual({
+    type: "checkout.commit.amend.request",
+    cwd: "/tmp/project",
+    requestId: expect.any(String),
+  });
+
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "checkout.commit.amend.response",
+      payload: {
+        cwd: "/tmp/project",
+        success: true,
+        error: null,
+        requestId: amendRequest.requestId,
+      },
+    }),
+  );
+  await expect(amendPromise).resolves.toMatchObject({ success: true, error: null });
+});
+
 test("a connection loss rejects an in-flight file context action", async () => {
   const mock = createMockTransport();
   const client = new DaemonClient({
