@@ -898,6 +898,11 @@ export const en = {
         notRepository: "Not a git repository",
         diffMode: "Diff mode",
         uncommitted: "Uncommitted",
+        amend: "Amend",
+        amending: "Amending…",
+        amendSuccess: "Commit amended",
+        failedAmend: "Failed to amend commit",
+        amendUpdateHost: "Update the host to amend changes",
         committed: "Committed",
         baseSelectorLabel: "Compare committed changes against {{baseRef}}",
         baseSelectorTitle: "Compare against branch",
@@ -918,6 +923,7 @@ export const en = {
         markLineUnreviewed: "Mark line {{line}} unreviewed",
         editLineUnavailable: "This line cannot be opened in the built-in editor",
         noUncheckedLines: "No unchecked lines remain in that direction",
+        focusChangesShortcut: "{{shortcut}} focus Changes",
         lineReviewShortcuts:
           "m / , approve and move · Shift+M / Shift+. reveal context · Space toggle · E edit · U undo · Esc clear",
         context: {

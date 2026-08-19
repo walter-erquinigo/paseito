@@ -1,13 +1,15 @@
 # Paseito Changes extensions
 
-Paseito adds four capability-gated review features to the Changes view.
+Paseito adds capability-gated review features to the Changes view.
 
 ## Comparison and branch ordering
 
 The base selector changes only the read-only comparison used by Changes, commit history, and review
 attachments. It does not change merge, pull-request, or update targets. Branch switcher results put
 `werquinigo/` branches first in literal name order. Remaining branches on the current first-parent
-stack follow from the configured base toward the current tip, then other branches by recency.
+stack follow from the configured base toward the current tip, then other branches by recency. When
+opened, the branch switcher keeps its search field focused while making the current branch the active
+row and scrolling that row into view, even when it falls outside the first 200 suggestions.
 
 When the current branch has commits ahead of its base, Changes opens on the committed branch diff
 even if the working tree is dirty. The **Uncommitted** option remains available and an explicit
@@ -15,6 +17,9 @@ selection is honored for as long as the checkout's dirty state does not change.
 
 A muted **Uncommitted** badge beside the branch switcher reports the selected branch's live
 working-tree state. It remains visible while Changes displays the **Committed** comparison.
+An **Amend** button beside the badge stages the complete working tree and immediately amends the
+current commit without changing its message. Paseito refreshes the status and diff after the amend;
+older hosts leave the action visible and report that the host must be updated.
 
 ## Hidden context
 
@@ -90,25 +95,34 @@ Saved comments keep the fixed line-number gutter aligned with the code, includin
 wraps to two lines or multiple comments appear in one diff.
 `Space` toggles without moving, `U` undoes the latest keyboard approval, `Escape` clears selection,
 and `E` opens the nearest current-file line in a side-by-side built-in editor. Entirely deleted files
-cannot be opened for editing.
+cannot be opened for editing. The selected-line shortcut widget also shows the current configured
+shortcut for focusing Changes from another view (`Command+;` by default on macOS).
 
 Line records use exact content, side, change type, and surrounding context. Unique unchanged edits
-survive a new file revision; changed or ambiguous duplicate edits are cleared. Existing file-level
-records are materialized as reviewed lines the first time the upgraded client observes that diff.
+survive a new file revision. Repeated edits survive only when their count and ordinal position within
+the same uniquely anchored region are unchanged; inserted, removed, or moved ambiguous repetitions
+are cleared. Existing file-level records are materialized as reviewed lines the first time the
+upgraded client observes that diff.
 
-## Full-tab file navigator
+## Desktop file navigator
 
-The desktop Changes tab has a fixed 240px file navigator on the right. It reuses the Changes
-directory hierarchy, compresses single-child folder chains, and shows file status plus addition and
-deletion counts. Folder expansion belongs to the retained Changes tab, while the whole navigator's
-collapsed preference persists across tabs and app launches. A pane narrower than 800px suppresses
-the navigator without changing that preference, so it returns automatically when the pane widens.
+The full desktop Changes tab and the inline right Changes sidebar have a fixed 240px file navigator
+on the right when their containing surface is at least 800px wide. It reuses the Changes directory
+hierarchy, compresses single-child folder chains, and shows file status plus addition and deletion
+counts. Folder expansion and selection belong to each retained surface, while the whole navigator's
+collapsed preference persists across tabs and app launches. A narrower surface suppresses the
+navigator without changing that preference, so it returns automatically when the surface widens.
 
 Selecting a navigator file expands its diff, aligns the virtualized file header with the top of the
 diff viewport, and focuses the diff surface. Repeated selections issue new focus requests. Manual
 diff scrolling does not change selection, and a selection is cleared only when that path disappears
-from the active comparison. Commit diffs, the inline Changes panel, and compact layouts do not render
-the navigator.
+from the active comparison. Commit diffs and compact layouts do not render the navigator.
+
+`/` searches changed filenames and complete current-side source with smart-case matching after
+Enter. The daemon validates the displayed file set and content revisions, then returns at most
+10,000 matches without transferring the source corpus to the client. Revealing a hidden text match
+loads only a bounded surrounding context window. Deleted, binary, and oversized files remain
+searchable by name. Older hosts report that an update is required.
 
 Editor LSP now prefers the existing Lens broker but no longer depends on Lens for C and C++ files.
 When Lens is absent, the daemon starts one shared clangd for the workspace and automatically uses a
@@ -130,10 +144,11 @@ switches discard the old index before searches resume, so results never cross br
 The index does not precompute the repository's ignored paths, and it rejects truncated Git output
 instead of presenting a partial file set. Older hosts show an update-host message before searching.
 
-`Enter` opens the selected result in a normal file tab. On desktop web, `Command+Enter` opens or
-reuses the full **Changes** tab and checks the selected path against that tab's loaded comparison. A
-matching file expands and its header is centered only when outside the diff viewport. An unchanged
-file leaves the command center open and reports that the file is not present in **Changes**.
+`Enter` opens the selected result in a normal file tab. On desktop web, `Command+Enter` opens the
+right explorer, switches it to **Changes**, and checks the selected path against that surface's
+loaded comparison. A matching file expands and its header is centered only when outside the diff
+viewport. An existing full **Changes** tab remains open and untouched. An unchanged file leaves the
+command center open and reports that the file is not present in **Changes**.
 
 ## Markdown preview source links
 

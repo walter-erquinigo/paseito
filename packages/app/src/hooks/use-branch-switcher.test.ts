@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { orderBranchSwitcherBranches } from "./use-branch-switcher";
+import { includeCurrentBranch, orderBranchSwitcherBranches } from "./use-branch-switcher";
 
 describe("orderBranchSwitcherBranches", () => {
   it("orders preferred-owner branches literally and preserves the remaining host order", () => {
@@ -33,5 +33,12 @@ describe("orderBranchSwitcherBranches", () => {
       "alpha/recent",
     ]);
     expect(branches[0]).toBe("werquinigo/public-debug-info-good-0-typedef");
+  });
+});
+
+describe("includeCurrentBranch", () => {
+  it("adds a current branch omitted by the bounded suggestions without duplicating it", () => {
+    expect(includeCurrentBranch(["dev"], "main")).toEqual(["dev", "main"]);
+    expect(includeCurrentBranch(["main", "dev"], "main")).toEqual(["main", "dev"]);
   });
 });

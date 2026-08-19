@@ -38,6 +38,14 @@ export function orderBranchSwitcherBranches(branches: readonly string[]): string
   });
 }
 
+export function includeCurrentBranch(
+  branches: readonly string[],
+  currentBranchName: string | null,
+): string[] {
+  if (!currentBranchName || branches.includes(currentBranchName)) return [...branches];
+  return [...branches, currentBranchName];
+}
+
 export function useBranchSwitcher({
   client,
   normalizedServerId,
@@ -80,9 +88,9 @@ export function useBranchSwitcher({
   });
 
   const branchOptions = useMemo<ComboboxOption[]>(() => {
-    const branches = branchSuggestionsQuery.data ?? [];
+    const branches = includeCurrentBranch(branchSuggestionsQuery.data ?? [], currentBranchName);
     return orderBranchSwitcherBranches(branches).map((name) => ({ id: name, label: name }));
-  }, [branchSuggestionsQuery.data]);
+  }, [branchSuggestionsQuery.data, currentBranchName]);
 
   const stashListQueryKey = useMemo(
     () => ["stashList", normalizedServerId, normalizedWorkspaceId] as const,

@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync, unlinkSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { getCheckoutDiff, getCheckoutDiffContext } from "./checkout-git.js";
+import { getCheckoutDiff, getCheckoutDiffContext, searchCheckoutDiff } from "./checkout-git.js";
 
 const tempDirs: string[] = [];
 
@@ -107,5 +107,45 @@ describe("checkout diff context", () => {
       isDeleted: true,
       contentRevision: "deleted:v1",
     });
+  });
+
+  it("searches the revisioned current side without returning source files", async () => {
+    const cwd = initRepo();
+    const diff = await getCheckoutDiff(cwd, { mode: "uncommitted", includeStructured: true });
+    const files = (diff.structured ?? []).map((file) =>
+      file.revision ? { path: file.path, expectedRevision: file.revision } : { path: file.path },
+    );
+
+    const result = await searchCheckoutDiff(cwd, {
+      compare: { mode: "uncommitted" },
+      query: "changed",
+      files,
+      limit: 10_000,
+    });
+
+    expect(result).toEqual({
+      matches: [
+        {
+          kind: "text",
+          filePath: "sample.ts",
+          lineNumber: 50,
+          columnStart: 7,
+          preview: "const changed = 50;",
+        },
+      ],
+      truncated: false,
+    });
+  });
+
+  it("rejects stale displayed revisions before returning search matches", async () => {
+    const cwd = initRepo();
+    await expect(
+      searchCheckoutDiff(cwd, {
+        compare: { mode: "uncommitted" },
+        query: "changed",
+        files: [{ path: "sample.ts", expectedRevision: "stale" }],
+        limit: 10_000,
+      }),
+    ).rejects.toThrow("Changes changed");
   });
 });

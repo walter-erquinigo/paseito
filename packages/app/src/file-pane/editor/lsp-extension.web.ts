@@ -10,10 +10,10 @@ import { lintGutter, setDiagnostics, type Diagnostic } from "@codemirror/lint";
 import type {
   WorkspaceLspCompletionItem,
   WorkspaceLspDiagnostic,
-  WorkspaceLspHover,
   WorkspaceLspLocation,
 } from "@getpaseo/protocol/messages";
 import type { EditorLspSession } from "./lsp-session";
+import { createLspHoverMarkdownDom, hasLspHoverContent } from "./lsp-hover-markdown.web";
 
 export function editorLspExtensions(input: {
   session: EditorLspSession;
@@ -170,18 +170,14 @@ async function hoverSource(
 ): Promise<Tooltip | null> {
   const hover = await session.hover(lspPosition(view.state.doc, position));
   if (!hover) return null;
-  const text = hoverText(hover);
-  if (!text) return null;
+  if (!hasLspHoverContent(hover)) return null;
   const range = hover.range ? rangeOffsets(view, hover.range) : null;
   return {
     pos: range?.from ?? position,
     end: range?.to,
     above: true,
     create() {
-      const dom = document.createElement("div");
-      dom.className = "cm-lsp-hover";
-      dom.textContent = text;
-      return { dom };
+      return { dom: createLspHoverMarkdownDom(hover) };
     },
   };
 }
@@ -249,16 +245,6 @@ function lspPosition(
 function markupText(value: WorkspaceLspCompletionItem["documentation"]): string {
   if (!value) return "";
   return typeof value === "string" ? value : value.value;
-}
-
-function hoverText(hover: WorkspaceLspHover): string {
-  if (typeof hover.contents === "string") return hover.contents;
-  if (Array.isArray(hover.contents)) {
-    return hover.contents
-      .map((part) => (typeof part === "string" ? part : part.value))
-      .join("\n\n");
-  }
-  return hover.contents.value;
 }
 
 function completionKind(kind: number | undefined): string | undefined {

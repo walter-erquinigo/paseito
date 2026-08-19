@@ -145,6 +145,23 @@ class RebasePipelineTests(unittest.TestCase):
         remote_call = controller[controller.index("deploy_remote_daemons.py") :]
         self.assertIn("check=False", remote_call[:500])
 
+    def test_release_is_redownloaded_before_any_remote_deployment(self) -> None:
+        controller = (Path(__file__).parent / "semantic_sync.py").read_text(encoding="utf-8")
+        promote = controller[controller.index("def promote(") : controller.index("def pending_path(")]
+        self.assertLess(
+            promote.index("verify_published_release"),
+            promote.index("deploy_remote_daemons.py"),
+        )
+        self.assertIn('"--remote-restart-approved"', controller)
+        self.assertIn('"--restart-approved"', promote)
+
+    def test_linux_artifact_binds_release_tag_and_runtime_inventory(self) -> None:
+        workflow = (Path(__file__).parents[2] / ".github/workflows/paseito-release.yml").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('--release-tag "${{ inputs.release_tag }}"', workflow)
+        self.assertIn("runtime-integrity.json", workflow)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -911,6 +911,11 @@ export const ptBR: TranslationResources = {
         notRepository: "Não é um repositório git",
         diffMode: "Modo de diff",
         uncommitted: "Sem commit",
+        amend: "Emendar",
+        amending: "Emendando…",
+        amendSuccess: "Commit emendado",
+        failedAmend: "Falha ao emendar o commit",
+        amendUpdateHost: "Atualize o host para emendar alterações",
         committed: "Com commit",
         baseSelectorLabel: "Comparar alterações commitadas com {{baseRef}}",
         baseSelectorTitle: "Comparar com a branch",
@@ -931,6 +936,7 @@ export const ptBR: TranslationResources = {
         markLineUnreviewed: "Marcar a linha {{line}} como não revisada",
         editLineUnavailable: "Esta linha não pode ser aberta no editor integrado",
         noUncheckedLines: "Não há linhas desmarcadas nessa direção",
+        focusChangesShortcut: "{{shortcut}} focar Alterações",
         lineReviewShortcuts:
           "m / , aprovar e mover · Shift+M / Shift+. mostrar contexto · Espaço alternar · E editar · U desfazer · Esc limpar",
         context: {

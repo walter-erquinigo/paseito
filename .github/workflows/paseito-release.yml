@@ -182,12 +182,28 @@ jobs:
           python3 automation/release/package_linux_daemon.py \
             --version "${{ inputs.paseito_version }}" \
             --commit "${{ inputs.expected_sha }}" \
+            --release-tag "${{ inputs.release_tag }}" \
             --output "$artifact"
           tar -xzf "$artifact" -C extracted
           manifest=extracted/paseito-daemon/manifest.json
+          test "$(jq -r .schemaVersion "$manifest")" = 3
           test "$(jq -r .version "$manifest")" = "${{ inputs.paseito_version }}"
           test "$(jq -r .daemonVersion "$manifest")" = "$(jq -r .version packages/server/package.json)"
           test "$(jq -r .commit "$manifest")" = "${{ inputs.expected_sha }}"
+          test "$(jq -r .source.repository "$manifest")" = "walter-erquinigo/paseito"
+          test "$(jq -r .source.releaseTag "$manifest")" = "${{ inputs.release_tag }}"
+          integrity="extracted/paseito-daemon/$(jq -r .runtimeIntegrity.path "$manifest")"
+          test "$(sha256sum "$integrity" | awk '{print $1}')" = "$(jq -r .runtimeIntegrity.sha256 "$manifest")"
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          from automation.release.package_linux_daemon import runtime_integrity
+
+          root = Path("extracted/paseito-daemon")
+          expected = json.loads((root / "runtime-integrity.json").read_text(encoding="utf-8"))
+          if runtime_integrity(root) != expected:
+              raise SystemExit("packaged daemon runtime inventory does not match its extracted tree")
+          PY
           test "$(jq -r .feature "$manifest")" = changesBaseSelector
           test "$(jq -r '.features | contains(["workspaceLsp"])' "$manifest")" = true
           entrypoint="$(jq -r .entrypoint "$manifest")"

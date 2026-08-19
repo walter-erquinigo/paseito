@@ -42,6 +42,8 @@ class WeeklyInteractiveTests(unittest.TestCase):
         self.assertIn("install", PROMPT)
         self.assertIn("local-only fallback", PROMPT)
         self.assertIn("force-push the final `paseito` branch with `--force-with-lease`", PROMPT)
+        self.assertIn("--remote-restart-approved", PROMPT)
+        self.assertIn("every registered daemon restart can interrupt active agents", PROMPT)
         self.assertIn("Do not create a release tag", PROMPT)
         self.assertIn("explicit permission", PROMPT)
         self.assertIn("Never use launchctl submit", PROMPT)

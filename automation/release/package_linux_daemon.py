@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import gzip
+import hashlib
 import json
 import os
 import platform
@@ -16,6 +17,9 @@ from pathlib import Path
 from typing import Any
 
 WORKSPACES = ("highlight", "relay", "protocol", "client", "server", "cli")
+SOURCE_REPOSITORY = "walter-erquinigo/paseito"
+INTEGRITY_PATH = "runtime-integrity.json"
+INTEGRITY_EXCLUDES = {"manifest.json", INTEGRITY_PATH}
 
 
 def command(args: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
@@ -75,6 +79,8 @@ def validate_local_workspace_resolution(stage: Path) -> None:
         "workspaceLsp",
         "workspaceLspClangd",
         "workspaceFileSearch",
+        "checkoutDiffSearch",
+        "checkoutCommitAmend",
     )
     missing_features = [feature for feature in required_features if feature not in feature_text]
     if missing_features:
@@ -100,13 +106,60 @@ def write_bundle(stage: Path, output: Path) -> None:
     temporary.replace(output)
 
 
-def manifest(version: str, commit: str, daemon_version: str) -> dict[str, Any]:
+def sha256_bytes(value: bytes) -> str:
+    return hashlib.sha256(value).hexdigest()
+
+
+def runtime_integrity(stage: Path) -> dict[str, Any]:
+    entries: list[dict[str, str]] = []
+    for path in sorted(stage.rglob("*"), key=lambda item: item.relative_to(stage).as_posix()):
+        relative = path.relative_to(stage).as_posix()
+        if relative in INTEGRITY_EXCLUDES:
+            continue
+        if path.is_symlink():
+            entries.append({"path": relative, "target": os.readlink(path), "type": "symlink"})
+        elif path.is_file():
+            entries.append(
+                {
+                    "path": relative,
+                    "sha256": sha256_bytes(path.read_bytes()),
+                    "type": "file",
+                }
+            )
+    return {"schemaVersion": 1, "entries": entries}
+
+
+def write_runtime_integrity(stage: Path) -> dict[str, Any]:
+    value = runtime_integrity(stage)
+    content = json.dumps(value, separators=(",", ":"), sort_keys=True).encode() + b"\n"
+    (stage / INTEGRITY_PATH).write_bytes(content)
     return {
-        "schemaVersion": 2,
+        "algorithm": "sha256",
+        "entryCount": len(value["entries"]),
+        "path": INTEGRITY_PATH,
+        "sha256": sha256_bytes(content),
+    }
+
+
+def manifest(
+    version: str,
+    commit: str,
+    daemon_version: str,
+    release_tag: str,
+    integrity: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "schemaVersion": 3,
         "product": "Paseito daemon",
         "version": version,
         "daemonVersion": daemon_version,
         "commit": commit,
+        "source": {
+            "repository": SOURCE_REPOSITORY,
+            "commit": commit,
+            "releaseTag": release_tag,
+        },
+        "runtimeIntegrity": integrity,
         "platform": "linux",
         "architecture": "x64",
         "nodeMajor": 22,
@@ -120,6 +173,8 @@ def manifest(version: str, commit: str, daemon_version: str) -> dict[str, Any]:
             "workspaceLsp",
             "workspaceLspClangd",
             "workspaceFileSearch",
+            "checkoutDiffSearch",
+            "checkoutCommitAmend",
         ],
     }
 
@@ -138,6 +193,7 @@ def main() -> int:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--version", required=True)
     parser.add_argument("--commit", required=True)
+    parser.add_argument("--release-tag", required=True)
     args = parser.parse_args()
     root = args.root.resolve()
     if platform.system() != "Linux" or platform.machine() not in {"x86_64", "amd64"}:
@@ -167,8 +223,19 @@ def main() -> int:
         )
         validate_local_workspace_resolution(stage)
         shutil.rmtree(packs)
+        integrity = write_runtime_integrity(stage)
         (stage / "manifest.json").write_text(
-            json.dumps(manifest(args.version, args.commit, daemon_version), indent=2, sort_keys=True)
+            json.dumps(
+                manifest(
+                    args.version,
+                    args.commit,
+                    daemon_version,
+                    args.release_tag,
+                    integrity,
+                ),
+                indent=2,
+                sort_keys=True,
+            )
             + "\n",
             encoding="utf-8",
         )

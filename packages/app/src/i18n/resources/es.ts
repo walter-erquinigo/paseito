@@ -920,6 +920,11 @@ export const es: TranslationResources = {
         notRepository: "No es un repositorio de git",
         diffMode: "modo diferencial",
         uncommitted: "No comprometido",
+        amend: "Enmendar",
+        amending: "Enmendando…",
+        amendSuccess: "Commit enmendado",
+        failedAmend: "No se pudo enmendar el commit",
+        amendUpdateHost: "Actualiza el host para enmendar cambios",
         committed: "Comprometido",
         baseSelectorLabel: "Comparar los cambios confirmados con {{baseRef}}",
         baseSelectorTitle: "Comparar con la rama",
@@ -940,6 +945,7 @@ export const es: TranslationResources = {
         markLineUnreviewed: "Marcar la línea {{line}} como no revisada",
         editLineUnavailable: "Esta línea no se puede abrir en el editor integrado",
         noUncheckedLines: "No quedan líneas sin revisar en esa dirección",
+        focusChangesShortcut: "{{shortcut}} enfocar Cambios",
         lineReviewShortcuts:
           "m / , aprobar y mover · Shift+M / Shift+. mostrar contexto · Espacio alternar · E editar · U deshacer · Esc borrar",
         context: {

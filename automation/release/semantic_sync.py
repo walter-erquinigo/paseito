@@ -12,6 +12,8 @@ import re
 import shlex
 import subprocess
 import sys
+import tarfile
+import tempfile
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -82,6 +84,25 @@ def sha256(path: Path) -> str:
         for chunk in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def daemon_manifest(path: Path) -> tuple[dict[str, Any], str]:
+    try:
+        with tarfile.open(path, "r:gz") as archive:
+            member = archive.getmember("paseito-daemon/manifest.json")
+            stream = archive.extractfile(member)
+            if stream is None:
+                raise SyncError("artifact", "Linux daemon manifest is unreadable")
+            content = stream.read()
+    except (KeyError, tarfile.TarError) as error:
+        raise SyncError("artifact", "Linux daemon artifact has no valid manifest") from error
+    try:
+        value = json.loads(content)
+    except json.JSONDecodeError as error:
+        raise SyncError("artifact", "Linux daemon manifest is invalid") from error
+    if not isinstance(value, dict):
+        raise SyncError("artifact", "Linux daemon manifest must be an object")
+    return value, hashlib.sha256(content).hexdigest()
 
 
 def reconciliation_prompt(values: dict[str, str], input_commit: str) -> str:
@@ -524,7 +545,7 @@ def validate_artifacts(
     if any(provenance.get(key) != value for key, value in expected.items()):
         raise SyncError("provenance", "candidate artifact provenance does not match local decision")
     entries = provenance.get("artifacts")
-    if provenance.get("schemaVersion") != 2 or not isinstance(entries, list):
+    if provenance.get("schemaVersion") != 3 or not isinstance(entries, list):
         raise SyncError("provenance", "candidate provenance has no versioned artifact set")
     expected_artifacts = {
         ("desktop", "darwin", "arm64"),
@@ -563,6 +584,34 @@ def validate_artifacts(
         "sha256": desktop.get("sha256"),
     }:
         raise SyncError("provenance", "legacy desktop artifact does not match artifact set")
+    daemon = next(
+        entry
+        for entry in entries
+        if isinstance(entry, dict) and entry.get("kind") == "daemon"
+    )
+    daemon_path = directory / str(daemon.get("name", ""))
+    manifest, manifest_digest = daemon_manifest(daemon_path)
+    source = manifest.get("source")
+    integrity = manifest.get("runtimeIntegrity")
+    daemon_runtime = provenance.get("daemonRuntime")
+    if (
+        provenance.get("paseitoRepository") != REPOSITORY
+        or manifest.get("schemaVersion") != 3
+        or manifest.get("commit") != commit
+        or manifest.get("version") != values["paseito_version"]
+        or not isinstance(source, dict)
+        or source.get("repository") != REPOSITORY
+        or source.get("commit") != commit
+        or source.get("releaseTag") != values["release_tag"]
+        or not isinstance(integrity, dict)
+        or integrity.get("algorithm") != "sha256"
+        or daemon.get("manifestSha256") != manifest_digest
+        or daemon.get("runtimeIntegritySha256") != integrity.get("sha256")
+        or not isinstance(daemon_runtime, dict)
+        or daemon_runtime.get("manifestSha256") != manifest_digest
+        or daemon_runtime.get("runtimeIntegritySha256") != integrity.get("sha256")
+    ):
+        raise SyncError("provenance", "Linux daemon runtime is not bound to the candidate")
     if provenance.get("semanticDecision", {}).get("sha256") != sha256(decision_path):
         raise SyncError("provenance", "semantic decision record does not match provenance")
     required_tests = {
@@ -582,6 +631,42 @@ def validate_artifacts(
     return (*artifact_paths, provenance_path)
 
 
+def verify_published_release(
+    candidate: Path,
+    control_repo: Path,
+    tag: str,
+    commit: str,
+    artifacts: tuple[Path, ...],
+) -> None:
+    tag_lines = git(candidate, "ls-remote", "fork", f"refs/tags/{tag}^{{}}").splitlines()
+    remote_tag = tag_lines[0].split()[0] if tag_lines else ""
+    if remote_tag != commit:
+        raise SyncError("publication", "published release tag does not match the verified commit")
+    with tempfile.TemporaryDirectory(prefix="paseito-release-verification-") as directory:
+        downloaded = Path(directory)
+        for artifact in artifacts:
+            command(
+                [
+                    "gh",
+                    "release",
+                    "download",
+                    tag,
+                    "--repo",
+                    REPOSITORY,
+                    "--pattern",
+                    artifact.name,
+                    "--dir",
+                    str(downloaded),
+                ],
+                cwd=control_repo,
+                timeout=300,
+            )
+            if sha256(downloaded / artifact.name) != sha256(artifact):
+                raise SyncError(
+                    "publication", f"published release asset differs locally: {artifact.name}"
+                )
+
+
 def promote(
     candidate: Path,
     control_repo: Path,
@@ -590,6 +675,7 @@ def promote(
     commit: str,
     values: dict[str, str],
     artifacts: tuple[Path, ...],
+    remote_restart_approved: bool = False,
 ) -> None:
     tag = values["release_tag"]
     branch_lines = git(candidate, "ls-remote", "fork", "refs/heads/paseito").splitlines()
@@ -656,23 +742,40 @@ def promote(
             cwd=control_repo,
             timeout=300,
         )
+    verify_published_release(candidate, control_repo, tag, commit, artifacts)
     command(["git", "push", "fork", "--delete", branch], cwd=candidate, check=False, timeout=120)
     command([sys.executable, str(candidate / "automation/installer/paseito_installer.py")], cwd=candidate, timeout=600)
+    remote_args = [
+        sys.executable,
+        str(candidate / "automation/remote/deploy_remote_daemons.py"),
+        "--provenance",
+        str(artifacts[-1]),
+    ]
+    if remote_restart_approved:
+        remote_args.append("--restart-approved")
     remote = command(
-        [
-            sys.executable,
-            str(candidate / "automation/remote/deploy_remote_daemons.py"),
-            "--provenance",
-            str(artifacts[-1]),
-        ],
+        remote_args,
         cwd=candidate,
         check=False,
-        timeout=600,
+        timeout=900,
     )
-    if remote.returncode:
+    if remote_restart_approved:
+        if remote.returncode:
+            print(
+                "Paseito Mac promotion succeeded; at least one registered remote deployment failed "
+                "and was recorded for the daily report.",
+                file=sys.stderr,
+            )
+    elif remote.returncode != 2:
         print(
-            "Paseito Mac promotion succeeded; at least one registered remote deployment failed "
-            "and was recorded for the daily report.",
+            "Paseito Mac promotion succeeded; remote deployment could not record its deferred "
+            "approval state.",
+            file=sys.stderr,
+        )
+    else:
+        print(
+            "Paseito Mac promotion succeeded; remote deployment was deferred because this "
+            "invocation had no explicit restart approval.",
             file=sys.stderr,
         )
 
@@ -705,7 +808,9 @@ def save_pending(
     temporary.replace(path)
 
 
-def resume_pending(control_repo: Path, state_root: Path) -> bool:
+def resume_pending(
+    control_repo: Path, state_root: Path, remote_restart_approved: bool = False
+) -> bool:
     path = pending_path(state_root)
     if not path.exists():
         return False
@@ -734,6 +839,7 @@ def resume_pending(control_repo: Path, state_root: Path) -> bool:
         commit,
         values,
         artifacts,
+        remote_restart_approved,
     )
     path.unlink()
     close_failure_issue(control_repo)
@@ -751,9 +857,14 @@ def close_failure_issue(control_repo: Path) -> None:
         command(["gh", "issue", "close", result.stdout.strip(), "--repo", REPOSITORY, "--comment", "Resolved by a verified local semantic sync."], cwd=control_repo, check=False)
 
 
-def synchronize(control_repo: Path, state_root: Path, force: bool = False) -> int:
+def synchronize(
+    control_repo: Path,
+    state_root: Path,
+    force: bool = False,
+    remote_restart_approved: bool = False,
+) -> int:
     ensure_public(control_repo)
-    if resume_pending(control_repo, state_root):
+    if resume_pending(control_repo, state_root, remote_restart_approved):
         return 0
     values = discover(control_repo, force)
     if values.get("needs_release") != "true":
@@ -974,7 +1085,16 @@ def synchronize(control_repo: Path, state_root: Path, force: bool = False) -> in
     command(["gh", "run", "download", str(run_id), "--repo", REPOSITORY, "--name", "paseito-candidate", "--dir", str(artifacts_dir)], cwd=control_repo, timeout=600)
     artifacts = validate_artifacts(artifacts_dir, values, final_commit, record_path)
     save_pending(state_root, candidate, branch, original_commit, final_commit, values, artifacts)
-    promote(candidate, control_repo, branch, original_commit, final_commit, values, artifacts)
+    promote(
+        candidate,
+        control_repo,
+        branch,
+        original_commit,
+        final_commit,
+        values,
+        artifacts,
+        remote_restart_approved,
+    )
     pending_path(state_root).unlink()
     close_failure_issue(control_repo)
     dispatch_status(control_repo, "success", "semantic-sync", values["paseito_version"])
@@ -986,6 +1106,7 @@ def main() -> int:
     parser.add_argument("--control-repo", type=Path, default=Path(__file__).resolve().parents[2])
     parser.add_argument("--state-root", type=Path, default=Path.home() / "Library/Application Support/PaseitoAutomation")
     parser.add_argument("--force", action="store_true")
+    parser.add_argument("--remote-restart-approved", action="store_true")
     args = parser.parse_args()
     args.state_root.mkdir(parents=True, exist_ok=True, mode=0o700)
     lock_path = args.state_root / "semantic-sync.lock"
@@ -995,7 +1116,12 @@ def main() -> int:
         except BlockingIOError:
             return 0
         try:
-            return synchronize(args.control_repo.resolve(), args.state_root.resolve(), args.force)
+            return synchronize(
+                args.control_repo.resolve(),
+                args.state_root.resolve(),
+                args.force,
+                args.remote_restart_approved,
+            )
         except Exception as error:
             category = error.category if isinstance(error, SyncError) else "command"
             report_failure(args.control_repo.resolve(), category)

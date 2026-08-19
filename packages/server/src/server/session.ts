@@ -2089,12 +2089,16 @@ export class Session {
         return undefined;
       case "checkout.diff.get_context.request":
         return this.checkoutSession.handleDiffGetContextRequest(msg);
+      case "checkout.diff.search.request":
+        return this.checkoutSession.handleDiffSearchRequest(msg);
       case "checkout_switch_branch_request":
         return this.checkoutSession.handleCheckoutSwitchBranchRequest(msg);
       case "checkout.rename_branch.request":
         return this.checkoutSession.handleCheckoutRenameBranchRequest(msg);
       case "checkout_commit_request":
         return this.checkoutSession.handleCheckoutCommitRequest(msg);
+      case "checkout.commit.amend.request":
+        return this.checkoutSession.handleCheckoutCommitAmendRequest(msg);
       case "checkout_merge_request":
         return this.checkoutSession.handleCheckoutMergeRequest(msg);
       case "checkout_merge_from_base_request":

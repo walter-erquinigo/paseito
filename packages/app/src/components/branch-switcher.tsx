@@ -71,6 +71,7 @@ export function BranchSwitcher({
   const renderBranchOption = useCallback<NonNullable<ComboboxProps["renderOption"]>>(
     ({ option, selected, active, onPress }) => (
       <ComboboxItem
+        testID={`branch-switcher-option-${option.id}`}
         label={option.label}
         selected={selected}
         active={active}
@@ -115,6 +116,7 @@ export function BranchSwitcher({
         desktopPlacement="bottom-start"
         desktopPreventInitialFlash
         desktopMinWidth={280}
+        scrollActiveOptionIntoView
         renderOption={renderBranchOption}
       />
     </View>

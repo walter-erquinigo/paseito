@@ -32,6 +32,10 @@ const inlineWorkingDiffSnapshots = new Map<
   string,
   { owner: object; snapshot: InlineWorkingDiffNavigationSnapshot }
 >();
+const inlineWorkingDiffSnapshotListeners = new Map<
+  string,
+  Set<(snapshot: InlineWorkingDiffNavigationSnapshot) => void>
+>();
 let lastWorkingDiffFocusRequestId = 0;
 
 export function publishWorkingDiffNavigationSnapshot(
@@ -91,6 +95,9 @@ export function publishInlineWorkingDiffNavigationSnapshot(
   snapshot: InlineWorkingDiffNavigationSnapshot,
 ): void {
   inlineWorkingDiffSnapshots.set(workspaceKey, { owner, snapshot });
+  for (const listener of inlineWorkingDiffSnapshotListeners.get(workspaceKey) ?? []) {
+    listener(snapshot);
+  }
 }
 
 export function clearInlineWorkingDiffNavigationSnapshot(
@@ -106,6 +113,33 @@ export function getInlineWorkingDiffNavigationSnapshot(
   workspaceKey: string,
 ): InlineWorkingDiffNavigationSnapshot | null {
   return inlineWorkingDiffSnapshots.get(workspaceKey)?.snapshot ?? null;
+}
+
+export function waitForInlineWorkingDiffNavigationSnapshot(input: {
+  workspaceKey: string;
+  timeoutMs?: number;
+}): Promise<InlineWorkingDiffNavigationSnapshot> {
+  const current = getInlineWorkingDiffNavigationSnapshot(input.workspaceKey);
+  if (current && !current.isLoading) {
+    return Promise.resolve(current);
+  }
+  return new Promise((resolve, reject) => {
+    const listeners = inlineWorkingDiffSnapshotListeners.get(input.workspaceKey) ?? new Set();
+    const finish = (snapshot: InlineWorkingDiffNavigationSnapshot) => {
+      if (snapshot.isLoading) return;
+      clearTimeout(timeout);
+      listeners.delete(finish);
+      if (listeners.size === 0) inlineWorkingDiffSnapshotListeners.delete(input.workspaceKey);
+      resolve(snapshot);
+    };
+    const timeout = setTimeout(() => {
+      listeners.delete(finish);
+      if (listeners.size === 0) inlineWorkingDiffSnapshotListeners.delete(input.workspaceKey);
+      reject(new Error("Changes did not finish loading."));
+    }, input.timeoutMs ?? 15_000);
+    listeners.add(finish);
+    inlineWorkingDiffSnapshotListeners.set(input.workspaceKey, listeners);
+  });
 }
 
 export interface MarkdownChangesNavigation {

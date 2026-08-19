@@ -20,6 +20,9 @@ export function FileEditorView(_props: {
     foregroundMuted: string;
     border: string;
     selection: string;
+    surfaceRaised: string;
+    codeBackground: string;
+    uiFont: string;
     monoFont: string;
     codeFontSize: number;
     syntax: Record<HighlightStyle, string>;
