@@ -54,6 +54,7 @@ const READ_ONLY_GIT_ENV = {
  */
 export type GitMutationRefreshReason =
   | "commit-changes"
+  | "amend-commit"
   | "pull"
   | "push"
   | "merge-to-base"
@@ -3957,6 +3958,31 @@ export async function commitChanges(
     await runGitCommand(["add", "-A"], { cwd, timeout: 120_000 });
   }
   await runGitCommand(["-c", "commit.gpgsign=false", "commit", "-m", options.message], {
+    cwd,
+    timeout: 120_000,
+  });
+}
+
+export async function amendCommit(cwd: string): Promise<void> {
+  await requireGitRepo(cwd);
+  const head = await runGitCommand(["rev-parse", "--verify", "HEAD"], {
+    cwd,
+    acceptExitCodes: [0, 128],
+  });
+  if (head.exitCode !== 0) {
+    throw new Error("No commit exists to amend");
+  }
+
+  await runGitCommand(["add", "-A"], { cwd, timeout: 120_000 });
+  const staged = await runGitCommand(["diff", "--cached", "--quiet", "--exit-code", "HEAD", "--"], {
+    cwd,
+    acceptExitCodes: [0, 1],
+  });
+  if (staged.exitCode === 0) {
+    throw new Error("No changes to amend");
+  }
+
+  await runGitCommand(["-c", "commit.gpgsign=false", "commit", "--amend", "--no-edit"], {
     cwd,
     timeout: 120_000,
   });
