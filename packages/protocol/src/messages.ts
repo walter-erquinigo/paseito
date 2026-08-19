@@ -2159,6 +2159,12 @@ export const CheckoutCommitRequestSchema = z.object({
   requestId: z.string(),
 });
 
+export const CheckoutCommitAmendRequestSchema = z.object({
+  type: z.literal("checkout.commit.amend.request"),
+  cwd: z.string(),
+  requestId: z.string(),
+});
+
 export const CheckoutMergeRequestSchema = z.object({
   type: z.literal("checkout_merge_request"),
   cwd: z.string(),
@@ -3262,6 +3268,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   CheckoutDiffGetContextRequestSchema,
   CheckoutDiffSearchRequestSchema,
   CheckoutCommitRequestSchema,
+  CheckoutCommitAmendRequestSchema,
   CheckoutMergeRequestSchema,
   CheckoutMergeFromBaseRequestSchema,
   CheckoutPullRequestSchema,
@@ -3684,6 +3691,9 @@ export const ServerInfoStatusPayloadSchema = z
         fsEntryDuplicate: z.boolean().optional(),
         // COMPAT(checkoutDiscardChanges): added in v0.3.0, remove gate after 2027-02-08.
         checkoutDiscardChanges: z.boolean().optional(),
+        // COMPAT(checkoutCommitAmend): added in Paseito v0.4.0-paseito.24,
+        // remove gate after 2027-02-18.
+        checkoutCommitAmend: z.boolean().optional(),
         // COMPAT(agentProfiles): added in v0.3.2, remove gate after 2027-02-11.
         // An older daemon parses its persisted config strictly, so writing
         // agentProfiles to one is silently dropped. The client hides the feature
@@ -5286,6 +5296,16 @@ export const CheckoutCommitResponseSchema = z.object({
   }),
 });
 
+export const CheckoutCommitAmendResponseSchema = z.object({
+  type: z.literal("checkout.commit.amend.response"),
+  payload: z.object({
+    cwd: z.string(),
+    success: z.boolean(),
+    error: CheckoutErrorSchema.nullable(),
+    requestId: z.string(),
+  }),
+});
+
 export const CheckoutMergeResponseSchema = z.object({
   type: z.literal("checkout_merge_response"),
   payload: z.object({
@@ -6706,6 +6726,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   CheckoutDiffGetContextResponseSchema,
   CheckoutDiffSearchResponseSchema,
   CheckoutCommitResponseSchema,
+  CheckoutCommitAmendResponseSchema,
   CheckoutMergeResponseSchema,
   CheckoutMergeFromBaseResponseSchema,
   CheckoutPullResponseSchema,
@@ -7062,6 +7083,8 @@ export type CheckoutDiffSearchRequest = z.infer<typeof CheckoutDiffSearchRequest
 export type CheckoutDiffSearchResponse = z.infer<typeof CheckoutDiffSearchResponseSchema>;
 export type CheckoutCommitRequest = z.infer<typeof CheckoutCommitRequestSchema>;
 export type CheckoutCommitResponse = z.infer<typeof CheckoutCommitResponseSchema>;
+export type CheckoutCommitAmendRequest = z.infer<typeof CheckoutCommitAmendRequestSchema>;
+export type CheckoutCommitAmendResponse = z.infer<typeof CheckoutCommitAmendResponseSchema>;
 export type CheckoutMergeRequest = z.infer<typeof CheckoutMergeRequestSchema>;
 export type CheckoutMergeResponse = z.infer<typeof CheckoutMergeResponseSchema>;
 export type CheckoutMergeFromBaseRequest = z.infer<typeof CheckoutMergeFromBaseRequestSchema>;

@@ -64,11 +64,6 @@ export const ptBR: TranslationResources = {
       placeholder: "Buscar comandos, arquivos, espaços de trabalho e agentes...",
       filePlaceholder: "Pesquisar arquivos...",
       searchingFiles: "Pesquisando arquivos...",
-      fileNotPresentInChanges: "Este arquivo não está presente em Alterações.",
-      absoluteFileSearchRequiresHostUpdate:
-        "Atualize este host para pesquisar caminhos absolutos de arquivos.",
-      fileSearchRequiresHostUpdate:
-        "Atualize este host para pesquisar todos os arquivos do espaço de trabalho.",
       noMatches: "Nenhuma correspondência",
       actions: "Ações",
       files: "Arquivos",
