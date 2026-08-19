@@ -64,11 +64,6 @@ export const ru: TranslationResources = {
       placeholder: "Поиск команд, файлов, рабочих пространств и агентов...",
       filePlaceholder: "Поиск файлов...",
       searchingFiles: "Поиск файлов...",
-      fileNotPresentInChanges: "Этого файла нет в изменениях.",
-      absoluteFileSearchRequiresHostUpdate:
-        "Обновите этот хост, чтобы искать абсолютные пути к файлам.",
-      fileSearchRequiresHostUpdate:
-        "Обновите этот хост, чтобы искать во всех файлах рабочего пространства.",
       noMatches: "Нет совпадений",
       actions: "Действия",
       files: "Файлы",
