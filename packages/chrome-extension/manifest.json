@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "Open GitLab MRs in Paseito",
+  "version": "0.6.1.2",
+  "description": "Open the current GitLab merge request in Paseito's MR tracker.",
+  "permissions": ["activeTab", "scripting", "storage"],
+  "optional_host_permissions": ["https://*/*"],
+  "background": {
+    "service_worker": "service-worker.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "Open GitLab MRs in Paseito",
+    "default_popup": "popup.html",
+    "default_icon": "icons/icon.png"
+  },
+  "icons": {
+    "16": "icons/icon.png",
+    "32": "icons/icon.png",
+    "48": "icons/icon.png",
+    "128": "icons/icon.png"
+  }
+}

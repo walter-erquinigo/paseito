@@ -4,7 +4,7 @@ import { PortalProvider } from "@gorhom/portal";
 import { QueryClientProvider } from "@tanstack/react-query";
 import * as Linking from "expo-linking";
 import * as Notifications from "expo-notifications";
-import { Stack, useNavigationContainerRef, usePathname, useRouter } from "expo-router";
+import { Stack, useNavigationContainerRef, usePathname, useRouter, type Href } from "expo-router";
 import {
   createContext,
   type ReactNode,
@@ -74,6 +74,7 @@ import { registerWorkspaceRouteNavigationRef } from "@/navigation/workspace-rout
 import { ThemedStack } from "@/navigation/themed-stack";
 import { shouldUseDesktopDaemon } from "@/desktop/daemon/desktop-daemon";
 import { AgentNavigationListener } from "@/desktop/agent-navigation";
+import { MRNavigationListener } from "@/desktop/mr-navigation";
 import { LegacyAgentSkillsMigration } from "@/agent-skills/legacy-migration";
 import { legacyFavoriteProfileMigration } from "@/agent-profiles/migration";
 import { listenToDesktopEvent } from "@/desktop/electron/events";
@@ -262,6 +263,35 @@ function PushNotificationRouter() {
       subscription.remove();
     };
   }, [openNotification]);
+
+  useEffect(() => {
+    if (!getIsElectronRuntime()) return;
+    let cleanup: (() => void) | null = null;
+    let cancelled = false;
+    const result = getDesktopHost()?.events?.on?.(
+      "mr-tracker-notification-click",
+      (payload: unknown) => {
+        const mergeRequestId =
+          typeof payload === "object" && payload !== null && "mergeRequestId" in payload
+            ? String((payload as { mergeRequestId: unknown }).mergeRequestId)
+            : undefined;
+        router.navigate({
+          pathname: "/mrs/[tab]",
+          params: { tab: "all", ...(mergeRequestId ? { mr: mergeRequestId } : {}) },
+        } as unknown as Href);
+      },
+    );
+    void Promise.resolve(result).then((value) => {
+      if (typeof value !== "function") return;
+      if (cancelled) value();
+      else cleanup = value;
+      return;
+    });
+    return () => {
+      cancelled = true;
+      cleanup?.();
+    };
+  }, [router]);
 
   return null;
 }
@@ -862,6 +892,7 @@ function AppWithSidebar({ children }: { children: ReactNode }) {
       pathname === "/new" ||
       pathname === "/sessions" ||
       pathname === "/schedules" ||
+      pathname.startsWith("/mrs/") ||
       routeHasKnownHost);
 
   return <AppContainer chromeEnabled={shouldShowAppChrome}>{children}</AppContainer>;
@@ -890,6 +921,7 @@ function RootStack() {
         <Stack.Screen name="open-project" />
         <Stack.Screen name="sessions" />
         <Stack.Screen name="schedules" />
+        <Stack.Screen name="mrs/[tab]" />
         <Stack.Screen name="pair-scan" />
       </Stack.Protected>
       <Stack.Screen name="h/[serverId]" />
@@ -917,6 +949,7 @@ function AppShell() {
       <HorizontalScrollProvider>
         <OpenProjectListener />
         <AgentNavigationListener />
+        <MRNavigationListener />
         <AppWithSidebar>
           <WorkspaceRouteNavigationBridge />
           <RootStack />

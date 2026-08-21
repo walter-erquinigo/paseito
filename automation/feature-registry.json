@@ -475,7 +475,8 @@
         "Keep the unconfigured tracker free of dead controls and provide direct, security-explained setup actions.",
         "Keep every local triage label understandable through concise desktop hover and keyboard-focus explanations.",
         "Keep MR triage left-anchored while summary navigation, detail expansion, and importance controls remain independent interactions.",
-        "Keep MR triage binary as Important or Ignore, normalize legacy local choices to Ignore, and provide an accessible Important-only filter beside search."
+        "Keep MR triage binary as Important or Ignore, normalize legacy local choices to Ignore, and provide an accessible Important-only filter beside search.",
+        "Keep the Chrome bridge token-free and origin-opt-in while repeated links reveal, expand, center and highlight the resolved MR."
       ],
       "permanent": false,
       "intent": "Track GitLab merge requests in a read-only desktop sidebar surface without porting MR Tracker automations or personal configuration.",
@@ -485,17 +486,27 @@
         "GitLab integration issues GET requests only; local tracking and importance never mutate GitLab.",
         "After token submission, desktop main never returns the stored GitLab token to renderer state; nonsecret state is stored separately, and the token remains in a separate owner-only local file without macOS Keychain.",
         "MR readiness and notifications use generic GitLab mergeability, overall pipeline, approvals and blocking-discussion facts; MR Tracker automations and product-specific integrations remain excluded.",
-        "The first complete refresh is notification-silent, partial refreshes preserve cached results without advancing transitions, and later complete refreshes notify only for new owned MRs, readiness, or a new failed pipeline."
+        "The first complete refresh is notification-silent, partial refreshes preserve cached results without advancing transitions, and later complete refreshes notify only for new owned MRs, readiness, or a new failed pipeline.",
+        "The locally loadable Chrome extension requests access per HTTPS GitLab origin, makes no GitLab API requests, opens a validated paseito:// MR link, and stores no credentials.",
+        "MR links resolve through desktop main, locally track a missing open MR without mutating GitLab, choose My MRs or Others by resolved ownership, and make repeated focus visible."
       ],
       "contracts": [
         "npm test --workspace=@getpaseo/desktop -- --run src/features/mr-tracker/store.test.ts src/features/mr-tracker/gitlab-client.test.ts src/features/mr-tracker/service.test.ts",
         "npm test --workspace=@getpaseo/app -- --run src/mr-tracker/model.test.ts src/mr-tracker/importance-control.test.tsx src/components/ui/tooltip.test.tsx",
-        "npm run test:e2e:renderer --workspace=@getpaseo/desktop -- e2e/mr-tracker-row.spec.ts"
+        "npm run test:e2e:renderer --workspace=@getpaseo/desktop -- e2e/mr-tracker-row.spec.ts",
+        "npx vitest run packages/protocol/src/mr-deep-link.test.ts packages/desktop/src/mr-navigation.test.ts --bail=1",
+        "npm test --workspace=@getpaseo/chrome-extension"
       ],
       "paths": [
         "packages/desktop/src/features/mr-tracker",
+        "packages/desktop/src/mr-navigation.ts",
+        "packages/desktop/src/main.ts",
+        "packages/desktop/src/preload.ts",
+        "packages/protocol/src/mr-deep-link.ts",
         "packages/app/src/mr-tracker",
         "packages/app/src/app/mrs",
+        "packages/app/src/desktop/mr-navigation.tsx",
+        "packages/chrome-extension",
         "packages/app/src/components/left-sidebar.tsx",
         "packages/app/src/screens/settings-screen.tsx",
         "docs/paseito-mr-tracker.md"

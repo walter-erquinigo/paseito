@@ -3,7 +3,7 @@ appId: dev.werquinigo.paseito
 productName: Paseito
 executableName: Paseito
 protocols:
-  - name: Paseito agent link
+  - name: Paseito link
     schemes:
       - paseito
 afterPack: ./scripts/after-pack.js

@@ -59,6 +59,7 @@ At the start of non-trivial work, list `docs/` and skim anything relevant to the
 | [docs/docker.md](docs/docker.md)                                   | Running the daemon and bundled web UI in Docker, volumes, agent images, security                                               |
 | [docs/release.md](docs/release.md)                                 | Release playbook, draft releases, completion checklist                                                                         |
 | [docs/terminal-activity.md](docs/terminal-activity.md)             | Terminal activity indicators — source-agnostic tracker, agent hook reporting, adding a new hook provider                       |
+| [docs/paseito-mr-tracker.md](docs/paseito-mr-tracker.md)           | Desktop GitLab MR tracking, stack semantics, notification baseline, and owner-only credential persistence                      |
 | [SECURITY.md](SECURITY.md)                                         | Relay threat model, E2E encryption, DNS rebinding, agent auth                                                                  |
 | [public-docs/hub/security.md](public-docs/hub/security.md)         | Public Hub guide — trust boundaries, untrusted triggers, provider controls, and output authority                               |
 
@@ -271,5 +272,6 @@ instead of editing the list by hand.
   - Fix: Keep every local triage label understandable through concise desktop hover and keyboard-focus explanations.
   - Fix: Keep MR triage left-anchored while summary navigation, detail expansion, and importance controls remain independent interactions.
   - Fix: Keep MR triage binary as Important or Ignore, normalize legacy local choices to Ignore, and provide an accessible Important-only filter beside search.
+  - Fix: Keep the Chrome bridge token-free and origin-opt-in while repeated links reveal, expand, center and highlight the resolved MR.
 
 <!-- PASEITO-LOCAL-FEATURES:END -->
