@@ -1,5 +1,9 @@
 const shared = {
   directoryPlaceholder: "/absolute/path/on/host",
+  desktopTitle: "Desktop MR automation plugins",
+  desktopTrustedDescription:
+    "They run locally in the Paseito desktop process without sandboxing. Install only code you trust.",
+  desktopDirectoryPlaceholder: "/absolute/path/on/this/Mac",
   logs: {
     action: "Logs",
     title: "Logs: {{id}}",

@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  compileDesktopPlugin,
   compilePlugin,
   resolveExistingAsarUnpackedEsbuildBinary,
   unpackedEsbuildBinaryFromPackageDir,
@@ -882,5 +883,45 @@ export default function contribute() { void value; void secret; return () => und
     });
     expect(clientBundle).toContain("Client contribution");
     expect(serverBundle).toBeNull();
+  });
+});
+
+describe("desktop plugin compilation", () => {
+  it("builds MR contributions in a standalone desktop plugin directory", async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), "paseito-desktop-plugin-compiler-"));
+    temporaryDirectories.push(directory);
+    const entryPath = path.join(directory, "index.ts");
+    const helperPath = path.join(directory, "predicate.ts");
+    await writeFile(helperPath, 'export const predicateId = "label";');
+    await writeFile(
+      entryPath,
+      `import { predicateId } from "./predicate";
+import type { DesktopPluginContext } from "@getpaseo/plugin/desktop";
+export default function contribute(plugin: DesktopPluginContext) {
+  plugin.addMRPredicate({
+    id: predicateId,
+    title: "Has label",
+    description: "Matches a label",
+    fields: [],
+    evaluate: ({ mergeRequest }) => mergeRequest.labels.length ? "match" : "no_match",
+  });
+  return () => undefined;
+}`,
+    );
+
+    const bundle = await compileDesktopPlugin(entryPath);
+    expect(bundle).toContain("addMRPredicate");
+    expect(bundle).toContain("label");
+  });
+
+  it("rejects desktop SDK imports from daemon plugins", async () => {
+    const entries = await createSplitPlugin();
+    await writeFile(
+      entries.server,
+      'import type { DesktopPluginContext } from "@getpaseo/plugin/desktop"; export default function contribute(plugin: DesktopPluginContext) { void plugin; return () => undefined; }',
+    );
+    await expect(compilePlugin({ client: null, server: entries.server })).rejects.toThrow(
+      "desktop-only module cannot be imported into the plugin server bundle",
+    );
   });
 });

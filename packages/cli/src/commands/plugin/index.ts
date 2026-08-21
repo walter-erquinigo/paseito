@@ -18,6 +18,7 @@ import {
   withPluginManagementClient,
   withPluginSourceClient,
 } from "./shared.js";
+import { desktopPlugins } from "./desktop.js";
 
 interface PluginOptions extends CommandOptions {
   host?: string;
@@ -25,6 +26,17 @@ interface PluginOptions extends CommandOptions {
   ref?: string;
   path?: string;
   all?: boolean;
+  scope?: "daemon" | "desktop";
+}
+
+function desktopScope(options: PluginOptions): boolean {
+  if (!options.scope || options.scope === "daemon") return false;
+  if (options.scope === "desktop") return true;
+  throw new Error(`Unsupported plugin scope: ${String(options.scope)}`);
+}
+
+function addScopeOption(command: Command): Command {
+  return command.option("--scope <scope>", "Plugin host scope: daemon or desktop", "daemon");
 }
 
 const pluginSchema: OutputSchema<PluginListItem> = {
@@ -90,7 +102,9 @@ export async function runPluginListCommand(
   options: PluginOptions,
   _command: Command,
 ): Promise<ListResult<PluginListItem>> {
-  const plugins = await withPluginManagementClient(options.host, (client) => client.listPlugins());
+  const plugins = desktopScope(options)
+    ? await desktopPlugins.list()
+    : await withPluginManagementClient(options.host, (client) => client.listPlugins());
   const data = pluginId ? plugins.filter((plugin) => plugin.id === pluginId) : plugins;
   if (pluginId && data.length === 0) throw new Error(`Plugin is not configured: ${pluginId}`);
   return { type: "list", data, schema: pluginSchema };
@@ -101,7 +115,9 @@ export async function runPluginLogsCommand(
   options: PluginOptions,
   _command: Command,
 ): Promise<ListResult<PluginLogEntry>> {
-  const data = await withPluginLogsClient(options.host, (client) => client.getPluginLogs(pluginId));
+  const data = desktopScope(options)
+    ? await desktopPlugins.logs(pluginId)
+    : await withPluginLogsClient(options.host, (client) => client.getPluginLogs(pluginId));
   return { type: "list", data, schema: pluginLogsSchema };
 }
 
@@ -125,17 +141,22 @@ async function install(
   const canUseLegacyDirectoryInstall =
     isExplicitPath && !hasPluginPathSuffix && !options.ref && !options.path;
   const sourceReference = formatPluginSourceReference(source, options.path);
-  const data = canUseLegacyDirectoryInstall
-    ? await withPluginManagementClient(options.host, (client) =>
-        client.installDirectoryPlugin(source, options.id),
-      )
-    : await withPluginSourceClient(options.host, (client) =>
-        client.installPluginSource({
-          source: sourceReference,
-          ...(options.id ? { id: options.id } : {}),
-          ...(options.ref ? { ref: options.ref } : {}),
-        }),
-      );
+  let data: PluginListItem;
+  if (desktopScope(options)) {
+    data = await desktopPlugins.install(source, options.id);
+  } else if (canUseLegacyDirectoryInstall) {
+    data = await withPluginManagementClient(options.host, (client) =>
+      client.installDirectoryPlugin(source, options.id),
+    );
+  } else {
+    data = await withPluginSourceClient(options.host, (client) =>
+      client.installPluginSource({
+        source: sourceReference,
+        ...(options.id ? { id: options.id } : {}),
+        ...(options.ref ? { ref: options.ref } : {}),
+      }),
+    );
+  }
   return { type: "single", data, schema: pluginSchema };
 }
 
@@ -158,9 +179,11 @@ async function act(
   pluginId: string,
   options: PluginOptions,
 ): Promise<SingleResult<PluginListItem>> {
-  const data = await withPluginManagementClient(options.host, (client) =>
-    client[`${action}Plugin`](pluginId),
-  );
+  const data = desktopScope(options)
+    ? await desktopPlugins[action](pluginId)
+    : await withPluginManagementClient(options.host, (client) =>
+        client[`${action}Plugin`](pluginId),
+      );
   return { type: "single", data, schema: pluginSchema };
 }
 
@@ -169,6 +192,16 @@ async function remove(
   options: PluginOptions,
   _command: Command,
 ): Promise<SingleResult<PluginListItem>> {
+  if (desktopScope(options)) {
+    const current = (await desktopPlugins.list()).find((plugin) => plugin.id === pluginId);
+    if (!current) throw new Error(`Plugin is not configured: ${pluginId}`);
+    await desktopPlugins.remove(pluginId);
+    return {
+      type: "single",
+      data: { ...current, enabled: false, status: "disabled" as const },
+      schema: pluginSchema,
+    };
+  }
   const data = await withPluginManagementClient(options.host, async (client) => {
     const current = (await client.listPlugins()).find((plugin) => plugin.id === pluginId);
     if (!current) throw new Error(`Plugin is not configured: ${pluginId}`);
@@ -188,23 +221,27 @@ export function createPluginCommand(): Command {
       .option("--id <id>", "Manifest plugin ID (defaults to the directory name)"),
   ).action(withOutput(runPluginInitCommand));
   addJsonAndDaemonHostOptions(
-    plugin.command("ls").description("List configured plugins").argument("[id]"),
+    addScopeOption(plugin.command("ls").description("List configured plugins").argument("[id]")),
   ).action(withOutput(runPluginListCommand));
-  addJsonAndDaemonHostOptions(plugin.command("status", { hidden: true }).argument("[id]")).action(
-    withOutput(runPluginListCommand),
-  );
   addJsonAndDaemonHostOptions(
-    plugin.command("logs").description("Show recent plugin output").argument("<id>"),
+    addScopeOption(plugin.command("status", { hidden: true }).argument("[id]")),
+  ).action(withOutput(runPluginListCommand));
+  addJsonAndDaemonHostOptions(
+    addScopeOption(
+      plugin.command("logs").description("Show recent plugin output").argument("<id>"),
+    ),
   ).action(withOutput(runPluginLogsCommand));
   addJsonAndDaemonHostOptions(
-    plugin
-      .command("install")
-      .alias("add")
-      .description("Trust and install a plugin from a directory or Git repository")
-      .argument("<source>", "Host directory, Git source, or Git source:plugin/path")
-      .option("--id <id>", "Runtime plugin ID (defaults to paseo-plugin.json id)")
-      .option("--ref <ref>", "Git branch, tag, or commit")
-      .option("--path <path>", "Legacy form of the :plugin/path source suffix"),
+    addScopeOption(
+      plugin
+        .command("install")
+        .alias("add")
+        .description("Trust and install a plugin from a directory or Git repository")
+        .argument("<source>", "Host directory, Git source, or Git source:plugin/path")
+        .option("--id <id>", "Runtime plugin ID (defaults to paseo-plugin.json id)")
+        .option("--ref <ref>", "Git branch, tag, or commit")
+        .option("--path <path>", "Legacy form of the :plugin/path source suffix"),
+    ),
   ).action(withOutput(install));
   addJsonAndDaemonHostOptions(
     plugin
@@ -215,7 +252,7 @@ export function createPluginCommand(): Command {
   ).action(withOutput(update));
   for (const action of ["reload", "enable", "disable"] as const) {
     addJsonAndDaemonHostOptions(
-      plugin.command(action).description(`${action} a plugin`).argument("<id>"),
+      addScopeOption(plugin.command(action).description(`${action} a plugin`).argument("<id>")),
     ).action(
       withOutput((id: string, options: PluginOptions, _command: Command) =>
         act(action, id, options),
@@ -223,7 +260,9 @@ export function createPluginCommand(): Command {
     );
   }
   addJsonAndDaemonHostOptions(
-    plugin.command("remove").description("Remove plugin configuration").argument("<id>"),
+    addScopeOption(
+      plugin.command("remove").description("Remove plugin configuration").argument("<id>"),
+    ),
   ).action(withOutput(remove));
   return plugin;
 }

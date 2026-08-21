@@ -20,6 +20,8 @@ import { resolvePluginPageState } from "@/screens/settings/plugins-page-state";
 import { pluginRegistry, useInstalledPlugins } from "@/plugins/registry";
 import { settingsStyles } from "@/styles/settings";
 import { confirmDialog } from "@/utils/confirm-dialog";
+import { isElectronRuntime } from "@/desktop/host";
+import { DesktopMRPluginsSection } from "./desktop-mr-plugins-section";
 
 const pluginQueryKey = (serverId: string) => ["plugins", serverId] as const;
 type PluginRowAction = "reload" | "enable" | "disable" | "remove";
@@ -188,7 +190,7 @@ function PluginLogsSheet({
   );
 }
 
-export function HostPluginsPage({ serverId }: { serverId: string }) {
+function HostPluginCatalog({ serverId }: { serverId: string }) {
   const { t } = useTranslation();
   const client = useHostRuntimeClient(serverId);
   const connected = useHostRuntimeIsConnected(serverId);
@@ -449,6 +451,15 @@ export function HostPluginsPage({ serverId }: { serverId: string }) {
           onClose={closeLogs}
         />
       ) : null}
+    </View>
+  );
+}
+
+export function HostPluginsPage({ serverId }: { serverId: string }) {
+  return (
+    <View>
+      {isElectronRuntime() ? <DesktopMRPluginsSection /> : null}
+      <HostPluginCatalog serverId={serverId} />
     </View>
   );
 }

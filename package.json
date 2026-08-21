@@ -27,6 +27,7 @@
     "packages/relay",
     "packages/website",
     "packages/desktop",
+    "packages/chrome-extension",
     "packages/cli"
   ],
   "scripts": {

@@ -131,6 +131,15 @@ export interface DesktopAgentNavigationBridge {
   ready?: () => Promise<{ serverId: string; agentId: string } | null>;
 }
 
+export interface DesktopMRNavigationBridge {
+  ready?: () => Promise<{
+    mergeRequestId?: string;
+    tab?: "all" | "my_mrs" | "others";
+    revision: number;
+    error?: string;
+  } | null>;
+}
+
 export type DesktopBrowserShortcutEvent =
   | { browserId?: string; action: "focus-url" }
   | { browserId: string; action: "new-tab" };
@@ -180,6 +189,7 @@ export interface DesktopHostBridge {
   invoke?: DesktopInvokeBridge["invoke"];
   getPendingOpenProject?: () => Promise<string | null>;
   agentNavigation?: DesktopAgentNavigationBridge;
+  mrNavigation?: DesktopMRNavigationBridge;
   events?: DesktopEventsBridge;
   window?: DesktopWindowModuleBridge;
   dialog?: DesktopDialogBridge;

@@ -1,0 +1,6 @@
+#!/bin/sh
+set -eu
+SCRIPT_DIRECTORY=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+RESOURCES_DIRECTORY=$(dirname -- "$SCRIPT_DIRECTORY")
+CONTENTS_DIRECTORY=$(dirname -- "$RESOURCES_DIRECTORY")
+ELECTRON_RUN_AS_NODE=1 exec "$CONTENTS_DIRECTORY/MacOS/Paseito" "$RESOURCES_DIRECTORY/native-messaging-host.js"

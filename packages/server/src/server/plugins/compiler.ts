@@ -5,6 +5,7 @@ import { createPluginImportReader, type PluginImportKind } from "./compiler-impo
 import type { Metafile, OnResolveResult, Plugin } from "esbuild";
 import {
   isPluginClientOnlySdkSpecifier,
+  isPluginDesktopOnlySdkSpecifier,
   isPluginServerOnlySdkSpecifier,
   PLUGIN_SDK_SPECIFIERS,
 } from "./plugin-sdk-specifiers.js";
@@ -69,7 +70,7 @@ function loadEsbuild(): typeof import("esbuild") {
   }
 }
 
-type PluginBuildTarget = "client" | "server";
+type PluginBuildTarget = "client" | "server" | "desktop";
 
 type PluginModuleLocation = PluginBuildTarget | "shared" | "invalid";
 
@@ -80,15 +81,28 @@ function directoryTarget(filePath: string, pluginDirectory: string): PluginModul
   if (segments.includes("node_modules")) return null;
   if (segments[0] === "client") return "client";
   if (segments[0] === "server") return "server";
+  if (segments[0] === "desktop") return "desktop";
   if (segments[0] === "shared") return "shared";
   if (/^index\.client\.tsx?$/.test(relative)) return "client";
   if (/^index\.server\.tsx?$/.test(relative)) return "server";
+  if (/^index\.desktop\.tsx?$/.test(relative)) return "desktop";
   return "invalid";
 }
 
 function containsPath(directory: string, filePath: string): boolean {
   const relative = path.relative(directory, filePath);
   return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+}
+
+function directoryTargetForBuild(
+  filePath: string,
+  pluginDirectory: string,
+  target: PluginBuildTarget | "shared",
+): PluginModuleLocation | null {
+  const location = directoryTarget(filePath, pluginDirectory);
+  return location === "invalid" && target === "desktop" && containsPath(pluginDirectory, filePath)
+    ? "desktop"
+    : location;
 }
 
 function dependencyName(specifier: string): string {
@@ -152,14 +166,22 @@ function lexicalBoundaryError(
   if (!specifier.startsWith(".") && !path.isAbsolute(specifier)) return null;
   const lexicalPath = path.resolve(resolveDirectory, specifier);
   if (containsPath(pluginDirectory, lexicalPath)) {
-    return moduleBoundaryError(directoryTarget(lexicalPath, pluginDirectory), target, lexicalPath);
+    return moduleBoundaryError(
+      directoryTargetForBuild(lexicalPath, pluginDirectory, target),
+      target,
+      lexicalPath,
+    );
   }
   // Normalize only a containing root alias. Resolving the whole import would erase
   // an authored server/ or client/ location when the final file is a symlink.
   for (let ancestor = path.dirname(lexicalPath); ; ancestor = path.dirname(ancestor)) {
     if (existsSync(ancestor) && realpathSync.native(ancestor) === pluginDirectory) {
       const ownedPath = path.join(pluginDirectory, path.relative(ancestor, lexicalPath));
-      return moduleBoundaryError(directoryTarget(ownedPath, pluginDirectory), target, lexicalPath);
+      return moduleBoundaryError(
+        directoryTargetForBuild(ownedPath, pluginDirectory, target),
+        target,
+        lexicalPath,
+      );
     }
     if (path.dirname(ancestor) === ancestor) return null;
   }
@@ -180,7 +202,7 @@ function createRuntimeBoundaryPlugin(target: PluginBuildTarget, pluginDirectory:
         owner: PluginBuildTarget | "shared",
       ) {
         const file = realpathSync.native(resolvedFile);
-        const location = directoryTarget(file, pluginDirectory);
+        const location = directoryTargetForBuild(file, pluginDirectory, owner);
         if (location === "invalid") {
           if (
             [...linkedDependencyRoots].some(
@@ -323,9 +345,15 @@ function runtimeSpecifierError(
     !(PLUGIN_SDK_SPECIFIERS as readonly string[]).includes(specifier)
   )
     kind = "Unknown SDK";
-  else if (target !== "server" && (isBuiltin(specifier) || specifier === "@types/node"))
+  else if (
+    target !== "server" &&
+    target !== "desktop" &&
+    (isBuiltin(specifier) || specifier === "@types/node")
+  )
     kind = "Node";
   else if (target !== "server" && isPluginServerOnlySdkSpecifier(specifier)) kind = "server-only";
+  else if (target !== "desktop" && isPluginDesktopOnlySdkSpecifier(specifier))
+    kind = "desktop-only";
   else if (
     target !== "client" &&
     (isPluginClientOnlySdkSpecifier(specifier) ||
@@ -388,8 +416,8 @@ async function compileTarget(entryPath: string, target: PluginBuildTarget): Prom
     bundle: true,
     format: "cjs",
     jsx: "automatic",
-    platform: target === "server" ? "node" : "neutral",
-    target: target === "server" ? "node20" : "es2020",
+    platform: target === "server" || target === "desktop" ? "node" : "neutral",
+    target: target === "server" || target === "desktop" ? "node20" : "es2020",
     // Metro lowers async syntax before Hermes sees app code. Plugin client bundles bypass Metro,
     // so apply the same compatibility transform before the app evaluates them from source.
     supported: target === "client" ? { "async-await": false } : undefined,
@@ -414,6 +442,10 @@ async function compileTarget(entryPath: string, target: PluginBuildTarget): Prom
   const output = result.outputFiles[0]?.text;
   if (!output) throw new Error(`Plugin ${target} compilation produced no output`);
   return wrapCommonJsBundle(makeHermesInteropEager(output));
+}
+
+export async function compileDesktopPlugin(entryPath: string): Promise<string> {
+  return await compileTarget(entryPath, "desktop");
 }
 
 export async function compilePlugin(entryPaths: {

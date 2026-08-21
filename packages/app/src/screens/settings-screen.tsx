@@ -40,6 +40,7 @@ import {
   Blocks,
   PanelsTopLeft,
   ChevronRight,
+  GitPullRequest,
 } from "lucide-react-native";
 import { DropdownTrigger } from "@/components/ui/dropdown-trigger";
 import { ComboboxTrigger } from "@/components/ui/combobox-trigger";
@@ -123,6 +124,7 @@ import ProjectsScreen from "@/screens/projects-screen";
 import ProjectSettingsScreen from "@/screens/project-settings-screen";
 import { SETTINGS_DESKTOP_SIDEBAR_WIDTH, useIsCompactFormFactor } from "@/constants/layout";
 import { useLocalDaemonServerId } from "@/hooks/use-is-local-daemon";
+import { MRTrackerSettingsSection } from "@/mr-tracker/settings-section";
 import {
   type EnableBuiltInDaemonOption,
   useEnableBuiltInDaemonOption,
@@ -178,6 +180,12 @@ const SIDEBAR_SECTION_ITEMS: SidebarSectionItem[] = [
     icon: Shield,
     desktopOnly: true,
   },
+  {
+    id: "mrs",
+    labelKey: "settings.sections.mrTracker",
+    icon: GitPullRequest,
+    desktopOnly: true,
+  },
   { id: "diagnostics", labelKey: "settings.sections.diagnostics", icon: Stethoscope },
   { id: "about", labelKey: "settings.sections.about", icon: Info },
 ];
@@ -230,6 +238,10 @@ function renderHostSettingsContent(
     case "host":
       return <HostSettingsPage serverId={view.serverId} onHostRemoved={onHostRemoved} />;
   }
+}
+
+function renderWhen(enabled: boolean, content: ReactNode): ReactNode {
+  return enabled ? content : null;
 }
 
 // ---------------------------------------------------------------------------
@@ -1546,6 +1558,8 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
             return isDesktopApp ? <DesktopNotificationsSection /> : null;
           case "permissions":
             return isDesktopApp ? <DesktopPermissionsSection /> : null;
+          case "mrs":
+            return isDesktopApp ? <MRTrackerSettingsSection /> : null;
           case "diagnostics":
             return (
               <DiagnosticsSection

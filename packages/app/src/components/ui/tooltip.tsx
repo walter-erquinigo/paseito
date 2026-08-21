@@ -262,6 +262,15 @@ export function Tooltip({
     [isOpen, setIsOpen, enabled, isCompact, delayDuration],
   );
 
+  useEffect(() => {
+    if (!isWeb || !isOpen || !enabled) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setIsOpen(false);
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [enabled, isOpen, setIsOpen]);
+
   return <TooltipContext.Provider value={value}>{children}</TooltipContext.Provider>;
 }
 
