@@ -1,4 +1,9 @@
 import { en, type TranslationResources } from "./en";
+import {
+  mrTrackerSectionTranslations,
+  mrTrackerSettingsTranslations,
+  mrTrackerTranslations,
+} from "./mr-tracker";
 
 export const ko: TranslationResources = {
   common: {
@@ -1769,6 +1774,7 @@ export const ko: TranslationResources = {
       save: "제안 추가",
     },
   },
+  mrTracker: mrTrackerTranslations,
   settings: {
     title: "설정",
     loading: "설정 불러오는 중...",
@@ -1790,6 +1796,7 @@ export const ko: TranslationResources = {
     },
     groupInfo: "{{title}} 정보",
     sections: {
+      ...mrTrackerSectionTranslations,
       general: "일반",
       appearance: "모양",
       editor: "편집기",
@@ -1800,6 +1807,7 @@ export const ko: TranslationResources = {
       diagnostics: "진단",
       about: "정보",
     },
+    mrTracker: mrTrackerSettingsTranslations,
     editor: {
       title: "편집기",
       vimKeybindings: "Vim 키 바인딩",

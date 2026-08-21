@@ -1,4 +1,9 @@
 import type { TranslationResources } from "./en";
+import {
+  mrTrackerSectionTranslations,
+  mrTrackerSettingsTranslations,
+  mrTrackerTranslations,
+} from "./mr-tracker";
 
 export const ja: TranslationResources = {
   common: {
@@ -1824,6 +1829,7 @@ export const ja: TranslationResources = {
       rangeInvalid: "同じファイルとリビジョンの現在側の行を選択してください",
     },
   },
+  mrTracker: mrTrackerTranslations,
   settings: {
     title: "設定",
     loading: "設定を読み込み中...",
@@ -1845,6 +1851,7 @@ export const ja: TranslationResources = {
     },
     groupInfo: "{{title}}について",
     sections: {
+      ...mrTrackerSectionTranslations,
       general: "一般",
       appearance: "外観",
       editor: "エディター",
@@ -1855,6 +1862,7 @@ export const ja: TranslationResources = {
       diagnostics: "診断",
       about: "アプリ情報",
     },
+    mrTracker: mrTrackerSettingsTranslations,
     editor: {
       title: "エディター",
       vimKeybindings: "Vim キーバインド",

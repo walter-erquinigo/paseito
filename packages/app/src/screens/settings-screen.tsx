@@ -37,6 +37,7 @@ import {
   Code2,
   Smartphone,
   Sparkles,
+  GitPullRequest,
 } from "lucide-react-native";
 import { DropdownTrigger } from "@/components/ui/dropdown-trigger";
 import { ComboboxTrigger } from "@/components/ui/combobox-trigger";
@@ -114,6 +115,7 @@ import ProjectSettingsScreen from "@/screens/project-settings-screen";
 import { SETTINGS_DESKTOP_SIDEBAR_WIDTH, useIsCompactFormFactor } from "@/constants/layout";
 import { isNative } from "@/constants/platform";
 import { useLocalDaemonServerId } from "@/hooks/use-is-local-daemon";
+import { MRTrackerSettingsSection } from "@/mr-tracker/settings-section";
 import {
   type EnableBuiltInDaemonOption,
   useEnableBuiltInDaemonOption,
@@ -168,6 +170,12 @@ const SIDEBAR_SECTION_ITEMS: SidebarSectionItem[] = [
     id: "permissions",
     labelKey: "settings.sections.permissions",
     icon: Shield,
+    desktopOnly: true,
+  },
+  {
+    id: "mrs",
+    labelKey: "settings.sections.mrTracker",
+    icon: GitPullRequest,
     desktopOnly: true,
   },
   { id: "diagnostics", labelKey: "settings.sections.diagnostics", icon: Stethoscope },
@@ -1444,6 +1452,8 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
           return isDesktopApp ? <DesktopNotificationsSection /> : null;
         case "permissions":
           return isDesktopApp ? <DesktopPermissionsSection /> : null;
+        case "mrs":
+          return isDesktopApp ? <MRTrackerSettingsSection /> : null;
         case "diagnostics":
           return (
             <DiagnosticsSection

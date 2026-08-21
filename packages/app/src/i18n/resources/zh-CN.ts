@@ -1,4 +1,9 @@
 import type { TranslationResources } from "./en";
+import {
+  mrTrackerSectionTranslations,
+  mrTrackerSettingsTranslations,
+  mrTrackerTranslations,
+} from "./mr-tracker";
 
 export const zhCN: TranslationResources = {
   common: {
@@ -1786,6 +1791,7 @@ export const zhCN: TranslationResources = {
       rangeInvalid: "请选择同一文件和修订版本的当前侧行",
     },
   },
+  mrTracker: mrTrackerTranslations,
   settings: {
     title: "设置",
     loading: "正在加载设置...",
@@ -1807,6 +1813,7 @@ export const zhCN: TranslationResources = {
     },
     groupInfo: "关于 {{title}}",
     sections: {
+      ...mrTrackerSectionTranslations,
       general: "通用",
       appearance: "外观",
       editor: "编辑器",
@@ -1817,6 +1824,7 @@ export const zhCN: TranslationResources = {
       diagnostics: "诊断",
       about: "关于",
     },
+    mrTracker: mrTrackerSettingsTranslations,
     editor: {
       title: "编辑器",
       vimKeybindings: "Vim 键位",

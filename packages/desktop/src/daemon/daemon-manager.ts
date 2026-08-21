@@ -40,6 +40,11 @@ import { getDesktopSettingsStore } from "../settings/desktop-settings-electron.j
 import { isRunningUnderARM64Translation } from "../system/arm64-translation.js";
 import { getDesktopAppLogs } from "../diagnostics/app-logs.js";
 import { tailFile } from "../diagnostics/tail-file.js";
+import {
+  getDesktopMRTrackerService,
+  startDesktopMRTracker,
+} from "../features/mr-tracker/electron.js";
+import { createMRTrackerCommandHandlers } from "../features/mr-tracker/commands.js";
 
 const DAEMON_LOG_FILENAME = "daemon.log";
 const STARTUP_POLL_INTERVAL_MS = 200;
@@ -515,6 +520,7 @@ async function resolveRequestedReleaseChannel(
 export function createDaemonCommandHandlers(): Record<string, DesktopCommandHandler> {
   return {
     ...createDesktopSettingsCommandHandlers({ settingsStore: getDesktopSettingsStore() }),
+    ...createMRTrackerCommandHandlers({ service: getDesktopMRTrackerService() }),
     desktop_get_runtime_info: () => ({
       appVersion: resolveDesktopAppVersion(),
       runningUnderARM64Translation: isRunningUnderARM64Translation(),
@@ -575,6 +581,7 @@ export function createDaemonCommandHandlers(): Record<string, DesktopCommandHand
 
 export function registerDaemonManager(): void {
   const handlers = createDaemonCommandHandlers();
+  startDesktopMRTracker();
 
   ipcMain.handle(
     "paseo:invoke",

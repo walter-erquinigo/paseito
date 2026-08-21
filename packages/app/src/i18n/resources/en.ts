@@ -1,3 +1,9 @@
+import {
+  mrTrackerSectionTranslations,
+  mrTrackerSettingsTranslations,
+  mrTrackerTranslations,
+} from "./mr-tracker";
+
 export const en = {
   common: {
     back: "Back",
@@ -1817,6 +1823,7 @@ export const en = {
       rangeInvalid: "Select current-side lines from the same file and revision",
     },
   },
+  mrTracker: mrTrackerTranslations,
   settings: {
     title: "Settings",
     loading: "Loading settings...",
@@ -1838,6 +1845,7 @@ export const en = {
     },
     groupInfo: "About {{title}}",
     sections: {
+      ...mrTrackerSectionTranslations,
       general: "General",
       appearance: "Appearance",
       editor: "Editor",
@@ -1848,6 +1856,7 @@ export const en = {
       diagnostics: "Diagnostics",
       about: "About",
     },
+    mrTracker: mrTrackerSettingsTranslations,
     editor: {
       title: "Editor",
       vimKeybindings: "Vim keybindings",

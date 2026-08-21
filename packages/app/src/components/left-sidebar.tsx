@@ -1,8 +1,9 @@
-import { router, usePathname } from "expo-router";
+import { router, usePathname, type Href } from "expo-router";
 import {
   CalendarClock,
   FolderPlus,
   GitBranch,
+  GitPullRequest,
   History,
   Home,
   Plus,
@@ -25,7 +26,7 @@ import { Gesture } from "react-native-gesture-handler";
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue } from "react-native-reanimated";
 import { scheduleOnRN } from "react-native-worklets";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, useUnistyles, withUnistyles } from "react-native-unistyles";
 import { TitlebarDragRegion } from "@/components/desktop/titlebar-drag-region";
 import { resolveDesktopSidebarWidth } from "@/components/desktop-sidebar-layout";
 import {
@@ -39,7 +40,11 @@ import { SidebarHelpMenu } from "@/components/sidebar/sidebar-help-menu";
 import { SidebarResizeHandle } from "@/components/sidebar-resize-handle";
 import { Shortcut } from "@/components/ui/shortcut";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { HEADER_INNER_HEIGHT, useIsCompactFormFactor } from "@/constants/layout";
+import {
+  getIsElectronRuntime,
+  HEADER_INNER_HEIGHT,
+  useIsCompactFormFactor,
+} from "@/constants/layout";
 import { useOpenAddProject } from "@/hooks/use-open-add-project";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
 import { canCreateWorktreeForProjectKind } from "@/projects/host-projects";
@@ -58,6 +63,7 @@ import { useHosts } from "@/runtime/host-runtime";
 import { useActiveWorkspaceSelection } from "@/stores/navigation-active-workspace-store";
 import { useWorkspace } from "@/stores/session-store-hooks";
 import { usePanelStore } from "@/stores/panel-store";
+import { useMRTrackerState } from "@/mr-tracker/client";
 import { useOwnsWindowChromeCorner, WindowChromeSafeArea } from "@/utils/desktop-window";
 import { useCloseAgentListGesture } from "@/mobile-panels/gestures";
 import { MobilePanelOverlay } from "@/mobile-panels/presentation";
@@ -65,11 +71,13 @@ import { useIsMobilePanelPresented } from "@/mobile-panels/provider";
 import {
   buildOpenProjectRoute,
   buildNewWorkspaceRoute,
+  buildMRTrackerRoute,
   buildSchedulesRoute,
   buildSessionsRoute,
   buildSettingsAddHostRoute,
   buildSettingsHostSectionRoute,
   buildSettingsRoute,
+  buildSettingsSectionRoute,
 } from "@/utils/host-routes";
 import type { ShortcutKey } from "@/utils/format-shortcut";
 import { SidebarAgentListSkeleton } from "./sidebar-agent-list-skeleton";
@@ -945,7 +953,6 @@ function DesktopSidebar({
 }
 
 function WorkspacesSectionHeader() {
-  const { theme } = useUnistyles();
   const setCommandCenterOpen = useKeyboardShortcutsStore((state) => state.setCommandCenterOpen);
   const commandCenterKeys = useShortcutKeys("toggle-command-center");
   const handleSearchPress = useCallback(() => setCommandCenterOpen(true), [setCommandCenterOpen]);
@@ -958,45 +965,150 @@ function WorkspacesSectionHeader() {
   );
 
   return (
-    <View style={styles.workspacesSectionHeader}>
-      <Text style={styles.workspacesSectionTitle}>Workspaces</Text>
-      <View style={styles.workspacesSectionActions}>
-        <Tooltip delayDuration={300}>
-          <TooltipTrigger asChild>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Open command center"
-              testID="sidebar-command-center-search"
-              style={searchButtonStyle}
-              onPress={handleSearchPress}
-            >
-              {({ hovered, pressed }) => (
-                <Search
-                  size={14}
-                  color={
-                    hovered || pressed ? theme.colors.foreground : theme.colors.foregroundMuted
-                  }
-                />
-              )}
-            </Pressable>
-          </TooltipTrigger>
-          <TooltipContent side="bottom" align="center" offset={8}>
-            <IconTooltipContent label="Search" shortcutKeys={commandCenterKeys} />
-          </TooltipContent>
-        </Tooltip>
-        <Tooltip delayDuration={300}>
-          <TooltipTrigger asChild>
-            <View>
-              <SidebarDisplayPreferencesMenu />
-            </View>
-          </TooltipTrigger>
-          <TooltipContent side="bottom" align="center" offset={8}>
-            <IconTooltipContent label="Display preferences" />
-          </TooltipContent>
-        </Tooltip>
+    <View>
+      <MRTrackerSidebarSection />
+      <View style={styles.workspacesSectionHeader}>
+        <Text style={styles.workspacesSectionTitle}>Workspaces</Text>
+        <View style={styles.workspacesSectionActions}>
+          <Tooltip delayDuration={300}>
+            <TooltipTrigger asChild>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Open command center"
+                testID="sidebar-command-center-search"
+                style={searchButtonStyle}
+                onPress={handleSearchPress}
+              >
+                {({ hovered, pressed }) => (
+                  <ThemedSearch
+                    size={14}
+                    uniProps={hovered || pressed ? foregroundIconMapping : mutedIconMapping}
+                  />
+                )}
+              </Pressable>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" align="center" offset={8}>
+              <IconTooltipContent label="Search" shortcutKeys={commandCenterKeys} />
+            </TooltipContent>
+          </Tooltip>
+          <Tooltip delayDuration={300}>
+            <TooltipTrigger asChild>
+              <View>
+                <SidebarDisplayPreferencesMenu />
+              </View>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" align="center" offset={8}>
+              <IconTooltipContent label="Display preferences" />
+            </TooltipContent>
+          </Tooltip>
+        </View>
       </View>
     </View>
   );
+}
+
+const MR_TAB_ROWS = [
+  { id: "all" as const, labelKey: "mrTracker.tabs.all" },
+  { id: "my_mrs" as const, labelKey: "mrTracker.tabs.myMRs" },
+  { id: "others" as const, labelKey: "mrTracker.tabs.others" },
+];
+
+function MRTrackerSidebarSection() {
+  const { t } = useTranslation();
+  const pathname = usePathname();
+  const { state } = useMRTrackerState();
+  const handleSettings = useCallback(() => router.push(buildSettingsSectionRoute("mrs")), []);
+
+  if (!getIsElectronRuntime()) return null;
+
+  return (
+    <View style={styles.mrSection}>
+      <View style={styles.workspacesSectionHeader}>
+        <Text style={styles.workspacesSectionTitle}>{t("mrTracker.title")}</Text>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t("mrTracker.settings")}
+          style={workspacesHeaderIconButtonStyle}
+          onPress={handleSettings}
+        >
+          <ThemedSettings size={14} uniProps={mutedIconMapping} />
+        </Pressable>
+      </View>
+      <View style={styles.mrRows}>
+        {MR_TAB_ROWS.map((row) => (
+          <MRTrackerSidebarRow
+            key={row.id}
+            row={row}
+            pathname={pathname}
+            count={state?.counts[row.id] ?? 0}
+          />
+        ))}
+      </View>
+    </View>
+  );
+}
+
+function MRTrackerSidebarRow({
+  row,
+  pathname,
+  count,
+}: {
+  row: (typeof MR_TAB_ROWS)[number];
+  pathname: string;
+  count: number;
+}) {
+  const { t } = useTranslation();
+  const href = buildMRTrackerRoute(row.id);
+  const active = pathname === href;
+  const handlePress = useCallback(
+    () => router.push({ pathname: "/mrs/[tab]", params: { tab: row.id } } as unknown as Href),
+    [row.id],
+  );
+  return (
+    <Pressable
+      accessibilityRole="button"
+      style={active ? activeMrRowStyle : mrRowStyle}
+      onPress={handlePress}
+      testID={`mr-sidebar-${row.id}`}
+    >
+      <ThemedGitPullRequest
+        size={14}
+        uniProps={active ? foregroundIconMapping : mutedIconMapping}
+      />
+      <Text style={[styles.mrRowLabel, active && styles.mrRowLabelActive]}>{t(row.labelKey)}</Text>
+      <Text style={styles.mrRowCount}>{count}</Text>
+    </Pressable>
+  );
+}
+
+const ThemedSearch = withUnistyles(Search);
+const ThemedSettings = withUnistyles(Settings);
+const ThemedGitPullRequest = withUnistyles(GitPullRequest);
+const foregroundIconMapping = (theme: SidebarTheme) => ({ color: theme.colors.foreground });
+const mutedIconMapping = (theme: SidebarTheme) => ({ color: theme.colors.foregroundMuted });
+
+function workspacesHeaderIconButtonStyle({
+  hovered = false,
+  pressed,
+}: PressableStateCallbackType & { hovered?: boolean }) {
+  return [
+    styles.workspacesHeaderIconButton,
+    (hovered || pressed) && styles.workspacesHeaderIconButtonHovered,
+  ];
+}
+
+function mrRowStyle({
+  hovered = false,
+  pressed,
+}: PressableStateCallbackType & { hovered?: boolean }) {
+  return [styles.mrRow, (hovered || pressed) && styles.mrRowHovered];
+}
+
+function activeMrRowStyle({
+  hovered = false,
+  pressed,
+}: PressableStateCallbackType & { hovered?: boolean }) {
+  return [styles.mrRow, styles.mrRowActive, (hovered || pressed) && styles.mrRowHovered];
 }
 
 // Stable element so the sidebar list's listHeaderComponent prop keeps identity across
@@ -1038,6 +1150,41 @@ const styles = StyleSheet.create((theme) => ({
     paddingRight: 4,
     paddingTop: theme.spacing[1],
     paddingBottom: theme.spacing[1],
+  },
+  mrSection: {
+    paddingBottom: theme.spacing[3],
+    marginBottom: theme.spacing[2],
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.border,
+  },
+  mrRows: {
+    gap: theme.spacing[0.5],
+  },
+  mrRow: {
+    minHeight: 32,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
+    paddingHorizontal: theme.spacing[2],
+    borderRadius: theme.borderRadius.md,
+  },
+  mrRowActive: {
+    backgroundColor: theme.colors.surfaceSidebarHover,
+  },
+  mrRowHovered: {
+    backgroundColor: theme.colors.surfaceSidebarHover,
+  },
+  mrRowLabel: {
+    flex: 1,
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
+  },
+  mrRowLabelActive: {
+    color: theme.colors.foreground,
+  },
+  mrRowCount: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.xs,
   },
   workspacesSectionTitle: {
     color: theme.colors.foregroundMuted,

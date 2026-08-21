@@ -1,4 +1,9 @@
 import type { TranslationResources } from "./en";
+import {
+  mrTrackerSectionTranslations,
+  mrTrackerSettingsTranslations,
+  mrTrackerTranslations,
+} from "./mr-tracker";
 
 export const ar: TranslationResources = {
   common: {
@@ -1806,6 +1811,7 @@ export const ar: TranslationResources = {
       rangeInvalid: "حدد أسطر الجانب الحالي من الملف والمراجعة نفسيهما",
     },
   },
+  mrTracker: mrTrackerTranslations,
   settings: {
     title: "إعدادات",
     loading: "جارٍ تحميل الإعدادات...",
@@ -1827,6 +1833,7 @@ export const ar: TranslationResources = {
     },
     groupInfo: "حول{{title}}",
     sections: {
+      ...mrTrackerSectionTranslations,
       general: "عام",
       appearance: "مظهر",
       editor: "المحرر",
@@ -1837,6 +1844,7 @@ export const ar: TranslationResources = {
       diagnostics: "التشخيص",
       about: "عن",
     },
+    mrTracker: mrTrackerSettingsTranslations,
     editor: {
       title: "المحرر",
       vimKeybindings: "اختصارات Vim",

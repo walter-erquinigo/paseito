@@ -1,4 +1,9 @@
 import type { TranslationResources } from "./en";
+import {
+  mrTrackerSectionTranslations,
+  mrTrackerSettingsTranslations,
+  mrTrackerTranslations,
+} from "./mr-tracker";
 
 export const es: TranslationResources = {
   common: {
@@ -1850,6 +1855,7 @@ export const es: TranslationResources = {
       rangeInvalid: "Selecciona líneas actuales del mismo archivo y revisión",
     },
   },
+  mrTracker: mrTrackerTranslations,
   settings: {
     title: "Ajustes",
     loading: "Cargando configuración...",
@@ -1871,6 +1877,7 @@ export const es: TranslationResources = {
     },
     groupInfo: "Acerca de{{title}}",
     sections: {
+      ...mrTrackerSectionTranslations,
       general: "General",
       appearance: "Apariencia",
       editor: "Editor",
@@ -1881,6 +1888,7 @@ export const es: TranslationResources = {
       diagnostics: "Diagnóstico",
       about: "Acerca de",
     },
+    mrTracker: mrTrackerSettingsTranslations,
     editor: {
       title: "Editor",
       vimKeybindings: "Atajos de Vim",
