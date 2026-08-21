@@ -3,7 +3,7 @@ appId: dev.werquinigo.paseito
 productName: Paseito
 executableName: Paseito
 protocols:
-  - name: Paseito agent link
+  - name: Paseito link
     schemes:
       - paseito
 afterPack: ./scripts/after-pack.js
@@ -46,6 +46,10 @@ mac:
   extraResources:
     - from: bin/paseito
       to: bin/paseito
+    - from: bin/paseito-native-host
+      to: bin/paseito-native-host
+    - from: dist/native-messaging-host.js
+      to: native-messaging-host.js
   target:
     - target: zip
       arch:

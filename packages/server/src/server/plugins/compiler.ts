@@ -69,7 +69,7 @@ function loadEsbuild(): typeof import("esbuild") {
   }
 }
 
-type PluginBuildTarget = "client" | "server";
+type PluginBuildTarget = "client" | "server" | "desktop";
 
 interface SourceRange {
   start: number;
@@ -77,8 +77,22 @@ interface SourceRange {
 }
 
 const REGISTRATIONS_REMOVED_BY_TARGET: Record<PluginBuildTarget, ReadonlySet<string>> = {
-  client: new Set(["handle"]),
+  client: new Set(["handle", "addMRPredicate", "addMROperation"]),
   server: new Set([
+    "addSurface",
+    "addSidebarItem",
+    "addWorkspacePanel",
+    "addCommandCenterItem",
+    "addClientSide",
+    "addAttachmentSource",
+    "addTheme",
+    "addTimelineTransformer",
+    "addTimelineRenderer",
+    "addMRPredicate",
+    "addMROperation",
+  ]),
+  desktop: new Set([
+    "handle",
     "addSurface",
     "addSidebarItem",
     "addWorkspacePanel",
@@ -193,6 +207,7 @@ function collectRemovedRegistrationRanges(
 function moduleTarget(specifier: string): PluginBuildTarget | null {
   if (/\.client(?:\.[cm]?[jt]sx?)?$/.test(specifier)) return "client";
   if (/\.server(?:\.[cm]?[jt]sx?)?$/.test(specifier)) return "server";
+  if (/\.desktop(?:\.[cm]?[jt]sx?)?$/.test(specifier)) return "desktop";
   return null;
 }
 
@@ -250,17 +265,20 @@ function createRuntimeBoundaryPlugin(target: PluginBuildTarget): Plugin {
   return {
     name: `paseo-plugin-${target}-runtime-boundary`,
     setup(buildContext) {
-      buildContext.onResolve({ filter: /\.(?:client|server)(?:\.[cm]?[jt]sx?)?$/ }, (args) => {
-        const importedTarget = moduleTarget(args.path);
-        if (importedTarget === null || importedTarget === target) return null;
-        return {
-          errors: [
-            {
-              text: `${importedTarget}-only module cannot be imported into the plugin ${target} bundle: ${args.path}`,
-            },
-          ],
-        };
-      });
+      buildContext.onResolve(
+        { filter: /\.(?:client|server|desktop)(?:\.[cm]?[jt]sx?)?$/ },
+        (args) => {
+          const importedTarget = moduleTarget(args.path);
+          if (importedTarget === null || importedTarget === target) return null;
+          return {
+            errors: [
+              {
+                text: `${importedTarget}-only module cannot be imported into the plugin ${target} bundle: ${args.path}`,
+              },
+            ],
+          };
+        },
+      );
     },
   };
 }
@@ -285,7 +303,7 @@ function exactSpecifierFilter(specifiers: readonly string[]): RegExp {
 
 function createUnusedPlatformModulePlugin(target: PluginBuildTarget): Plugin {
   const filter =
-    target === "server"
+    target === "server" || target === "desktop"
       ? exactSpecifierFilter([
           "@tanstack/react-query",
           "react",
@@ -323,8 +341,8 @@ async function compileTarget(entryPath: string, target: PluginBuildTarget): Prom
     },
     bundle: true,
     format: "cjs",
-    platform: target === "server" ? "node" : "neutral",
-    target: target === "server" ? "node20" : "es2020",
+    platform: target === "server" || target === "desktop" ? "node" : "neutral",
+    target: target === "server" || target === "desktop" ? "node20" : "es2020",
     // Metro lowers async syntax before Hermes sees app code. Plugin client bundles bypass Metro,
     // so apply the same compatibility transform before the app evaluates them from source.
     supported: target === "client" ? { "async-await": false } : undefined,
@@ -347,6 +365,10 @@ async function compileTarget(entryPath: string, target: PluginBuildTarget): Prom
   const output = result.outputFiles[0]?.text;
   if (!output) throw new Error(`Plugin ${target} compilation produced no output`);
   return wrapCommonJsBundle(makeHermesInteropEager(output));
+}
+
+export async function compileDesktopPlugin(entryPath: string): Promise<string> {
+  return await compileTarget(entryPath, "desktop");
 }
 
 export async function compilePlugin(entryPath: string): Promise<{

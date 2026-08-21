@@ -3,6 +3,7 @@ import type { PaseoApi } from "@getpaseo/client";
 import type { AgentTimelineItem } from "@getpaseo/protocol/agent-types";
 import type { ZodType, input as ZodInput, output as ZodOutput } from "zod";
 import type { PluginRpcContract } from "./rpc.js";
+import type { PluginMROperationContribution, PluginMRPredicateContribution } from "./desktop.js";
 
 export interface PluginTheme {
   readonly colors: {
@@ -305,6 +306,8 @@ export interface PluginContext {
   addTimelineRenderer<Schema extends ZodType>(
     contribution: PluginTimelineRendererContribution<Schema>,
   ): void;
+  addMRPredicate(contribution: PluginMRPredicateContribution): void;
+  addMROperation(contribution: PluginMROperationContribution): void;
 }
 
 export type PluginCleanup = () => void | Promise<void>;
