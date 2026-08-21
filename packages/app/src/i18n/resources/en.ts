@@ -2052,6 +2052,10 @@ export const en = {
     },
     plugins: {
       title: "Plugins",
+      desktopTitle: "Desktop MR automation plugins",
+      desktopTrustedDescription:
+        "They run locally in the Paseito desktop process without sandboxing. Install only code you trust.",
+      desktopDirectoryPlaceholder: "/absolute/path/on/this/Mac",
       trustedTitle: "Plugins are trusted code",
       trustedDescription:
         "They run on this host and inside the app without sandboxing. Install only code you trust.",

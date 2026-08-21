@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="popup.css" />
+    <title>Paseito MR bridge</title>
+  </head>
+  <body>
+    <main>
+      <header>
+        <img src="icons/icon.png" alt="" />
+        <div>
+          <h1>Paseito MR bridge</h1>
+          <p>Open the current GitLab MR in Paseito</p>
+        </div>
+      </header>
+      <section id="current" aria-live="polite"></section>
+      <section class="privacy">
+        <strong>Private by design</strong>
+        <span>No GitLab token or API access. Page access is enabled one host at a time.</span>
+      </section>
+      <section>
+        <h2>Enabled GitLab hosts</h2>
+        <div id="origins"></div>
+      </section>
+      <p id="status" role="status"></p>
+    </main>
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>

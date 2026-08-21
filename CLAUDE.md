@@ -59,6 +59,7 @@ At the start of non-trivial work, list `docs/` and skim anything relevant to the
 | [docs/docker.md](docs/docker.md)                                   | Running the daemon and bundled web UI in Docker, volumes, agent images, security                                               |
 | [docs/release.md](docs/release.md)                                 | Release playbook, draft releases, completion checklist                                                                         |
 | [docs/terminal-activity.md](docs/terminal-activity.md)             | Terminal activity indicators — source-agnostic tracker, agent hook reporting, adding a new hook provider                       |
+| [docs/paseito-mr-tracker.md](docs/paseito-mr-tracker.md)           | Desktop GitLab MR tracking, stack semantics, notification baseline, and owner-only credential persistence                      |
 | [SECURITY.md](SECURITY.md)                                         | Relay threat model, E2E encryption, DNS rebinding, agent auth                                                                  |
 | [public-docs/hub/security.md](public-docs/hub/security.md)         | Public Hub guide — trust boundaries, untrusted triggers, provider controls, and output authority                               |
 
@@ -315,11 +316,16 @@ instead of editing the list by hand.
   - Fix: Gate exhaustive search on daemon support, bypass redundant ignored-path enumeration, and reject truncated Git file corpora.
   - Fix: Route Command+Enter to the right Changes sidebar even when a full Changes tab exists.
   - Fix: Keep absolute host-path autocomplete outside the Git index and preserve editable absolute file tabs.
-- `desktop-gitlab-mr-tracker` — Track GitLab merge requests in a read-only desktop sidebar surface without porting MR Tracker automations or personal configuration.
+- `desktop-gitlab-mr-tracker` — Track GitLab merge requests and run user-configured, plugin-extensible workflows from Paseito without embedding personal or organization policy.
   - Fix: Keep GitLab access tokens outside renderer-visible state and the repository, stored locally with owner-only permissions without Keychain, and preserve credentials across ordinary desktop upgrades.
   - Fix: Keep the unconfigured tracker free of dead controls and provide direct, security-explained setup actions.
   - Fix: Keep every local triage label understandable through concise desktop hover and keyboard-focus explanations.
   - Fix: Keep MR triage left-anchored while summary navigation, detail expansion, and importance controls remain independent interactions.
   - Fix: Keep MR triage binary as Important or Ignore, normalize legacy local choices to Ignore, and provide an accessible Important-only filter beside search.
+  - Fix: Keep always-show GitLab accounts visible before activity while discovering other commenters only after activity, scoped to owner-authored MRs and keyed by stable user identity.
+  - Fix: Keep the Chrome bridge token-free and origin-opt-in, expose matching controls even while Paseito is visible, preserve specific bridge errors, and make repeated links reveal, expand, center and highlight the resolved MR.
+  - Fix: Keep MR workflow behavior user-configured and plugin-extensible, with no employer, project, username, pipeline, or command policy compiled into Paseito.
+  - Fix: Keep automatic mutations transition-triggered, silently baselined, optionally limited to one durable run per MR, durably receipted before dispatch, and fail-closed when data or delivery is uncertain.
+  - Fix: Keep desktop MR plugins locally managed from Settings and `paseito plugin --scope desktop`, independent of every registered remote daemon.
 
 <!-- PASEITO-LOCAL-FEATURES:END -->

@@ -22,6 +22,11 @@
       "types": "./dist/host.d.ts",
       "source": "./src/host.ts",
       "default": "./dist/host.js"
+    },
+    "./desktop": {
+      "types": "./dist/desktop.d.ts",
+      "source": "./src/desktop.ts",
+      "default": "./dist/desktop.js"
     }
   },
   "publishConfig": {

@@ -2,6 +2,7 @@ import type { ComponentType } from "react";
 import type { PaseoApi } from "@getpaseo/client";
 import type { ZodType, input as ZodInput, output as ZodOutput } from "zod";
 import type { PluginRpcContract } from "./rpc.js";
+import type { PluginMROperationContribution, PluginMRPredicateContribution } from "./desktop.js";
 
 export interface PluginTheme {
   readonly colors: {
@@ -201,6 +202,8 @@ export interface PluginContext {
   addCommandCenterItem(contribution: PluginCommandCenterItemContribution): void;
   addAttachmentSource(contribution: PluginAttachmentSourceContribution): void;
   addTheme(contribution: PluginThemeContribution): void;
+  addMRPredicate(contribution: PluginMRPredicateContribution): void;
+  addMROperation(contribution: PluginMROperationContribution): void;
 }
 
 export type PluginCleanup = () => void | Promise<void>;

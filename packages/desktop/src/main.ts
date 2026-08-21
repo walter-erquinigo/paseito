@@ -94,11 +94,21 @@ import { registerBrowserAutomationIpc } from "./features/browser-automation/ipc.
 import { BrowserKeyboard } from "./features/browser-keyboard/index.js";
 import { installAppUpdateOnQuit } from "./features/auto-updater.js";
 import {
+  getDesktopMRPluginManager,
+  getDesktopMRTrackerService,
+} from "./features/mr-tracker/electron.js";
+import {
+  registerChromeNativeHost,
+  startMRNativeBridge,
+} from "./features/mr-tracker/native-messaging-bridge.js";
+import {
   buildAgentDeepLinkRoute,
   parseAgentDeepLink,
   type AgentDeepLinkTarget,
 } from "@getpaseo/protocol/agent-deep-link";
+import { parseMRDeepLink, type MRDeepLinkTarget } from "@getpaseo/protocol/mr-deep-link";
 import { AgentNavigationInbox, parseAgentDeepLinkFromArgv } from "./agent-navigation.js";
+import { MRNavigationInbox, parseMRDeepLinkFromArgv } from "./mr-navigation.js";
 
 const DEV_SERVER_URL = process.env.EXPO_DEV_URL ?? "http://localhost:8081";
 const APP_SCHEME = "paseito";
@@ -111,8 +121,10 @@ const DESKTOP_WINDOW_CHROME_MODE = resolveDesktopWindowChromeMode({
   isPackaged: app.isPackaged,
 });
 const UPDATE_QUIT_DEADLINE_MS = 5_000;
+const CHROME_EXTENSION_ID = "lcjcpapgipgmjadeafachaamdkbdcaaf";
 const pendingBrowserWindowOpenRequests = new PendingBrowserWindowOpenRequests();
 const agentNavigationInbox = new AgentNavigationInbox();
+const mrNavigationInbox = new MRNavigationInbox();
 
 // A second-instance launch can arrive before the packaged protocol handler,
 // IPC handlers, and first window exist. Wait for full bootstrap, not just
@@ -341,6 +353,7 @@ let pendingOpenProjectPath = parseOpenProjectPathFromArgv({
   isDefaultApp: process.defaultApp,
 });
 let pendingAgentNavigation = parseAgentDeepLinkFromArgv(process.argv);
+let pendingMRNavigation = parseMRDeepLinkFromArgv(process.argv);
 
 // Each window pulls its own pending open-project path on mount, keyed by
 // webContents id, so deep-linked windows (second-instance launches, the
@@ -368,6 +381,10 @@ ipcMain.handle("paseo:get-pending-open-project", (event) => {
 
 ipcMain.handle("paseo:agent-navigation:ready", (event) => {
   return agentNavigationInbox.windowReady(event.sender.id);
+});
+
+ipcMain.handle("paseo:mr-navigation:ready", (event) => {
+  return mrNavigationInbox.windowReady(event.sender.id);
 });
 
 function normalizeBrowserCaptureRect(
@@ -772,11 +789,13 @@ async function createWindow(
   mainWindow.webContents.on("did-start-navigation", (_event, _url, isSameDocument, isMainFrame) => {
     if (isMainFrame && !isSameDocument) {
       agentNavigationInbox.windowLoading(webContentsId);
+      mrNavigationInbox.windowLoading(webContentsId);
     }
   });
   mainWindow.on("closed", () => {
     pendingOpenProjectStore.delete(webContentsId);
     agentNavigationInbox.removeWindow(webContentsId);
+    mrNavigationInbox.removeWindow(webContentsId);
     unregisterPaseoBrowserHost(webContentsId);
     browserKeyboard.detachHost(webContentsId);
   });
@@ -856,6 +875,8 @@ async function createWindow(
 // ---------------------------------------------------------------------------
 
 let agentNavigationWindowCreation: Promise<BrowserWindow> | null = null;
+let mrNavigationWindowCreation: Promise<BrowserWindow> | null = null;
+let mrNavigationRevision = 0;
 
 function focusExistingWindowOnAgent(target: AgentDeepLinkTarget): void {
   const windows = BrowserWindow.getAllWindows();
@@ -918,9 +939,67 @@ function receiveAgentDeepLink(input: string): void {
   });
 }
 
+async function focusExistingWindowOnMR(target: MRDeepLinkTarget): Promise<void> {
+  let payload;
+  const revision = ++mrNavigationRevision;
+  try {
+    const resolution = await getDesktopMRTrackerService().resolveNavigation(target.url);
+    payload = { ...resolution, revision };
+  } catch (error) {
+    payload = {
+      revision,
+      error: error instanceof Error ? error.message : "Paseito could not open this merge request.",
+    };
+  }
+  if (revision !== mrNavigationRevision) return;
+
+  const windows = BrowserWindow.getAllWindows();
+  let mainWindow =
+    BrowserWindow.getFocusedWindow() ?? windows.find((window) => window.isVisible()) ?? windows[0];
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    if (!mrNavigationWindowCreation) {
+      mrNavigationWindowCreation = createWindow({ restoreWindowState: true });
+    }
+    const creation = mrNavigationWindowCreation;
+    try {
+      mainWindow = await creation;
+    } catch (error) {
+      log.error("[window] failed to create window for MR link", error);
+      return;
+    } finally {
+      if (mrNavigationWindowCreation === creation) mrNavigationWindowCreation = null;
+    }
+    if (revision !== mrNavigationRevision) return;
+  }
+
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+  const deliverable = mrNavigationInbox.deliverOrQueue(mainWindow.webContents.id, payload);
+  if (deliverable) mainWindow.webContents.send("paseo:event:open-mr", deliverable);
+}
+
+function receiveMRDeepLink(input: string): boolean {
+  const target = parseMRDeepLink(input);
+  if (!target) return false;
+  if (bootstrapIsComplete) {
+    void focusExistingWindowOnMR(target);
+    return true;
+  }
+
+  pendingMRNavigation = target;
+  void bootstrapComplete.then(() => {
+    if (pendingMRNavigation !== target) return undefined;
+    pendingMRNavigation = null;
+    void focusExistingWindowOnMR(target);
+    return undefined;
+  });
+  return true;
+}
+
 app.on("open-url", (event, url) => {
   event.preventDefault();
-  receiveAgentDeepLink(url);
+  if (!receiveMRDeepLink(url)) receiveAgentDeepLink(url);
 });
 
 function setupSingleInstanceLock(): boolean {
@@ -939,6 +1018,11 @@ function setupSingleInstanceLock(): boolean {
     const agentTarget = parseAgentDeepLinkFromArgv(commandLine);
     if (agentTarget) {
       void bootstrapComplete.then(() => focusExistingWindowOnAgent(agentTarget));
+      return;
+    }
+    const mrTarget = parseMRDeepLinkFromArgv(commandLine);
+    if (mrTarget) {
+      void bootstrapComplete.then(() => focusExistingWindowOnMR(mrTarget));
       return;
     }
 
@@ -1023,6 +1107,21 @@ async function bootstrap(): Promise<void> {
   });
   ensureNotificationCenterRegistration();
   registerDaemonManager();
+  const closeMRNativeBridge = await startMRNativeBridge({
+    userDataPath: app.getPath("userData"),
+    service: getDesktopMRTrackerService(),
+    plugins: getDesktopMRPluginManager(),
+  });
+  app.once("will-quit", () => {
+    void closeMRNativeBridge();
+  });
+  if (app.isPackaged && process.platform === "darwin") {
+    await registerChromeNativeHost({
+      homeDirectory: app.getPath("home"),
+      hostExecutablePath: path.join(process.resourcesPath, "bin", "paseito-native-host"),
+      extensionId: CHROME_EXTENSION_ID,
+    });
+  }
   registerWindowManager({ mode: DESKTOP_WINDOW_CHROME_MODE });
   registerDialogHandlers();
   registerNotificationHandlers();
@@ -1062,6 +1161,11 @@ async function bootstrap(): Promise<void> {
     pendingAgentNavigation = null;
     focusExistingWindowOnAgent(target);
   }
+  if (pendingMRNavigation) {
+    const target = pendingMRNavigation;
+    pendingMRNavigation = null;
+    void focusExistingWindowOnMR(target);
+  }
 
   app.on("activate", async () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -1071,7 +1175,9 @@ async function bootstrap(): Promise<void> {
 }
 
 void runDesktopStartup({
-  hasPendingGuiLaunchRequest: Boolean(pendingOpenProjectPath || pendingAgentNavigation),
+  hasPendingGuiLaunchRequest: Boolean(
+    pendingOpenProjectPath || pendingAgentNavigation || pendingMRNavigation,
+  ),
   runCliPassthroughIfRequested,
   inheritLoginShellEnv,
   bootstrapGui: bootstrap,

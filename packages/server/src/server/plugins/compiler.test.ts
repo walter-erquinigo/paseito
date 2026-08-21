@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  compileDesktopPlugin,
   compilePlugin,
   resolveExistingAsarUnpackedEsbuildBinary,
   unpackedEsbuildBinaryFromPackageDir,
@@ -107,4 +108,32 @@ export default function contribute(plugin: PluginContext) {
       expect(serverBundle).not.toContain("Invalid plugin RPC method");
     },
   );
+});
+
+describe("desktop plugin compilation", () => {
+  it("keeps MR contributions and removes UI and daemon registrations", async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), "paseito-desktop-plugin-compiler-"));
+    temporaryDirectories.push(directory);
+    const entryPath = path.join(directory, "index.ts");
+    await writeFile(
+      entryPath,
+      `export default function contribute(plugin) {
+  plugin.addMRPredicate({
+    id: "label",
+    title: "Has label",
+    description: "Matches a label",
+    fields: [],
+    evaluate: ({ mergeRequest }) => mergeRequest.labels.length ? "match" : "no_match",
+  });
+  plugin.addSurface("unsafe-ui", () => null);
+  plugin.handle({}, () => null);
+  return () => undefined;
+}`,
+    );
+
+    const bundle = await compileDesktopPlugin(entryPath);
+    expect(bundle).toContain("addMRPredicate");
+    expect(bundle).not.toContain("unsafe-ui");
+    expect(bundle).not.toContain("plugin.handle");
+  });
 });

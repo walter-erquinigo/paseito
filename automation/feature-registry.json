@@ -477,30 +477,55 @@
         "Keep the unconfigured tracker free of dead controls and provide direct, security-explained setup actions.",
         "Keep every local triage label understandable through concise desktop hover and keyboard-focus explanations.",
         "Keep MR triage left-anchored while summary navigation, detail expansion, and importance controls remain independent interactions.",
-        "Keep MR triage binary as Important or Ignore, normalize legacy local choices to Ignore, and provide an accessible Important-only filter beside search."
+        "Keep MR triage binary as Important or Ignore, normalize legacy local choices to Ignore, and provide an accessible Important-only filter beside search.",
+        "Keep always-show GitLab accounts visible before activity while discovering other commenters only after activity, scoped to owner-authored MRs and keyed by stable user identity.",
+        "Keep the Chrome bridge token-free and origin-opt-in, expose matching controls even while Paseito is visible, preserve specific bridge errors, and make repeated links reveal, expand, center and highlight the resolved MR.",
+        "Keep MR workflow behavior user-configured and plugin-extensible, with no employer, project, username, pipeline, or command policy compiled into Paseito.",
+        "Keep automatic mutations transition-triggered, silently baselined, optionally limited to one durable run per MR, durably receipted before dispatch, and fail-closed when data or delivery is uncertain.",
+        "Keep desktop MR plugins locally managed from Settings and `paseito plugin --scope desktop`, independent of every registered remote daemon."
       ],
       "permanent": false,
-      "intent": "Track GitLab merge requests in a read-only desktop sidebar surface without porting MR Tracker automations or personal configuration.",
+      "intent": "Track GitLab merge requests and run user-configured, plugin-extensible workflows from Paseito without embedding personal or organization policy.",
       "invariants": [
         "Electron builds expose All, My MRs and Others above Workspaces, with a gear that opens desktop-only MR settings.",
         "Discovery covers the configured owner, exact additional authors, optional reviewer assignments and local manual tracking on a fixed two-minute cadence.",
-        "GitLab integration issues GET requests only; local tracking and importance never mutate GitLab.",
+        "Local tracking and importance never mutate GitLab; only an enabled automation outcome can post an exact comment or add reviewers, and reviewer mutation is additive.",
         "After token submission, desktop main never returns the stored GitLab token to renderer state; nonsecret state is stored separately, and the token remains in a separate owner-only local file without macOS Keychain.",
-        "MR readiness and notifications use generic GitLab mergeability, overall pipeline, approvals and blocking-discussion facts; MR Tracker automations and product-specific integrations remain excluded.",
-        "The first complete refresh is notification-silent, partial refreshes preserve cached results without advancing transitions, and later complete refreshes notify only for new owned MRs, readiness, or a new failed pipeline."
+        "MR readiness and notifications use generic GitLab facts; automation rules are local data composed from nested all, any and not conditions plus generic built-in or desktop-plugin contributions.",
+        "Configured GitLab accounts show No activity, Open or All clear only on owner-authored MRs; other non-system commenters except the MR author appear automatically after activity, and only authored resolvable notes can remain open.",
+        "The first complete refresh is notification-silent, partial refreshes preserve cached results without advancing transitions, and later complete refreshes notify only for new owned MRs, readiness, or a new failed pipeline.",
+        "The locally loadable Chrome extension requests access per HTTPS GitLab origin, makes no GitLab API requests, stores no credentials, and receives actions through a versioned owner-only native bridge whether the Paseito window is visible or hidden.",
+        "Automatic outcomes establish a silent baseline per rule revision, run once on a later complete false-to-true transition, optionally persist a once-per-MR completion key before dispatch, persist an attempting receipt before dispatch, never retry uncertain delivery automatically, and treat missing or partial facts as unknown.",
+        "Manual buttons default to confirmation, are reevaluated immediately before execution in both desktop and Chrome, and links resolve only from the current MR head SHA.",
+        "Desktop MR plugins are trusted unsandboxed local code compiled for a desktop-only SDK target, executed outside the renderer, namespaced by plugin ID, and managed independently through desktop Settings or CLI scope.",
+        "MR links resolve through desktop main, locally track a missing open MR without mutating GitLab, choose My MRs or Others by resolved ownership, and make repeated focus visible."
       ],
       "contracts": [
-        "npm test --workspace=@getpaseo/desktop -- --run src/features/mr-tracker/store.test.ts src/features/mr-tracker/gitlab-client.test.ts src/features/mr-tracker/service.test.ts",
-        "npm test --workspace=@getpaseo/app -- --run src/mr-tracker/model.test.ts src/mr-tracker/importance-control.test.tsx src/components/ui/tooltip.test.tsx",
-        "npm run test:e2e:renderer --workspace=@getpaseo/desktop -- e2e/mr-tracker-row.spec.ts"
+        "npm test --workspace=@getpaseo/desktop -- --run src/features/mr-tracker/store.test.ts src/features/mr-tracker/automation-store.test.ts src/features/mr-tracker/gitlab-client.test.ts src/features/mr-tracker/service.test.ts src/features/mr-tracker/automation-engine.test.ts src/features/mr-tracker/native-messaging-bridge.test.ts",
+        "npm test --workspace=@getpaseo/app -- --run src/mr-tracker/model.test.ts src/mr-tracker/activity-state.test.ts src/mr-tracker/settings-form-model.test.ts src/mr-tracker/importance-control.test.tsx src/components/ui/tooltip.test.tsx",
+        "npm run test:e2e:renderer --workspace=@getpaseo/desktop -- e2e/mr-tracker-row.spec.ts e2e/desktop-mr-plugins.spec.ts",
+        "npx vitest run packages/protocol/src/mr-deep-link.test.ts packages/desktop/src/mr-navigation.test.ts --bail=1",
+        "npm test --workspace=@getpaseo/chrome-extension",
+        "npx vitest run packages/server/src/server/plugins/compiler.test.ts packages/cli/src/commands/plugin/index.test.ts --bail=1"
       ],
       "paths": [
         "packages/desktop/src/features/mr-tracker",
+        "packages/desktop/src/mr-navigation.ts",
+        "packages/desktop/src/main.ts",
+        "packages/desktop/src/preload.ts",
+        "packages/protocol/src/mr-deep-link.ts",
         "packages/app/src/mr-tracker",
         "packages/app/src/app/mrs",
+        "packages/app/src/desktop/mr-navigation.tsx",
+        "packages/chrome-extension",
+        "packages/plugin/src/desktop.ts",
+        "packages/server/src/server/plugins/compiler.ts",
+        "packages/cli/src/commands/plugin",
+        "plugin-examples/mr-automation",
         "packages/app/src/components/left-sidebar.tsx",
         "packages/app/src/screens/settings-screen.tsx",
-        "docs/paseito-mr-tracker.md"
+        "docs/paseito-mr-tracker.md",
+        "docs/plugins.md"
       ]
     }
   ]

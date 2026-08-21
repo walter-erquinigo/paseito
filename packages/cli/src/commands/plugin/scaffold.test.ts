@@ -40,6 +40,9 @@ describe("plugin scaffold", () => {
     await expect(readFile(path.join(directory, "main.client.tsx"), "utf8")).resolves.toContain(
       "Hello from my plugin",
     );
+    await expect(readFile(path.join(directory, "paseo-plugin.d.ts"), "utf8")).resolves.toContain(
+      'declare module "@getpaseo/plugin/desktop"',
+    );
   });
 
   it("typechecks client and server Paseo API access", async () => {

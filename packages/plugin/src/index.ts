@@ -36,3 +36,13 @@ export type {
 export { usePaseo } from "./paseo-context.js";
 export { useAgent, useWorkspace } from "./client-state.js";
 export { useRpc } from "./rpc-context.js";
+export type {
+  DesktopPluginContext,
+  PluginMRAutomationField,
+  PluginMRMatchState,
+  PluginMROperationContribution,
+  PluginMRPipeline,
+  PluginMRPredicateContribution,
+  PluginMRSnapshot,
+  PluginMRUser,
+} from "./desktop.js";

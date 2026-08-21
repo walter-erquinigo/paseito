@@ -5,6 +5,60 @@ app themes, and composer attachment sources from one `index.ts`. Paseo executes 
 subprocess and evaluates the client contribution in the app runtime. Plugin code is trusted code;
 this first slice does not sandbox it.
 
+Paseito also has a distinct desktop-local target for MR automation predicates and operations. It is
+managed by the desktop app rather than any local or registered remote daemon.
+
+## Desktop MR automation plugins
+
+Install and manage trusted desktop-local automation plugins from **Settings → Plugins → Desktop MR
+automation plugins**, or add `--scope desktop` to the normal CLI lifecycle commands:
+
+```bash
+paseito plugin install /absolute/path/to/my-plugin --scope desktop
+paseito plugin ls --scope desktop
+paseito plugin reload my-plugin --scope desktop
+paseito plugin logs my-plugin --scope desktop
+paseito plugin disable my-plugin --scope desktop
+paseito plugin remove my-plugin --scope desktop
+```
+
+The desktop app must be running for CLI commands in this scope. Configuration is owner-readable
+`desktop-plugins.json` under Electron `userData`; remove deletes configuration, not source. Each plugin
+is compiled into a desktop-only Node bundle and executed in its own child process outside the renderer.
+This is process separation, not a security sandbox: plugin code is trusted and can use Node APIs.
+
+```ts
+import type { DesktopPluginContext } from "@getpaseo/plugin/desktop";
+
+export default function contribute(plugin: DesktopPluginContext) {
+  plugin.addMRPredicate({
+    id: "has-release-label",
+    title: "Has release label",
+    description: "Matches an exact label.",
+    fields: [{ key: "label", type: "text", label: "Label", required: true }],
+    evaluate: ({ config, mergeRequest }) =>
+      mergeRequest.labels.includes(String(config.label)) ? "match" : "no_match",
+  });
+  plugin.addMROperation({
+    id: "open-dashboard",
+    title: "Open dashboard",
+    description: "Builds a link for this MR.",
+    kind: "link",
+    allowedPresentations: ["link"],
+    fields: [{ key: "baseUrl", type: "text", label: "Dashboard URL", required: true }],
+    run: ({ config, mergeRequest }) =>
+      `${String(config.baseUrl)}/${mergeRequest.projectId}/${mergeRequest.iid}`,
+  });
+  return () => undefined;
+}
+```
+
+Contribution IDs are namespaced at runtime as `<plugin-id>.<contribution-id>`. Predicates return
+`match`, `no_match`, or `unknown`; thrown errors become `unknown`. Link operations must return a URL
+string. Mutation operations return nothing and use the same receipt, confirmation, reevaluation, and
+automatic-transition rules as built-ins. A missing, disabled, failed, or removed plugin leaves saved
+rules intact but unavailable and fail-closed.
+
 ## Install a directory source
 
 Create a typecheckable plugin project, install its development dependencies, then install it into
@@ -222,4 +276,5 @@ against the installed catalog on every change; an id nothing contributes falls b
 preference instead of painting the reserved slot's placeholder colors.
 
 See `plugin-examples/local-plugin` for a native surface, `plugin-examples/linear` for a complete
-attachment-source example, and `plugin-examples/catppuccin` for a theme.
+attachment-source example, `plugin-examples/catppuccin` for a theme, and
+`plugin-examples/mr-automation` for desktop MR predicate and link contributions.

@@ -11,6 +11,17 @@ const getPluginLogs = vi.fn(async () => [
 ]);
 const close = vi.fn(async () => undefined);
 const features: { pluginManagement?: boolean; pluginLogs?: boolean } = {};
+const { listDesktopPlugins } = vi.hoisted(() => ({
+  listDesktopPlugins: vi.fn(async () => [
+    {
+      id: "desktop-example",
+      path: "/tmp/desktop-example",
+      enabled: true,
+      status: "running" as const,
+      error: null,
+    },
+  ]),
+}));
 
 vi.mock("../../utils/client.js", () => ({
   connectToDaemon: vi.fn(async () => ({
@@ -19,6 +30,12 @@ vi.mock("../../utils/client.js", () => ({
     getPluginLogs,
     close,
   })),
+}));
+
+vi.mock("./desktop.js", () => ({
+  desktopPlugins: {
+    list: listDesktopPlugins,
+  },
 }));
 
 import { render } from "../../output/index.js";
@@ -38,6 +55,13 @@ describe("plugin management commands", () => {
     });
     expect(listPlugins).not.toHaveBeenCalled();
     expect(close).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses the desktop-local bridge without checking daemon features", async () => {
+    const result = await runPluginListCommand({ scope: "desktop" }, {} as never);
+    expect(listDesktopPlugins).toHaveBeenCalledTimes(1);
+    expect(listPlugins).not.toHaveBeenCalled();
+    expect(render(result, { noColor: true })).toContain("desktop-example");
   });
 
   it("requires plugin log support before attempting the RPC", async () => {
