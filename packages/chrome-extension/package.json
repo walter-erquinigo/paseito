@@ -1,0 +1,16 @@
+{
+  "name": "@getpaseo/chrome-extension",
+  "version": "0.6.1-paseito.6",
+  "private": true,
+  "description": "Local Chrome bridge from GitLab merge requests to Paseito",
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "qa:visual": "npm run build && node scripts/visual-qa.mjs",
+    "test": "vitest run src/gitlab-url.test.js",
+    "typecheck": "node --check src/gitlab-url.js && node --check src/service-worker.js && node --check src/content-script.js && node --check src/popup.js && node --check scripts/build.mjs && node --check scripts/visual-qa.mjs"
+  },
+  "devDependencies": {
+    "vitest": "^4.1.6"
+  }
+}
