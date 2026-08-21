@@ -113,4 +113,24 @@ describe("TooltipTrigger", () => {
 
     expect(onPress).toHaveBeenCalledTimes(1);
   });
+
+  it("dismisses an open desktop tooltip with Escape", () => {
+    const onOpenChange = vi.fn();
+    act(() => {
+      root?.render(
+        <Tooltip defaultOpen onOpenChange={onOpenChange}>
+          <TooltipTrigger>
+            <Text>Focus</Text>
+          </TooltipTrigger>
+        </Tooltip>,
+      );
+    });
+
+    act(() => {
+      window.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Escape" }));
+    });
+
+    expect(onOpenChange).toHaveBeenCalledOnce();
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
 });
