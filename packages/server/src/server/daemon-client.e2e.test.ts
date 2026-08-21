@@ -1162,6 +1162,31 @@ test("returns typed relative suggestions within a requested directory", async ()
   }
 }, 30000);
 
+test("autocompletes an absolute file path outside the requested workspace", async () => {
+  const cwd = mkdtempSync(path.join(tmpdir(), "paseo-workspace-absolute-suggestion-"));
+  const outside = mkdtempSync(path.join(tmpdir(), "paseo-outside-absolute-suggestion-"));
+  const target = path.join(outside, "AGENTS.md");
+
+  try {
+    writeFileSync(target, "# Host instructions\n");
+    const result = await ctx.client.getDirectorySuggestions({
+      cwd,
+      query: target.slice(0, -3),
+      filesystemPath: true,
+      includeFiles: true,
+      includeDirectories: false,
+      limit: 20,
+    });
+
+    expect(result.error).toBeNull();
+    expect(result.directories).toEqual([]);
+    expect(result.entries).toEqual([{ path: target, kind: "file" }]);
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+    rmSync(outside, { recursive: true, force: true });
+  }
+}, 30000);
+
 test("finds workspace files inside the OpenCode directory", async () => {
   const cwd = mkdtempSync(path.join(tmpdir(), "paseo-opencode-suggestion-"));
   const target = path.join(

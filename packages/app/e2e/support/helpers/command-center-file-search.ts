@@ -125,6 +125,46 @@ export async function hideWorkspaceFileSearchCapability(page: Page): Promise<{
   return { requestCount: () => requests };
 }
 
+export async function hideAbsoluteFileSearchCapability(page: Page): Promise<{
+  requestCount(): number;
+}> {
+  let requests = 0;
+  await page.routeWebSocket(daemonWsRoutePattern(), (ws) => {
+    const server = ws.connectToServer();
+    ws.onMessage((message) => {
+      const sessionMessage = parseSessionMessage(message);
+      if (
+        sessionMessage?.type === "directory_suggestions_request" &&
+        sessionMessage.filesystemPath === true
+      ) {
+        requests += 1;
+      }
+      server.send(message);
+    });
+    server.onMessage((message) => {
+      if (typeof message !== "string") {
+        ws.send(message);
+        return;
+      }
+      const envelope = JSON.parse(message) as {
+        message?: {
+          type?: unknown;
+          payload?: { status?: unknown; features?: Record<string, unknown> };
+        };
+      };
+      if (
+        envelope.message?.type === "status" &&
+        envelope.message.payload?.status === "server_info" &&
+        envelope.message.payload.features
+      ) {
+        delete envelope.message.payload.features.workspaceFileSearchAbsolutePaths;
+      }
+      ws.send(JSON.stringify(envelope));
+    });
+  });
+  return { requestCount: () => requests };
+}
+
 export async function startCommandCenterLayoutObservation(page: Page): Promise<void> {
   await page.evaluate((selectors) => {
     const oracleWindow = window as LayoutOracleWindow;

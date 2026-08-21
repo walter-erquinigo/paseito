@@ -1,3 +1,6 @@
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { expect, test } from "../support/fixtures";
 import { openCommandCenter } from "../support/helpers/command-center";
 import {
@@ -5,6 +8,7 @@ import {
   expectOneLineTruncatedFileResult,
   expectStableCommandCenterLayout,
   failDirectorySuggestionRequests,
+  hideAbsoluteFileSearchCapability,
   hideWorkspaceFileSearchCapability,
   startCommandCenterLayoutObservation,
 } from "../support/helpers/command-center-file-search";
@@ -235,5 +239,60 @@ test("an older host reports that exhaustive file search requires an update", asy
     await seeded.cleanup();
   }
 });
-import { writeFile } from "node:fs/promises";
-import path from "node:path";
+test("an absolute path opens and edits a file outside the active workspace", async ({ page }) => {
+  test.setTimeout(120_000);
+  const seeded = await seedWorkspace({
+    repoPrefix: "command-center-absolute-file-search-",
+    title: "Absolute file search",
+  });
+  const outside = await mkdtemp(path.join(tmpdir(), "paseo-command-center-outside-"));
+  const target = path.join(outside, "AGENTS.md");
+
+  try {
+    await writeFile(target, "# Before\n", "utf8");
+    await gotoWorkspace(page, seeded.workspaceId);
+    await page.keyboard.press("Meta+P");
+
+    const panel = page.getByTestId("command-center-panel");
+    await panel.getByTestId("command-center-input").fill(target.slice(0, -3));
+    const row = panel.getByRole("button", { name: `AGENTS.md ${outside}` });
+    await expect(row).toBeVisible({ timeout: 30_000 });
+    await row.click();
+
+    await expectFileTabOpen(page, target);
+    await page.getByTestId("file-panel-bar").getByRole("button", { name: "Source" }).click();
+    const editor = page
+      .getByTestId("file-source-editor")
+      .filter({ visible: true })
+      .locator(".cm-content");
+    await editor.click();
+    await editor.press("Meta+A");
+    await editor.type("# After\n");
+    await expect.poll(() => readFile(target, "utf8")).toBe("# After\n");
+  } finally {
+    await seeded.cleanup();
+    await rm(outside, { recursive: true, force: true });
+  }
+});
+
+test("an older host blocks only absolute-path file search", async ({ page }) => {
+  const seeded = await seedWorkspace({
+    repoPrefix: "command-center-absolute-file-search-old-host-",
+    title: "Old absolute file-search host",
+  });
+
+  try {
+    const gate = await hideAbsoluteFileSearchCapability(page);
+    await gotoWorkspace(page, seeded.workspaceId);
+    await page.keyboard.press("Meta+P");
+
+    const panel = page.getByTestId("command-center-panel");
+    await panel.getByTestId("command-center-input").fill("/raid/werquinigo/AGENTS.md");
+    await expect(panel.getByTestId("command-center-file-search-unsupported-host")).toHaveText(
+      "Update this host to search absolute file paths.",
+    );
+    expect(gate.requestCount()).toBe(0);
+  } finally {
+    await seeded.cleanup();
+  }
+});

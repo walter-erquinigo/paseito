@@ -7,12 +7,16 @@ import { useWorkspaceDirectory } from "@/stores/session-store-hooks";
 import { useWorkspaceLayoutStore } from "@/stores/workspace-layout-store";
 import { clearCommandCenterFocusRestoreElement } from "@/utils/command-center-focus-restore";
 import { buildWorkspaceTabPersistenceKey } from "@/workspace-tabs/model";
+import { resolveWorkspaceFilePaths } from "@/workspace/file-open";
+import { isAbsolutePath } from "@/utils/path";
 import {
   createWorkingDiffFileNavigationTarget,
   waitForInlineWorkingDiffNavigationSnapshot,
 } from "@/workspace/markdown-changes-navigation";
 import {
   describeWorkspaceFilePath,
+  resolveUnsupportedFileSearchHost,
+  type UnsupportedFileSearchHost,
   type WorkspaceFileSearchEntry,
 } from "./workspace-file-search-model";
 
@@ -85,7 +89,7 @@ export function useWorkspaceFileSearch(input: { enabled: boolean; query: string 
   entries: readonly WorkspaceFileSearchEntry[];
   loading: boolean;
   error: string | null;
-  unsupportedHost: boolean;
+  unsupportedHost: UnsupportedFileSearchHost;
   openFile(path: string): void;
   openFileInChanges(path: string): Promise<"opened" | "absent">;
 } {
@@ -101,7 +105,19 @@ export function useWorkspaceFileSearch(input: { enabled: boolean; query: string 
   );
   // COMPAT(workspaceFileSearch): added in Paseito v0.4.0-paseito.20, remove after 2027-02-17.
   const supportsWorkspaceFileSearch = serverInfo?.features?.workspaceFileSearch === true;
-  const unsupportedHost = Boolean(client && cwd && serverInfo && !supportsWorkspaceFileSearch);
+  // COMPAT(workspaceFileSearchAbsolutePaths): added in Paseito v0.4.0-paseito.32,
+  // remove after 2027-02-21.
+  const supportsAbsolutePathSearch =
+    serverInfo?.features?.workspaceFileSearchAbsolutePaths === true;
+  const searchesAbsolutePath = isAbsolutePath(input.query.trim());
+  const supportsCurrentSearch =
+    supportsWorkspaceFileSearch && (!searchesAbsolutePath || supportsAbsolutePathSearch);
+  const unsupportedHost = resolveUnsupportedFileSearchHost({
+    hostAvailable: Boolean(client && cwd && serverInfo),
+    supportsWorkspaceFileSearch,
+    searchesAbsolutePath,
+    supportsAbsolutePathSearch,
+  });
   const [state, setState] = useState<WorkspaceFileSearchState>(EMPTY_STATE);
   const sourceKey = useMemo(
     () => (serverId && workspaceId && cwd && client ? `${serverId}\0${workspaceId}\0${cwd}` : null),
@@ -109,10 +125,8 @@ export function useWorkspaceFileSearch(input: { enabled: boolean; query: string 
   );
   const requestKey = useMemo(
     () =>
-      input.enabled && supportsWorkspaceFileSearch && sourceKey
-        ? `${sourceKey}\0${input.query}`
-        : null,
-    [input.enabled, input.query, sourceKey, supportsWorkspaceFileSearch],
+      input.enabled && supportsCurrentSearch && sourceKey ? `${sourceKey}\0${input.query}` : null,
+    [input.enabled, input.query, sourceKey, supportsCurrentSearch],
   );
 
   useEffect(() => {
@@ -136,6 +150,7 @@ export function useWorkspaceFileSearch(input: { enabled: boolean; query: string 
         const payload = await activeClient.getDirectorySuggestions({
           cwd: activeCwd,
           query: input.query,
+          filesystemPath: searchesAbsolutePath,
           includeFiles: true,
           includeDirectories: false,
           limit: FILE_SEARCH_LIMIT,
@@ -167,7 +182,7 @@ export function useWorkspaceFileSearch(input: { enabled: boolean; query: string 
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [client, cwd, input.query, requestKey, sourceKey]);
+  }, [client, cwd, input.query, requestKey, searchesAbsolutePath, sourceKey]);
 
   const openFile = useCallback(
     (path: string) => {
@@ -193,17 +208,24 @@ export function useWorkspaceFileSearch(input: { enabled: boolean; query: string 
       if (!workspaceKey) {
         throw new Error("The workspace is unavailable.");
       }
+      const changesPath = resolveWorkspaceFilePaths({ path, workspaceRoot: cwd })?.relativePath;
+      if (!changesPath) {
+        return "absent";
+      }
       const panelStore = usePanelStore.getState();
       const checkout = { serverId, cwd, isGit: true };
       panelStore.setExplorerTabForCheckout({ ...checkout, tab: "changes" });
       panelStore.openFileExplorerForCheckout({ isCompact: false, checkout });
       const snapshot = await waitForInlineWorkingDiffNavigationSnapshot({ workspaceKey });
-      if (!snapshot.files.some((file) => file.path === path)) {
+      if (!snapshot.files.some((file) => file.path === changesPath)) {
         return "absent";
       }
       clearCommandCenterFocusRestoreElement();
       snapshot.navigate(
-        createWorkingDiffFileNavigationTarget({ current: { kind: "working_diff" }, path }),
+        createWorkingDiffFileNavigationTarget({
+          current: { kind: "working_diff" },
+          path: changesPath,
+        }),
       );
       return "opened";
     },

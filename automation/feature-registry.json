@@ -448,7 +448,8 @@
       "preservationFixes": [
         "Keep exhaustive project-file search fast and preserve alternate navigation into the active Changes comparison.",
         "Gate exhaustive search on daemon support, bypass redundant ignored-path enumeration, and reject truncated Git file corpora.",
-        "Route Command+Enter to the right Changes sidebar even when a full Changes tab exists."
+        "Route Command+Enter to the right Changes sidebar even when a full Changes tab exists.",
+        "Keep absolute host-path autocomplete outside the Git index and preserve editable absolute file tabs."
       ],
       "permanent": false,
       "intent": "Find every eligible workspace file from Command+P and open it either as source or in Changes.",
@@ -457,6 +458,8 @@
         "The daemon prewarms a bounded in-memory project-file index for the active workspace without adding a persistent database or external search-tool dependency, and non-Git workspaces retain an exhaustive filesystem fallback.",
         "Superseded searches yield cooperatively and stop ranking, ordinary file changes refresh in the background, and branch switches hard-invalidate the previous revision before search resumes.",
         "Complete Git file search starts without enumerating ignored paths, treats truncated Git output as unusable, and old hosts show an update-required state instead of incomplete results.",
+        "Absolute path queries autocomplete files from the immediate host directory without using the Git index or recursively scanning the filesystem, and are independently capability-gated.",
+        "Absolute results retain their host path and open through filesystem-root-scoped read, observation and atomic-write operations; Changes navigation accepts only paths inside the active workspace.",
         "Enter and pointer activation open the normal file tab, while Command+Enter on web opens the right Changes sidebar and checks the file against its exact loaded comparison without creating or focusing a full Changes tab.",
         "A present Changes file expands and centers its header only when hidden; an already-visible header does not move, and file-tree navigation retains top alignment.",
         "An absent file leaves Command+P open with an accessible inline error, while loading and transport failures remain distinct from absence."
@@ -467,6 +470,9 @@
       ],
       "paths": [
         "packages/server/src/utils/directory-suggestions.ts",
+        "packages/server/src/server/session.ts",
+        "packages/client/src/daemon-client.ts",
+        "packages/protocol/src/messages.ts",
         "packages/app/src/command-center",
         "packages/app/src/workspace/markdown-changes-navigation.ts",
         "packages/app/src/git/diff-pane.tsx",

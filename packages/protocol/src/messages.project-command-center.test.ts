@@ -168,16 +168,38 @@ describe("project command-center protocol", () => {
     expect(parsed.features?.projectGithubClone).toBeUndefined();
     expect(parsed.features?.projectCreateDirectory).toBeUndefined();
     expect(parsed.features?.workspaceFileSearch).toBeUndefined();
+    expect(parsed.features?.workspaceFileSearchAbsolutePaths).toBeUndefined();
   });
 
-  it("parses the exhaustive workspace-file-search capability", () => {
+  it("parses the workspace-file-search capabilities", () => {
     const parsed = parseServerInfoStatusPayload({
       status: "server_info",
       serverId: "server-new",
-      features: { workspaceFileSearch: true },
+      features: {
+        workspaceFileSearch: true,
+        workspaceFileSearchAbsolutePaths: true,
+      },
     });
 
     expect(parsed.features?.workspaceFileSearch).toBe(true);
+    expect(parsed.features?.workspaceFileSearchAbsolutePaths).toBe(true);
+  });
+
+  it("parses an optional filesystem-path directory suggestion request", () => {
+    expect(
+      SessionInboundMessageSchema.parse({
+        type: "directory_suggestions_request",
+        query: "/raid/werquinigo/AGENTS.md",
+        cwd: "/raid/werquinigo/project",
+        filesystemPath: true,
+        includeFiles: true,
+        includeDirectories: false,
+        requestId: "req-absolute-file",
+      }),
+    ).toMatchObject({
+      type: "directory_suggestions_request",
+      filesystemPath: true,
+    });
   });
 
   it("parses the agent thinking update capability", () => {

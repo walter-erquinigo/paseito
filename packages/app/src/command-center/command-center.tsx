@@ -218,7 +218,7 @@ interface CommandCenterState {
   inputRef: React.RefObject<TextInput | null>;
   fileSearchLoading: boolean;
   fileSearchError: string | null;
-  fileSearchUnsupportedHost: boolean;
+  fileSearchUnsupportedHost: "workspace" | "absolute" | null;
   fileActionError: string | null;
   fileActionLoading: boolean;
   close(): void;
@@ -715,7 +715,11 @@ export function CommandCenter() {
           style={styles.errorText}
           testID="command-center-file-search-unsupported-host"
         >
-          {t("shell.commandCenter.fileSearchRequiresHostUpdate")}
+          {t(
+            state.fileSearchUnsupportedHost === "absolute"
+              ? "shell.commandCenter.absoluteFileSearchRequiresHostUpdate"
+              : "shell.commandCenter.fileSearchRequiresHostUpdate",
+          )}
         </Text>
       ) : null,
     [state.fileSearchUnsupportedHost, t],

@@ -63,6 +63,7 @@ export const en = {
       searchingFiles: "Searching files...",
       fileNotPresentInChanges: "This file is not present in Changes.",
       fileSearchRequiresHostUpdate: "Update this host to search all workspace files.",
+      absoluteFileSearchRequiresHostUpdate: "Update this host to search absolute file paths.",
       noMatches: "No matches",
       actions: "Actions",
       files: "Files",

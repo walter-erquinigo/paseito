@@ -488,6 +488,26 @@ describe("searchDirectoryEntries", () => {
     );
   });
 
+  it("autocompletes absolute files from their parent without using the Git index", async () => {
+    const target = path.join(searchRoot, "src", "components", "message-renderer.tsx");
+    startGitCommandMetrics();
+
+    const results = await searchDirectoryEntries({
+      root: path.parse(searchRoot).root,
+      query: target.slice(0, -4),
+      pathFormat: "absolute",
+      includeFiles: true,
+      includeDirectories: false,
+      pathQueryPolicy: "rooted",
+      retrieveExactPath: true,
+      limit: 20,
+    });
+    const gitMetrics = stopGitCommandMetrics();
+
+    expect(results).toEqual([{ path: target, kind: "file" }]);
+    expect(gitMetrics.commands.filter((command) => command.args.includes("ls-files"))).toEqual([]);
+  });
+
   it("browses an absolute root and an absolute directory ending in a separator", async () => {
     const common = {
       root: configuredSearchRoot,

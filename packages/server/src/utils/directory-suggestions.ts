@@ -31,6 +31,7 @@ export interface SearchDirectoryEntriesOptions {
   maxEntriesScanned?: number;
   confidentResultScanThreshold?: number;
   respectGitIgnore?: boolean;
+  retrieveExactPath?: boolean;
   prepareOnly?: boolean;
   isCancelled?: () => boolean;
 }
@@ -189,7 +190,8 @@ async function searchDirectoryEntriesFromFilesystem(
   if (!input) return [];
 
   const exact =
-    input.plan.browseExactPath || (input.matchMode === "suffix" && input.plan.isPathQuery)
+    input.plan.browseExactPath ||
+    (input.plan.isPathQuery && (input.matchMode === "suffix" || options.retrieveExactPath))
       ? await findExactEntry(input)
       : null;
   if (exact && input.limit === 1) return [exact];

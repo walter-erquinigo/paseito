@@ -2147,6 +2147,9 @@ export const DirectorySuggestionsRequestSchema = z.object({
   type: z.literal("directory_suggestions_request"),
   query: z.string(),
   cwd: z.string().optional(),
+  // COMPAT(workspaceFileSearchAbsolutePaths): added in Paseito v0.4.0-paseito.32,
+  // remove after 2027-02-21.
+  filesystemPath: z.boolean().optional(),
   includeFiles: z.boolean().optional(),
   includeDirectories: z.boolean().optional(),
   matchMode: z.enum(["fuzzy", "suffix"]).optional(),
@@ -3259,6 +3262,9 @@ export const ServerInfoStatusPayloadSchema = z
         workspaceLspClangd: z.boolean().optional(),
         // COMPAT(workspaceFileSearch): added in Paseito v0.4.0-paseito.20, remove after 2027-02-17.
         workspaceFileSearch: z.boolean().optional(),
+        // COMPAT(workspaceFileSearchAbsolutePaths): added in Paseito v0.4.0-paseito.32,
+        // remove after 2027-02-21.
+        workspaceFileSearchAbsolutePaths: z.boolean().optional(),
         // COMPAT(providerUsageList): added in v0.1.98, drop the gate when daemon floor >= v0.1.98.
         providerUsageList: z.boolean().optional(),
         // COMPAT(agentDetach): added in v0.1.98, remove gate after 2026-12-19 once daemon floor >= v0.1.98.

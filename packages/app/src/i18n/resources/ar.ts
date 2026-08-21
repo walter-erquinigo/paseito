@@ -63,6 +63,7 @@ export const ar: TranslationResources = {
       filePlaceholder: "البحث في الملفات...",
       searchingFiles: "جارٍ البحث في الملفات...",
       fileNotPresentInChanges: "هذا الملف غير موجود في التغييرات.",
+      absoluteFileSearchRequiresHostUpdate: "حدّث هذا المضيف للبحث في مسارات الملفات المطلقة.",
       fileSearchRequiresHostUpdate: "حدّث هذا المضيف للبحث في جميع ملفات مساحة العمل.",
       noMatches: "لا توجد مباريات",
       actions: "الإجراءات",
