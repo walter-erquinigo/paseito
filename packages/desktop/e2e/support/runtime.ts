@@ -55,6 +55,7 @@ export async function loadRealDaemonState(): Promise<RealDaemonState> {
 
 export interface DesktopRuntimeConfig {
   serverId: string;
+  commandResponses?: Record<string, unknown>;
   updateAvailable?: boolean;
   latestVersion?: string;
   updateReadyToInstall?: boolean;
@@ -106,6 +107,11 @@ declare global {
   interface Window {
     __capturedDialogCall: ConfirmDialogCall | undefined;
     __capturedDialogOpenCalls: Array<Record<string, unknown> | undefined>;
+    __capturedDesktopInvocations: Array<{
+      command: string;
+      args?: Record<string, unknown>;
+    }>;
+    __capturedOpenUrls: string[];
     __recordDesktopEditorOpen?: (input: DesktopEditorOpenRecord) => Promise<void>;
     __desktopDaemonStartRequested?: boolean;
   }
@@ -175,6 +181,10 @@ export async function installDesktopRuntime(
       }
     }
 
+    function getConfiguredCommandResponse(command: string): unknown {
+      return cfg.commandResponses?.[command] ?? null;
+    }
+
     const desktopBridge: {
       platform: string;
       invoke: (command: string, args?: Record<string, unknown>) => Promise<unknown>;
@@ -188,9 +198,11 @@ export async function installDesktopRuntime(
         listTargets: () => Promise<DesktopEditorTargetConfig[]>;
         openTarget: (input: DesktopEditorOpenRecord) => Promise<void>;
       };
+      opener: { openUrl: (url: string) => Promise<void> };
     } = {
       platform: "darwin",
       invoke: async (command: string, args?: Record<string, unknown>) => {
+        window.__capturedDesktopInvocations.push({ command, args });
         if (command === "check_app_update") {
           return cfg.updateAvailable
             ? {
@@ -264,7 +276,12 @@ export async function installDesktopRuntime(
           return startDesktopDaemon();
         }
 
-        return null;
+        return getConfiguredCommandResponse(command);
+      },
+      opener: {
+        openUrl: async (url: string) => {
+          window.__capturedOpenUrls.push(url);
+        },
       },
       dialog: {
         ask: async (message: string, options?: Record<string, unknown>) => {
@@ -293,6 +310,8 @@ export async function installDesktopRuntime(
     }
 
     window.__capturedDialogOpenCalls = [];
+    window.__capturedDesktopInvocations = [];
+    window.__capturedOpenUrls = [];
     (window as unknown as { paseoDesktop: unknown }).paseoDesktop = desktopBridge;
   }, config);
 }

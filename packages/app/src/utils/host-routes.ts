@@ -497,6 +497,7 @@ export const SETTINGS_SECTION_SLUGS = [
   "integrations",
   "notifications",
   "permissions",
+  "mrs",
   "diagnostics",
   "about",
 ] as const;
@@ -545,6 +546,18 @@ export function buildSettingsRoute() {
 
 export function buildSettingsSectionRoute(section: SettingsSectionSlug) {
   return `/settings/${section}` as const;
+}
+
+export const MR_TRACKER_TAB_SLUGS = ["all", "my_mrs", "others"] as const;
+export type MRTrackerTabSlug = (typeof MR_TRACKER_TAB_SLUGS)[number];
+
+export function isMRTrackerTabSlug(value: string): value is MRTrackerTabSlug {
+  return (MR_TRACKER_TAB_SLUGS as readonly string[]).includes(value);
+}
+
+export function buildMRTrackerRoute(tab: MRTrackerTabSlug, mergeRequestId?: string) {
+  const route = `/mrs/${tab}` as const;
+  return mergeRequestId ? `${route}?mr=${encodeURIComponent(mergeRequestId)}` : route;
 }
 
 export function buildSettingsAddHostRoute(intentId: string | number = "1") {
