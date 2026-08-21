@@ -4,6 +4,7 @@ import {
   buildHostRootRoute,
   buildHostWorkspaceOpenRoute,
   buildHostWorkspaceRoute,
+  buildMRTrackerRoute,
   buildNewWorkspaceRoute,
   buildOpenProjectRoute,
   resolveKnownHostRoute,
@@ -31,6 +32,12 @@ describe("parseHostAgentRouteFromPathname", () => {
       serverId: "local",
       agentId: "abc123",
     });
+  });
+});
+
+describe("MR tracker routes", () => {
+  it("adds a focus revision so repeated links remain observable", () => {
+    expect(buildMRTrackerRoute("my_mrs", "10:42", 7)).toBe("/mrs/my_mrs?mr=10%3A42&focus=7");
   });
 });
 

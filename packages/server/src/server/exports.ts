@@ -75,6 +75,7 @@ export type {
 
 // Agent activity curator for CLI logs
 export { curateAgentActivity } from "./agent/activity-curator.js";
+export { compileDesktopPlugin } from "./plugins/compiler.js";
 export {
   getStructuredAgentResponse,
   StructuredAgentResponseError,

@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "Open GitLab MRs in Paseito",
+  "version": "0.6.1.7",
+  "description": "Open GitLab merge requests in Paseito and run configured MR actions.",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAscEHpobnZl+OHPERaheTMRQq9YLqFg/oWYiY/jbK3s/iWxR4DueL0HSZ2dPypnP6qv9TCReDUFLjR6VLSs7hGJCY+yF6RMmVkq5D8JJd27pU5Qmx2oqv2Bb1qftYn1aP07gdXF4qtMmXspCcLHQqkHUhJeuM93F+nTVZYVHI4hK5ueC9+Ak36c/7nOK+eIN80PQ520/hMvFMl486rgFvZI/Q5wxILk2rPIN1kaBF47shpZHeKSfl4k1aPAPNGR5aj84A6VyZVnpB8+mxpeLONDZZyUeSMrYflzEmst6dgBtIzy2bjTxELOOI4a46ocUGv7HBKi615iR43PBNSFZ09wIDAQAB",
+  "permissions": ["activeTab", "nativeMessaging", "scripting", "storage"],
+  "optional_host_permissions": ["https://*/*"],
+  "background": {
+    "service_worker": "service-worker.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "Open GitLab MRs in Paseito",
+    "default_popup": "popup.html",
+    "default_icon": "icons/icon.png"
+  },
+  "icons": {
+    "16": "icons/icon.png",
+    "32": "icons/icon.png",
+    "48": "icons/icon.png",
+    "128": "icons/icon.png"
+  }
+}

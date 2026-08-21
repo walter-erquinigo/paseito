@@ -1,3 +1,9 @@
+import {
+  mrTrackerSectionTranslations,
+  mrTrackerSettingsTranslations,
+  mrTrackerTranslations,
+} from "./mr-tracker";
+
 export const en = {
   paneFind: {
     connectionFailure: "Could not search this chat. Check the host connection and retry.",
@@ -2058,6 +2064,7 @@ export const en = {
       rangeTooLarge: "Suggestions can include at most 200 lines",
     },
   },
+  mrTracker: mrTrackerTranslations,
   settings: {
     title: "Settings",
     loading: "Loading settings...",
@@ -2079,6 +2086,7 @@ export const en = {
     },
     groupInfo: "About {{title}}",
     sections: {
+      ...mrTrackerSectionTranslations,
       general: "General",
       chat: "Chat",
       appearance: "Appearance",
@@ -2132,6 +2140,7 @@ export const en = {
         },
       },
     },
+    mrTracker: mrTrackerSettingsTranslations,
     editor: {
       title: "Editor",
       vimKeybindings: "Vim keybindings",
@@ -2172,6 +2181,16 @@ export const en = {
         update: "Update this host to use plugin settings.",
         unavailable: "This plugin settings screen is unavailable.",
       },
+      desktopTitle: "Desktop MR automation plugins",
+      desktopTrustedDescription:
+        "They run locally in the Paseito desktop process without sandboxing. Install only code you trust.",
+      desktopDirectoryLabel: "Plugin directory",
+      desktopDirectoryPlaceholder: "/absolute/path/on/this/Mac",
+      desktopIdLabel: "Plugin installation ID",
+      desktopIdHint: "Leave blank to use paseo-plugin.json",
+      desktopIdPlaceholder: "Manifest default",
+      desktopInstall: "Install directory",
+      desktopInstalling: "Installing…",
       trustedTitle: "Plugins are trusted code",
       trustedDescription:
         "They run on this host and inside the app without sandboxing. Install only code you trust.",

@@ -43,6 +43,15 @@ contextBridge.exposeInMainWorld("paseoDesktop", {
         agentId: string;
       } | null>,
   },
+  mrNavigation: {
+    ready: () =>
+      ipcRenderer.invoke("paseo:mr-navigation:ready") as Promise<{
+        mergeRequestId?: string;
+        tab?: "all" | "my_mrs" | "others";
+        revision: number;
+        error?: string;
+      } | null>,
+  },
   events: {
     on: (event: string, handler: EventHandler): Promise<() => void> => {
       const listener = (_ipcEvent: Electron.IpcRendererEvent, payload: unknown) => {

@@ -11,10 +11,13 @@ const PLUGIN_SERVER_ONLY_SDK_SPECIFIERS = [
   "@getpaseo/plugin/server/acp",
 ] as const;
 
+const PLUGIN_DESKTOP_ONLY_SDK_SPECIFIERS = ["@getpaseo/plugin/desktop"] as const;
+
 export const PLUGIN_SDK_SPECIFIERS = [
   "@getpaseo/plugin",
   ...PLUGIN_SERVER_ONLY_SDK_SPECIFIERS,
   ...PLUGIN_CLIENT_ONLY_SDK_SPECIFIERS,
+  ...PLUGIN_DESKTOP_ONLY_SDK_SPECIFIERS,
 ] as const;
 
 export function isPluginClientOnlySdkSpecifier(name: string): boolean {
@@ -23,4 +26,8 @@ export function isPluginClientOnlySdkSpecifier(name: string): boolean {
 
 export function isPluginServerOnlySdkSpecifier(name: string): boolean {
   return (PLUGIN_SERVER_ONLY_SDK_SPECIFIERS as readonly string[]).includes(name);
+}
+
+export function isPluginDesktopOnlySdkSpecifier(name: string): boolean {
+  return (PLUGIN_DESKTOP_ONLY_SDK_SPECIFIERS as readonly string[]).includes(name);
 }

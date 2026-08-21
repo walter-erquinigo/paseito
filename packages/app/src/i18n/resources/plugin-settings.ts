@@ -1,4 +1,15 @@
 const shared = {
+  directoryPlaceholder: "/absolute/path/on/host",
+  desktopTitle: "Desktop MR automation plugins",
+  desktopTrustedDescription:
+    "They run locally in the Paseito desktop process without sandboxing. Install only code you trust.",
+  desktopDirectoryLabel: "Plugin directory",
+  desktopDirectoryPlaceholder: "/absolute/path/on/this/Mac",
+  desktopIdLabel: "Plugin installation ID",
+  desktopIdHint: "Leave blank to use paseo-plugin.json",
+  desktopIdPlaceholder: "Manifest default",
+  desktopInstall: "Install directory",
+  desktopInstalling: "Installing…",
   logs: {
     action: "Logs",
     title: "Logs: {{id}}",

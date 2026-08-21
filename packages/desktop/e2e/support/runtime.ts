@@ -55,6 +55,8 @@ export async function loadRealDaemonState(): Promise<RealDaemonState> {
 
 export interface DesktopRuntimeConfig {
   serverId: string;
+  commandResponses?: Record<string, unknown>;
+  commandErrors?: Record<string, string>;
   updateAvailable?: boolean;
   latestVersion?: string;
   updateReadyToInstall?: boolean;
@@ -81,6 +83,12 @@ export interface DesktopRuntimeConfig {
    * false so tests that only assert copy don't inadvertently trigger state changes.
    */
   confirmShouldAccept?: boolean;
+  pendingMRNavigation?: {
+    mergeRequestId?: string;
+    tab?: "all" | "my_mrs" | "others";
+    revision: number;
+    error?: string;
+  } | null;
   dialogOpenResult?: string | string[] | null;
   editorTargets?: DesktopEditorTargetConfig[];
   editorRecordPath?: string;
@@ -110,8 +118,14 @@ declare global {
   interface Window {
     __capturedDialogCall: ConfirmDialogCall | undefined;
     __capturedDialogOpenCalls: Array<Record<string, unknown> | undefined>;
+    __capturedDesktopInvocations: Array<{
+      command: string;
+      args?: Record<string, unknown>;
+    }>;
+    __capturedOpenUrls: string[];
     __recordDesktopEditorOpen?: (input: DesktopEditorOpenRecord) => Promise<void>;
     __desktopDaemonStartRequested?: boolean;
+    __emitDesktopEvent?: (event: string, payload: unknown) => void;
   }
 }
 
@@ -144,6 +158,7 @@ export async function installDesktopRuntime(
     let currentPid: number | null = cfg.daemonPid ?? null;
     let ownedByDesktop = cfg.ownedByDesktop ?? false;
     let manualUpdateAdmitted = false;
+    const eventHandlers = new Map<string, Set<(payload: unknown) => void>>();
     window.__desktopDaemonStartRequested = false;
 
     function buildDaemonStatus() {
@@ -209,6 +224,15 @@ export async function installDesktopRuntime(
       return buildAppUpdateCheckResult(manualUpdateAdmitted, manualUpdateAdmitted);
     }
 
+    function getConfiguredCommandResponse(command: string): unknown {
+      return cfg.commandResponses?.[command] ?? null;
+    }
+
+    function assertNoConfiguredCommandError(command: string): void {
+      const configuredError = cfg.commandErrors?.[command];
+      if (configuredError) throw new Error(configuredError);
+    }
+
     const desktopBridge: {
       platform: string;
       invoke: (command: string, args?: Record<string, unknown>) => Promise<unknown>;
@@ -217,14 +241,18 @@ export async function installDesktopRuntime(
         open: (options?: Record<string, unknown>) => Promise<string | string[] | null>;
       };
       getPendingOpenProject: () => Promise<string | null>;
-      events: { on: () => Promise<() => void> };
+      mrNavigation: { ready: () => Promise<DesktopRuntimeConfig["pendingMRNavigation"]> };
+      events: { on: (event: string, handler: (payload: unknown) => void) => Promise<() => void> };
       editor?: {
         listTargets: () => Promise<DesktopEditorTargetConfig[]>;
         openTarget: (input: DesktopEditorOpenRecord) => Promise<void>;
       };
+      opener: { openUrl: (url: string) => Promise<void> };
     } = {
       platform: "darwin",
       invoke: async (command: string, args?: Record<string, unknown>) => {
+        window.__capturedDesktopInvocations.push({ command, args });
+        assertNoConfiguredCommandError(command);
         if (command === "check_app_update") {
           return checkAppUpdate(args?.intent);
         }
@@ -283,7 +311,12 @@ export async function installDesktopRuntime(
           return startDesktopDaemon();
         }
 
-        return null;
+        return getConfiguredCommandResponse(command);
+      },
+      opener: {
+        openUrl: async (url: string) => {
+          window.__capturedOpenUrls.push(url);
+        },
       },
       dialog: {
         ask: async (message: string, options?: Record<string, unknown>) => {
@@ -299,7 +332,18 @@ export async function installDesktopRuntime(
         },
       },
       getPendingOpenProject: async () => null,
-      events: { on: async () => () => undefined },
+      mrNavigation: { ready: async () => cfg.pendingMRNavigation ?? null },
+      events: {
+        on: async (event, handler) => {
+          const handlers = eventHandlers.get(event) ?? new Set();
+          handlers.add(handler);
+          eventHandlers.set(event, handlers);
+          return () => handlers.delete(handler);
+        },
+      },
+    };
+    window.__emitDesktopEvent = (event, payload) => {
+      for (const handler of eventHandlers.get(event) ?? []) handler(payload);
     };
 
     if (cfg.editorTargets) {
@@ -312,6 +356,8 @@ export async function installDesktopRuntime(
     }
 
     window.__capturedDialogOpenCalls = [];
+    window.__capturedDesktopInvocations = [];
+    window.__capturedOpenUrls = [];
     (window as unknown as { paseoDesktop: unknown }).paseoDesktop = desktopBridge;
   }, config);
 }

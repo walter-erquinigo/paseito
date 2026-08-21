@@ -1,5 +1,10 @@
 import { en, type TranslationResources } from "./en";
 import { pluginSettings } from "./plugin-settings";
+import {
+  mrTrackerSectionTranslations,
+  mrTrackerSettingsTranslations,
+  mrTrackerTranslations,
+} from "./mr-tracker";
 
 export const zhCN: TranslationResources = {
   paneFind: {
@@ -1915,6 +1920,7 @@ export const zhCN: TranslationResources = {
       saveAccessibility: "保存 review 评论",
     },
   },
+  mrTracker: mrTrackerTranslations,
   settings: {
     title: "设置",
     loading: "正在加载设置...",
@@ -1936,6 +1942,7 @@ export const zhCN: TranslationResources = {
     },
     groupInfo: "关于 {{title}}",
     sections: {
+      ...mrTrackerSectionTranslations,
       general: "通用",
       chat: "聊天",
       appearance: "外观",
@@ -1951,6 +1958,7 @@ export const zhCN: TranslationResources = {
       about: "关于",
     },
     layout: en.settings.layout,
+    mrTracker: mrTrackerSettingsTranslations,
     editor: {
       title: "编辑器",
       vimKeybindings: "Vim 键位",

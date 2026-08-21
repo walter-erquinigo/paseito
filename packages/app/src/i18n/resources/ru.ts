@@ -1,4 +1,9 @@
 import { en, type TranslationResources } from "./en";
+import {
+  mrTrackerSectionTranslations,
+  mrTrackerSettingsTranslations,
+  mrTrackerTranslations,
+} from "./mr-tracker";
 import { pluginSettings } from "./plugin-settings";
 
 export const ru: TranslationResources = {
@@ -1969,6 +1974,7 @@ export const ru: TranslationResources = {
       saveAccessibility: "Сохранить комментарий к ревью",
     },
   },
+  mrTracker: mrTrackerTranslations,
   settings: {
     title: "Настройки",
     loading: "Загрузка настроек...",
@@ -1990,6 +1996,7 @@ export const ru: TranslationResources = {
     },
     groupInfo: "О разделе «{{title}}»",
     sections: {
+      ...mrTrackerSectionTranslations,
       general: "Основные",
       chat: "Чат",
       appearance: "Оформление",
@@ -2005,6 +2012,7 @@ export const ru: TranslationResources = {
       about: "О приложении",
     },
     layout: en.settings.layout,
+    mrTracker: mrTrackerSettingsTranslations,
     editor: {
       title: "Редактор",
       vimKeybindings: "Сочетания клавиш Vim",

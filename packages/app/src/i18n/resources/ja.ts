@@ -1,5 +1,10 @@
 import { en, type TranslationResources } from "./en";
 import { pluginSettings } from "./plugin-settings";
+import {
+  mrTrackerSectionTranslations,
+  mrTrackerSettingsTranslations,
+  mrTrackerTranslations,
+} from "./mr-tracker";
 
 export const ja: TranslationResources = {
   paneFind: {
@@ -1956,6 +1961,7 @@ export const ja: TranslationResources = {
       saveAccessibility: "レビューコメントを保存",
     },
   },
+  mrTracker: mrTrackerTranslations,
   settings: {
     title: "設定",
     loading: "設定を読み込み中...",
@@ -1977,6 +1983,7 @@ export const ja: TranslationResources = {
     },
     groupInfo: "{{title}}について",
     sections: {
+      ...mrTrackerSectionTranslations,
       general: "一般",
       chat: "チャット",
       appearance: "外観",
@@ -1992,6 +1999,7 @@ export const ja: TranslationResources = {
       about: "アプリ情報",
     },
     layout: en.settings.layout,
+    mrTracker: mrTrackerSettingsTranslations,
     editor: {
       title: "エディター",
       vimKeybindings: "Vim キーバインド",

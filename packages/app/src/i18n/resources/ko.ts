@@ -1,5 +1,10 @@
 import { en, type TranslationResources } from "./en";
 import { pluginSettings } from "./plugin-settings";
+import {
+  mrTrackerSectionTranslations,
+  mrTrackerSettingsTranslations,
+  mrTrackerTranslations,
+} from "./mr-tracker";
 
 export const ko: TranslationResources = {
   paneFind: {
@@ -1946,6 +1951,7 @@ export const ko: TranslationResources = {
       saveAccessibility: "리뷰 댓글 저장",
     },
   },
+  mrTracker: mrTrackerTranslations,
   settings: {
     title: "설정",
     loading: "설정 불러오는 중...",
@@ -1967,6 +1973,7 @@ export const ko: TranslationResources = {
     },
     groupInfo: "{{title}} 정보",
     sections: {
+      ...mrTrackerSectionTranslations,
       general: "일반",
       chat: "채팅",
       appearance: "모양",
@@ -1982,6 +1989,7 @@ export const ko: TranslationResources = {
       about: "정보",
     },
     layout: en.settings.layout,
+    mrTracker: mrTrackerSettingsTranslations,
     editor: {
       title: "편집기",
       vimKeybindings: "Vim 키 바인딩",

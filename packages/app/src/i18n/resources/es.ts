@@ -1,5 +1,10 @@
 import { en, type TranslationResources } from "./en";
 import { pluginSettings } from "./plugin-settings";
+import {
+  mrTrackerSectionTranslations,
+  mrTrackerSettingsTranslations,
+  mrTrackerTranslations,
+} from "./mr-tracker";
 
 export const es: TranslationResources = {
   paneFind: {
@@ -1984,6 +1989,7 @@ export const es: TranslationResources = {
       saveAccessibility: "Guardar comentario de revisión",
     },
   },
+  mrTracker: mrTrackerTranslations,
   settings: {
     title: "Ajustes",
     loading: "Cargando configuración...",
@@ -2005,6 +2011,7 @@ export const es: TranslationResources = {
     },
     groupInfo: "Acerca de{{title}}",
     sections: {
+      ...mrTrackerSectionTranslations,
       general: "General",
       chat: "Chat",
       appearance: "Apariencia",
@@ -2020,6 +2027,7 @@ export const es: TranslationResources = {
       about: "Acerca de",
     },
     layout: en.settings.layout,
+    mrTracker: mrTrackerSettingsTranslations,
     editor: {
       title: "Editor",
       vimKeybindings: "Atajos de Vim",

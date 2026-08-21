@@ -53,6 +53,13 @@ import {
   readLegacySkillSelection,
 } from "../integrations/legacy-skill-selection.js";
 import { tailFile } from "../diagnostics/tail-file.js";
+import {
+  getDesktopMRPluginManager,
+  getDesktopMRTrackerService,
+  startDesktopMRTracker,
+} from "../features/mr-tracker/electron.js";
+import { createMRTrackerCommandHandlers } from "../features/mr-tracker/commands.js";
+import { createDesktopMRPluginCommandHandlers } from "../features/mr-tracker/desktop-plugin-commands.js";
 
 const DAEMON_LOG_FILENAME = "daemon.log";
 let ownedLaunch: { home: string; instance: DaemonInstance } | null = null;
@@ -395,6 +402,8 @@ async function resolveRequestedReleaseChannel(
 export function createDaemonCommandHandlers(): Record<string, DesktopCommandHandler> {
   return {
     ...createDesktopSettingsCommandHandlers({ settingsStore: getDesktopSettingsStore() }),
+    ...createMRTrackerCommandHandlers({ service: getDesktopMRTrackerService() }),
+    ...createDesktopMRPluginCommandHandlers({ manager: getDesktopMRPluginManager() }),
     desktop_get_runtime_info: () => ({
       appVersion: resolveDesktopAppVersion(),
       runningUnderARM64Translation: isRunningUnderARM64Translation(),
@@ -470,6 +479,7 @@ export function createDaemonCommandHandlers(): Record<string, DesktopCommandHand
 
 export function registerDaemonManager(): void {
   const handlers = createDaemonCommandHandlers();
+  startDesktopMRTracker();
 
   ipcMain.handle(
     "paseo:invoke",
