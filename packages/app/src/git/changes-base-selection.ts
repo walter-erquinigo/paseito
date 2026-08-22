@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { CheckoutStackParent } from "@getpaseo/protocol/messages";
 import type { ComboboxOption } from "@/components/ui/combobox";
 
 export const CHANGES_BASE_OVERRIDES_STORAGE_KEY = "@paseito:changes-base-overrides-v1";
@@ -14,6 +15,38 @@ export interface ChangesBaseBranchDetail {
   name: string;
   hasLocal?: boolean;
   hasRemote?: boolean;
+}
+
+export type ChangesBaseSource = "override" | "stack-parent" | "recorded";
+
+export function getChangesStackParentBadgeKind(
+  status: CheckoutStackParent | null | undefined,
+): "malformed" | "missing" | null {
+  return status?.state === "malformed" || status?.state === "missing" ? status.state : null;
+}
+
+export function resolveChangesBaseRef(input: {
+  recordedBaseRef: string | undefined;
+  stackParentRef: string | null;
+  override: string | null;
+  overrideValid: boolean;
+}): {
+  defaultBaseRef: string | undefined;
+  effectiveBaseRef: string | undefined;
+  source: ChangesBaseSource;
+} {
+  const defaultBaseRef = input.stackParentRef ?? input.recordedBaseRef;
+  if (input.override && input.overrideValid) {
+    return { defaultBaseRef, effectiveBaseRef: input.override, source: "override" };
+  }
+  if (input.stackParentRef) {
+    return {
+      defaultBaseRef,
+      effectiveBaseRef: input.stackParentRef,
+      source: "stack-parent",
+    };
+  }
+  return { defaultBaseRef, effectiveBaseRef: input.recordedBaseRef, source: "recorded" };
 }
 
 export async function applyChangesBaseSelection(input: {
@@ -46,6 +79,7 @@ export function displayChangesBaseRef(ref: string | null | undefined): string | 
 
 export function buildChangesBaseOptions(input: {
   branches: ChangesBaseBranchDetail[];
+  defaultBaseRef?: string | null;
   recordedBaseRef?: string | null;
   selectedBaseRef?: string | null;
   currentBranch?: string | null;
@@ -70,6 +104,7 @@ export function buildChangesBaseOptions(input: {
     result.push({ id: normalized, label: label ?? displayName ?? normalized });
   };
 
+  add(input.defaultBaseRef);
   add(input.recordedBaseRef);
   add(input.selectedBaseRef);
   for (const branch of input.branches) {

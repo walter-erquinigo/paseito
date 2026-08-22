@@ -907,6 +907,8 @@ export const ar: TranslationResources = {
         baseSelectorMissing: "الفرع {{baseRef}} لم يعد موجودًا",
         baseSelectorError: "تعذر تغيير فرع المقارنة",
         baseSelectorUpdateHost: "حدّث المضيف لاختيار الفرع الأساسي",
+        stackParentMalformed: "Stack-Parent غير صالح",
+        stackParentMissing: "لم يتم العثور على الفرع الأب",
         markReviewed: "وضع علامة تمت المراجعة",
         markUnreviewed: "وضع علامة لم تتم المراجعة",
         markFileReviewed: "وضع علامة تمت المراجعة على {{file}}",

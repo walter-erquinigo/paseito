@@ -931,6 +931,8 @@ export const ru: TranslationResources = {
         baseSelectorMissing: "Ветка {{baseRef}} больше не существует",
         baseSelectorError: "Не удалось изменить ветку сравнения",
         baseSelectorUpdateHost: "Обновите хост, чтобы выбрать базовую ветку",
+        stackParentMalformed: "Некорректный Stack-Parent",
+        stackParentMissing: "Родительская ветка не найдена",
         markReviewed: "Отметить как просмотренный",
         markUnreviewed: "Отметить как непросмотренный",
         markFileReviewed: "Отметить {{file}} как просмотренный",

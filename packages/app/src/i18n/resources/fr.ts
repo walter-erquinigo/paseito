@@ -939,6 +939,8 @@ export const fr: TranslationResources = {
         baseSelectorMissing: "La branche {{baseRef}} n’existe plus",
         baseSelectorError: "Impossible de changer la branche de comparaison",
         baseSelectorUpdateHost: "Mettez à jour l’hôte pour choisir une branche de base",
+        stackParentMalformed: "Stack-Parent mal formé",
+        stackParentMissing: "Branche parente introuvable",
         markReviewed: "Marquer comme révisé",
         markUnreviewed: "Marquer comme non révisé",
         markFileReviewed: "Marquer {{file}} comme révisé",

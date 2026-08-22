@@ -901,6 +901,8 @@ export const ko: TranslationResources = {
         failedAmend: "커밋을 수정하지 못했습니다",
         amendUpdateHost: "변경 사항을 수정하려면 호스트를 업데이트하세요",
         committed: "커밋됨",
+        stackParentMalformed: "잘못된 Stack-Parent",
+        stackParentMissing: "상위 브랜치를 찾을 수 없음",
         search: {
           placeholder: "변경된 파일 검색",
           loading: "검색 중…",

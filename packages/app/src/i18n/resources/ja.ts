@@ -920,6 +920,8 @@ export const ja: TranslationResources = {
         baseSelectorMissing: "ブランチ {{baseRef}} は存在しません",
         baseSelectorError: "比較ブランチを変更できませんでした",
         baseSelectorUpdateHost: "ベースブランチを選択するにはホストを更新してください",
+        stackParentMalformed: "Stack-Parent の形式が不正です",
+        stackParentMissing: "親ブランチが見つかりません",
         markReviewed: "レビュー済みにする",
         markUnreviewed: "未レビューにする",
         markFileReviewed: "{{file}}をレビュー済みにする",

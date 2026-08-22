@@ -15,6 +15,11 @@ When the current branch has commits ahead of its base, Changes opens on the comm
 even if the working tree is dirty. The **Uncommitted** option remains available and an explicit
 selection is honored for as long as the checkout's dirty state does not change.
 
+When the top commit contains exactly one `Stack-Parent:` line naming an existing branch, that branch
+becomes the default Changes base and opens the committed comparison. A remembered manual base still
+wins. A malformed marker or missing branch falls back to the recorded Git base and keeps an error
+badge beside the base selector until the top commit is corrected.
+
 A muted **Uncommitted** badge beside the branch switcher reports the selected branch's live
 working-tree state. It remains visible while Changes displays the **Committed** comparison.
 An **Amend** button beside the badge stages the complete working tree and immediately amends the

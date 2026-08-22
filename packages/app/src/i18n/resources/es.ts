@@ -940,6 +940,8 @@ export const es: TranslationResources = {
         baseSelectorMissing: "La rama {{baseRef}} ya no existe",
         baseSelectorError: "No se pudo cambiar la rama de comparación",
         baseSelectorUpdateHost: "Actualiza el host para seleccionar una rama base",
+        stackParentMalformed: "Stack-Parent malformado",
+        stackParentMissing: "No se encontró la rama padre",
         markReviewed: "Marcar como revisado",
         markUnreviewed: "Marcar como no revisado",
         markFileReviewed: "Marcar {{file}} como revisado",

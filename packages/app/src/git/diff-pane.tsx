@@ -162,7 +162,10 @@ import { usePublishWorkingDiffAttachment, useWorkingDiff } from "@/git/use-worki
 import { DiffTooLargeState } from "@/git/diff-too-large-state";
 import { openDesktopTarget, useDesktopOpenTargets } from "@/workspace/desktop-open-targets";
 import { ChangesBaseSelector } from "@/git/changes-base-selector";
-import { applyChangesBaseSelection } from "@/git/changes-base-selection";
+import {
+  applyChangesBaseSelection,
+  getChangesStackParentBadgeKind,
+} from "@/git/changes-base-selection";
 import {
   buildDiffContextRegions,
   parseDiffContextMarker,
@@ -5081,20 +5084,36 @@ function ChangesBaseSelectorPlacement({
   baseSelection: ReturnType<typeof useWorkingDiff>["baseSelection"];
   onSelect: (baseRef: string | null) => Promise<void>;
 }) {
+  const { t } = useTranslation();
   if (!visible || !currentBranchName) {
     return null;
   }
+  const badgeKind = getChangesStackParentBadgeKind(baseSelection.stackParentStatus);
   return (
-    <ChangesBaseSelector
-      serverId={serverId}
-      cwd={cwd}
-      currentBranch={currentBranchName}
-      recordedBaseRef={baseSelection.recordedBaseRef}
-      selectedBaseRef={baseSelection.selectedBaseRef}
-      effectiveBaseRef={baseSelection.effectiveBaseRef}
-      supported={baseSelection.supported}
-      onSelect={onSelect}
-    />
+    <>
+      <ChangesBaseSelector
+        serverId={serverId}
+        cwd={cwd}
+        currentBranch={currentBranchName}
+        defaultBaseRef={baseSelection.defaultBaseRef}
+        recordedBaseRef={baseSelection.recordedBaseRef}
+        selectedBaseRef={baseSelection.selectedBaseRef}
+        effectiveBaseRef={baseSelection.effectiveBaseRef}
+        supported={baseSelection.supported}
+        onSelect={onSelect}
+      />
+      {badgeKind ? (
+        <StatusBadge
+          label={t(
+            badgeKind === "malformed"
+              ? "workspace.git.diff.stackParentMalformed"
+              : "workspace.git.diff.stackParentMissing",
+          )}
+          variant="error"
+          testID={`changes-stack-parent-${badgeKind}-badge`}
+        />
+      ) : null}
+    </>
   );
 }
 

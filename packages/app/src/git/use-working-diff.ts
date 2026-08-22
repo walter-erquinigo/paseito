@@ -42,9 +42,7 @@ function collectCurrentSideReviewTargets(files: ReturnType<typeof useCheckoutDif
 function resolveSelectedComparisonBaseRef(
   selection: ReturnType<typeof useChangesBaseSelection>,
 ): string | undefined {
-  return selection.supported &&
-    selection.selectedBaseRef !== null &&
-    selection.selectedBaseRef === selection.effectiveBaseRef
+  return selection.supported && selection.source !== "recorded" && selection.effectiveBaseRef
     ? selection.effectiveBaseRef
     : undefined;
 }
@@ -105,7 +103,6 @@ export function useWorkingDiff({
   const statusErrorMessage = getStatusErrorMessage({ status, isStatusError, statusError });
   const recordedBaseRef = gitStatus?.baseRef ?? undefined;
   const hasUncommittedChanges = Boolean(gitStatus?.isDirty);
-  const hasCommittedChanges = hasCommittedBranchChanges(gitStatus);
   const currentBranchName = getCurrentBranchName(gitStatus);
   const baseSelection = useChangesBaseSelection({
     serverId,
@@ -113,7 +110,10 @@ export function useWorkingDiff({
     repoRoot: gitStatus?.repoRoot,
     currentBranch: currentBranchName,
     recordedBaseRef,
+    stackParent: gitStatus?.stackParent,
   });
+  const hasCommittedChanges =
+    hasCommittedBranchChanges(gitStatus) || baseSelection.source === "stack-parent";
   const baseRef = baseSelection.effectiveBaseRef;
   const comparisonBaseRef = resolveSelectedComparisonBaseRef(baseSelection);
 

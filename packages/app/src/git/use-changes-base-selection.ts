@@ -4,11 +4,13 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useFetchQuery } from "@/data/query";
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import { useSessionStore } from "@/stores/session-store";
+import type { CheckoutStackParent } from "@getpaseo/protocol/messages";
 import { invalidateCheckoutComparisonQueriesForClient } from "./query-keys";
 import {
   buildChangesBaseScopeKey,
   loadChangesBaseOverrides,
   persistChangesBaseOverrides,
+  resolveChangesBaseRef,
 } from "./changes-base-selection";
 
 const CHANGES_BASE_OVERRIDES_QUERY_KEY = ["changes-base-overrides"] as const;
@@ -19,6 +21,7 @@ interface UseChangesBaseSelectionInput {
   repoRoot: string | null | undefined;
   currentBranch: string | null;
   recordedBaseRef: string | undefined;
+  stackParent: CheckoutStackParent | null | undefined;
 }
 
 export function useChangesBaseSelection(input: UseChangesBaseSelectionInput) {
@@ -28,6 +31,12 @@ export function useChangesBaseSelection(input: UseChangesBaseSelectionInput) {
   // COMPAT(changesBaseSelector): added in Paseito v0.2.5-paseito.1, remove after 2027-02-04.
   const supported = useSessionStore(
     (state) => state.sessions[input.serverId]?.serverInfo?.features?.changesBaseSelector === true,
+  );
+  // COMPAT(changesStackParentBase): added in Paseito v0.4.0-paseito.33,
+  // remove after 2027-02-21.
+  const stackParentSupported = useSessionStore(
+    (state) =>
+      state.sessions[input.serverId]?.serverInfo?.features?.changesStackParentBase === true,
   );
   const overridesQuery = useFetchQuery({
     queryKey: CHANGES_BASE_OVERRIDES_QUERY_KEY,
@@ -44,6 +53,8 @@ export function useChangesBaseSelection(input: UseChangesBaseSelectionInput) {
     [input.currentBranch, input.repoRoot],
   );
   const override = scopeKey ? (overridesQuery.data?.[scopeKey] ?? null) : null;
+  const stackParentStatus = stackParentSupported ? (input.stackParent ?? null) : null;
+  const stackParentRef = stackParentStatus?.state === "valid" ? stackParentStatus.ref : null;
   const validationQuery = useFetchQuery({
     queryKey: ["changesBaseValidation", input.serverId, input.cwd, override],
     queryFn: async () => {
@@ -70,7 +81,8 @@ export function useChangesBaseSelection(input: UseChangesBaseSelectionInput) {
       const previous =
         queryClient.getQueryData<Record<string, string>>(CHANGES_BASE_OVERRIDES_QUERY_KEY) ?? {};
       const next = { ...previous };
-      if (!baseRef || baseRef === input.recordedBaseRef) {
+      const defaultBaseRef = stackParentRef ?? input.recordedBaseRef;
+      if (!baseRef || baseRef === defaultBaseRef) {
         delete next[scopeKey];
       } else {
         next[scopeKey] = baseRef;
@@ -86,7 +98,7 @@ export function useChangesBaseSelection(input: UseChangesBaseSelectionInput) {
       });
       await persistChangesBaseOverrides(AsyncStorage, next);
     },
-    [input.cwd, input.recordedBaseRef, input.serverId, queryClient, scopeKey],
+    [input.cwd, input.recordedBaseRef, input.serverId, queryClient, scopeKey, stackParentRef],
   );
 
   useEffect(() => {
@@ -95,12 +107,20 @@ export function useChangesBaseSelection(input: UseChangesBaseSelectionInput) {
     }
   }, [override, setOverride, validationQuery.data]);
 
-  const effectiveBaseRef =
-    supported && override && validationQuery.data === true ? override : input.recordedBaseRef;
+  const selection = resolveChangesBaseRef({
+    recordedBaseRef: input.recordedBaseRef,
+    stackParentRef,
+    override: supported ? override : null,
+    overrideValid: validationQuery.data === true,
+  });
 
   return {
     supported,
-    effectiveBaseRef,
+    stackParentSupported,
+    stackParentStatus,
+    defaultBaseRef: selection.defaultBaseRef,
+    effectiveBaseRef: selection.effectiveBaseRef,
+    source: selection.source,
     recordedBaseRef: input.recordedBaseRef,
     selectedBaseRef: override,
     setOverride,

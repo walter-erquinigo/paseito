@@ -899,6 +899,8 @@ export const zhCN: TranslationResources = {
         baseSelectorMissing: "分支 {{baseRef}} 已不存在",
         baseSelectorError: "无法更改比较分支",
         baseSelectorUpdateHost: "更新主机以选择基础分支",
+        stackParentMalformed: "Stack-Parent 格式错误",
+        stackParentMissing: "未找到父分支",
         markReviewed: "标记为已审阅",
         markUnreviewed: "标记为未审阅",
         markFileReviewed: "将 {{file}} 标记为已审阅",

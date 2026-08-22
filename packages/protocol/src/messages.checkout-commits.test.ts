@@ -3,6 +3,7 @@ import { describe, expect, test } from "vitest";
 import {
   CheckoutCommitsListRequestSchema,
   CheckoutCommitsListResponseSchema,
+  CheckoutStatusResponseSchema,
   ServerInfoStatusPayloadSchema,
   SessionInboundMessageSchema,
   SessionOutboundMessageSchema,
@@ -156,13 +157,54 @@ describe("checkout.commits.list schemas", () => {
           commitsList: true,
           commitBaseClassification: true,
           changesBaseSelector: true,
+          changesStackParentBase: true,
         },
       }).features,
     ).toEqual({
       commitsList: true,
       commitBaseClassification: true,
       changesBaseSelector: true,
+      changesStackParentBase: true,
     });
+  });
+
+  test("parses Stack-Parent checkout status while keeping the field optional", () => {
+    const common = {
+      type: "checkout_status_response" as const,
+      payload: {
+        cwd: "/tmp/repo",
+        isGit: true as const,
+        isPaseoOwnedWorktree: false as const,
+        repoRoot: "/tmp/repo",
+        mainRepoRoot: null,
+        currentBranch: "feature",
+        isDirty: false,
+        baseRef: "main",
+        aheadBehind: { ahead: 1, behind: 0 },
+        upstreamRef: null,
+        aheadOfOrigin: null,
+        behindOfOrigin: null,
+        hasRemote: true,
+        remoteUrl: "git@example.com:repo.git",
+        error: null,
+        requestId: "status",
+      },
+    };
+
+    expect(
+      CheckoutStatusResponseSchema.parse({
+        ...common,
+        payload: {
+          ...common.payload,
+          stackParent: {
+            commitSha: "abc123",
+            state: "valid",
+            ref: "refs/heads/parent",
+          },
+        },
+      }).payload,
+    ).toMatchObject({ stackParent: { state: "valid", ref: "refs/heads/parent" } });
+    expect(CheckoutStatusResponseSchema.parse(common).payload).not.toHaveProperty("stackParent");
   });
 
   test("still parses server_info without the commitsList feature flag", () => {

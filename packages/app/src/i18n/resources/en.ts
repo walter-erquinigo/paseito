@@ -918,6 +918,8 @@ export const en = {
         baseSelectorMissing: "Branch {{baseRef}} no longer exists",
         baseSelectorError: "Failed to change comparison branch",
         baseSelectorUpdateHost: "Update the host to select a base branch",
+        stackParentMalformed: "Malformed Stack-Parent",
+        stackParentMissing: "Stack parent not found",
         markReviewed: "Mark reviewed",
         markUnreviewed: "Mark unreviewed",
         markFileReviewed: "Mark {{file}} reviewed",

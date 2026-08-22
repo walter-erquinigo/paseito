@@ -19,6 +19,7 @@ interface ChangesBaseSelectorProps {
   serverId: string;
   cwd: string;
   currentBranch: string | null;
+  defaultBaseRef?: string;
   recordedBaseRef?: string;
   selectedBaseRef: string | null;
   effectiveBaseRef?: string;
@@ -33,6 +34,7 @@ export function ChangesBaseSelector({
   serverId,
   cwd,
   currentBranch,
+  defaultBaseRef,
   recordedBaseRef,
   selectedBaseRef,
   effectiveBaseRef,
@@ -69,10 +71,11 @@ export function ChangesBaseSelector({
       buildChangesBaseOptions({
         branches: suggestionsQuery.data ?? [],
         currentBranch,
+        defaultBaseRef,
         recordedBaseRef,
         selectedBaseRef,
       }),
-    [currentBranch, recordedBaseRef, selectedBaseRef, suggestionsQuery.data],
+    [currentBranch, defaultBaseRef, recordedBaseRef, selectedBaseRef, suggestionsQuery.data],
   );
 
   const handleSelect = useCallback(
@@ -88,14 +91,14 @@ export function ChangesBaseSelector({
         if (!validation.exists) {
           throw new Error(t("workspace.git.diff.baseSelectorMissing", { baseRef }));
         }
-        await onSelect(baseRef === recordedBaseRef ? null : baseRef);
+        await onSelect(baseRef === defaultBaseRef ? null : baseRef);
       })().catch((error) => {
         toast.error(
           error instanceof Error ? error.message : t("workspace.git.diff.baseSelectorError"),
         );
       });
     },
-    [client, cwd, onSelect, recordedBaseRef, t, toast],
+    [client, cwd, defaultBaseRef, onSelect, t, toast],
   );
   const renderOption = useCallback<NonNullable<ComboboxProps["renderOption"]>>(
     ({ option, selected, active, onPress }) => (

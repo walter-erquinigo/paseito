@@ -29,6 +29,7 @@
       "commitSubject": "feat(changes): select and preserve comparison bases",
       "preservationFixes": [
         "Default ahead branches to their committed branch diff without hiding the explicit Uncommitted view.",
+        "Use valid top-commit Stack-Parent branches as the default comparison base and keep invalid markers visible.",
         "Sort every werquinigo/ branch first in literal name order on both current and legacy hosts.",
         "Keep branch search focused while revealing and activating the selected branch, including when it is absent from the bounded suggestion response."
       ],
@@ -38,13 +39,14 @@
         "The selection is scoped by repository root and current branch.",
         "On desktop, the base selector is beside the current branch selector and choosing a base switches Changes to Committed.",
         "When a branch is ahead of its base, Changes defaults to the committed branch diff even if the working tree is dirty; an explicit Uncommitted selection is still honored.",
+        "A valid Stack-Parent line on the top commit supplies the default read-only comparison beneath manual overrides; malformed or missing parents fall back and retain an error badge.",
         "Diffs, review attachments and commit history use the selected validated base.",
         "Branch dropdowns rank every werquinigo/ branch first in literal name order, then the remaining current ancestry stack from base to tip, then other branches by recency.",
         "Opening the current-branch dropdown focuses search and scrolls its active selected row into view without moving keyboard focus to the option.",
         "Missing refs fall back safely, and hosts without the advertised capability show an explicit update-host state without a degraded fallback."
       ],
       "contracts": [
-        "npx vitest run packages/app/src/git/changes-base-selection.test.ts packages/protocol/src/messages.checkout-commits.test.ts packages/server/src/utils/checkout-git.commits.test.ts"
+        "npx vitest run packages/app/src/git/changes-base-selection.test.ts packages/protocol/src/messages.checkout-commits.test.ts packages/server/src/utils/checkout-git.commits.test.ts packages/server/src/utils/checkout-git.stack-parent.test.ts"
       ],
       "paths": [
         "packages/app/src/components/branch-switcher.tsx",

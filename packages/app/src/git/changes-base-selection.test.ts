@@ -6,6 +6,8 @@ import {
   CHANGES_BASE_OVERRIDES_STORAGE_KEY,
   loadChangesBaseOverrides,
   persistChangesBaseOverrides,
+  resolveChangesBaseRef,
+  getChangesStackParentBadgeKind,
 } from "./changes-base-selection";
 
 function createStorage(initial: Record<string, string> = {}) {
@@ -66,5 +68,72 @@ describe("Changes base selection", () => {
       },
     });
     expect(events).toEqual(["base:origin/release", "mode:committed"]);
+  });
+
+  it("uses Stack-Parent as the default beneath a valid manual override", () => {
+    expect(
+      resolveChangesBaseRef({
+        recordedBaseRef: "main",
+        stackParentRef: "refs/heads/stack-parent",
+        override: null,
+        overrideValid: false,
+      }),
+    ).toEqual({
+      defaultBaseRef: "refs/heads/stack-parent",
+      effectiveBaseRef: "refs/heads/stack-parent",
+      source: "stack-parent",
+    });
+    expect(
+      resolveChangesBaseRef({
+        recordedBaseRef: "main",
+        stackParentRef: "refs/heads/stack-parent",
+        override: "refs/heads/review-base",
+        overrideValid: true,
+      }),
+    ).toEqual({
+      defaultBaseRef: "refs/heads/stack-parent",
+      effectiveBaseRef: "refs/heads/review-base",
+      source: "override",
+    });
+  });
+
+  it("falls back to the recorded base when no valid Stack-Parent or override exists", () => {
+    expect(
+      resolveChangesBaseRef({
+        recordedBaseRef: "main",
+        stackParentRef: null,
+        override: "missing",
+        overrideValid: false,
+      }),
+    ).toEqual({
+      defaultBaseRef: "main",
+      effectiveBaseRef: "main",
+      source: "recorded",
+    });
+  });
+
+  it("shows a persistent badge only for invalid Stack-Parent states", () => {
+    expect(
+      getChangesStackParentBadgeKind({
+        commitSha: "abc",
+        state: "malformed",
+        reason: "invalid",
+      }),
+    ).toBe("malformed");
+    expect(
+      getChangesStackParentBadgeKind({
+        commitSha: "abc",
+        state: "missing",
+        declaredRef: "missing",
+      }),
+    ).toBe("missing");
+    expect(
+      getChangesStackParentBadgeKind({
+        commitSha: "abc",
+        state: "valid",
+        ref: "refs/heads/main",
+      }),
+    ).toBeNull();
+    expect(getChangesStackParentBadgeKind(null)).toBeNull();
   });
 });
