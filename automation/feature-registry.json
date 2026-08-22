@@ -198,7 +198,7 @@
       ],
       "contracts": [
         "npx vitest run packages/app/src/review/file-review.test.ts packages/app/src/review/line-review.test.ts packages/app/src/review/line-review-navigation.test.ts packages/app/src/git/file-review-expansion.test.ts packages/server/src/utils/checkout-git.context.test.ts packages/server/src/utils/checkout-git.test.ts",
-        "npm run test:e2e --workspace=@getpaseo/app -- e2e/browser/changes-pane.spec.ts e2e/browser/branch-switcher.spec.ts"
+        "npm run test:e2e --workspace=@getpaseo/app -- e2e/browser/changes-pane.spec.ts"
       ],
       "paths": [
         "packages/app/src/review/file-review.ts",

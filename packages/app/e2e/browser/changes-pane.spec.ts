@@ -1169,7 +1169,7 @@ async function useCodeFont(page: Page, codeFontSize: number): Promise<void> {
         settingsKey,
         JSON.stringify({
           theme: "dark",
-          sendBehavior: "interrupt",
+          sendBehavior: "queue",
           serviceUrlBehavior: "ask",
           terminalScrollbackLines: 10_000,
           uiFontFamily: "",
