@@ -21,7 +21,6 @@ import {
 } from "@/styles/theme";
 import { z } from "zod";
 import { APP_SETTINGS_KEY, LEGACY_SETTINGS_KEY } from "./keys";
-import { migrateAppSettings } from "./migrations";
 
 export { APP_SETTINGS_KEY } from "./keys";
 export const APP_SETTINGS_QUERY_KEY = ["app-settings"];
@@ -171,7 +170,9 @@ const StoredAppSettingsSchema = z
     language: z
       .enum(["system", "ar", "en", "es", "fr", "ja", "ko", "pt-BR", "ru", "zh-CN"])
       .catch("system"),
-    sendBehavior: z.enum(["interrupt", "steer", "queue"]).catch("steer"),
+    sendBehavior: z
+      .enum(["interrupt", "steer", "queue"])
+      .catch(DEFAULT_CLIENT_SETTINGS.sendBehavior),
     serviceUrlBehavior: z.enum(["ask", "in-app", "external"]).catch("ask"),
     terminalScrollbackLines: clampedNumber(
       MIN_TERMINAL_SCROLLBACK_LINES,
@@ -294,13 +295,11 @@ export async function loadAppSettingsFromStorage(deps: SettingsDeps): Promise<Ap
     const read = await readAppSettings(deps);
     const queueDefaultMigrationComplete =
       (await deps.storage.getItem(QUEUE_DEFAULT_MIGRATION_KEY)) === "1";
-    const { needsWrite: _needsWrite, ...stored } = read.stored;
-    const settings = await migrateAppSettings(read.settings, deps.storage, stored);
     const next =
       !queueDefaultMigrationComplete && read.stored.sendBehavior === "interrupt"
-        ? { ...settings, sendBehavior: "queue" as const }
-        : settings;
-    if (read.needsWrite || next !== settings) {
+        ? { ...read.settings, sendBehavior: "queue" as const }
+        : read.settings;
+    if (read.needsWrite || next !== read.settings) {
       await writeAppSettings(deps.storage, read.stored, next);
     }
     if (!queueDefaultMigrationComplete) {
