@@ -33,6 +33,7 @@ export {
 export {
   getInlineReviewThreadViewportStyle,
   groupInlineReviewCommentsByTarget,
+  InlineReviewAddButton,
   InlineReviewEditor,
   InlineReviewGutterCell,
   InlineReviewThread,
