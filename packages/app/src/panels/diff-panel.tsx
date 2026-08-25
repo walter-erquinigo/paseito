@@ -144,6 +144,7 @@ function ChangesPanel() {
           cwd={cwd}
           enabled={isActive}
           presentation={presentation}
+          modeScope={tabId}
           focusPath={target.kind === "working_diff" ? target.focusPath : undefined}
           focusRequestId={target.kind === "working_diff" ? target.focusRequestId : undefined}
           focusLineStart={target.kind === "working_diff" ? target.focusLineStart : undefined}

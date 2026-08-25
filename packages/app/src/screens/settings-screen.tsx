@@ -279,10 +279,6 @@ function renderHostSettingsContent(
   }
 }
 
-function renderWhen(enabled: boolean, content: ReactNode): ReactNode {
-  return enabled ? content : null;
-}
-
 // ---------------------------------------------------------------------------
 // Trigger + sidebar style helpers
 // ---------------------------------------------------------------------------

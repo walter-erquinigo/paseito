@@ -160,6 +160,7 @@ export function useWorkingDiff({
 
   const {
     files: sourceFiles,
+    comparisonIdentity,
     payloadError: diffPayloadError,
     diffTooLarge,
     isLoading: isDiffLoading,
@@ -235,6 +236,7 @@ export function useWorkingDiff({
     selectBase,
     files,
     sourceFiles,
+    comparisonIdentity,
     diffPayloadError,
     diffTooLarge,
     isDiffLoading,

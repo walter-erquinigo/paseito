@@ -274,6 +274,7 @@ export class CheckoutDiffManager {
           cwd,
           files: [],
           diffTooLarge: true,
+          comparisonIdentity: diffResult.comparisonIdentity,
           error: toCheckoutError(new Error("Diff too large to display")),
         };
       }
@@ -285,6 +286,7 @@ export class CheckoutDiffManager {
       return {
         cwd,
         files,
+        comparisonIdentity: diffResult.comparisonIdentity,
         error: null,
       };
     } catch (error) {

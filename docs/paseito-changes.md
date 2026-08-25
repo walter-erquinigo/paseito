@@ -36,6 +36,23 @@ the expected current-file revision; a changed file rejects the request instead o
 Expansion is session-local, while persisted comments and suggestions automatically reveal their
 target region when the Changes view reopens.
 
+## GitLab discussions
+
+For a branch with an open GitLab MR, Changes shows MR discussions beside their diff lines and in
+an adaptive **MR comments** inbox. GitLab positions carry their old/new side and diff-version SHAs;
+an exact placement requires those SHAs to match the active committed comparison. A path and line
+that still exists under another comparison may be shown as **Position may be stale**, while general
+or missing positions remain in the inbox.
+
+The inbox polls while Changes is visible and supports replies through the connected host's `glab`
+authentication. A reply appears only after GitLab accepts it, and failed replies retain their text.
+Inline discussions reserve an interstitial row below their source line: the code and line-number
+gutters remain blank for the thread's full height instead of continuing behind it. The control on
+the gutter divider collapses or restores one thread without changing its GitLab resolution state;
+resolved threads use the same compact presentation. Discussion bodies use the shared Markdown and
+HTML-aware renderer, including linked GitLab badge images, instead of exposing source markup.
+Older hosts keep the control visible and require an update.
+
 ## Suggested edits
 
 Starting a comment on a current-side added or context line exposes **Suggest edit**. On macOS, drag

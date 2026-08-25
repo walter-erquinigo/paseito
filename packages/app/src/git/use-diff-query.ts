@@ -96,6 +96,7 @@ export function useCheckoutDiffQuery({
 
 export interface CheckoutDiffResult {
   files: ParsedDiffFile[];
+  comparisonIdentity: CheckoutDiffQueryPayload["comparisonIdentity"];
   payloadError: CheckoutDiffQueryPayload["error"];
   diffTooLarge: boolean;
   isLoading: boolean;
@@ -117,6 +118,7 @@ export function deriveCheckoutDiffResult(
   const payloadError = payload?.error ?? null;
   return {
     files: payload?.files ?? [],
+    comparisonIdentity: payload?.comparisonIdentity,
     payloadError,
     diffTooLarge: payload?.diffTooLarge === true,
     isLoading: payload === null,

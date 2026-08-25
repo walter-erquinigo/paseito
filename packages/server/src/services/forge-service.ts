@@ -156,6 +156,7 @@ export type PullRequestTimelineItem =
       kind: "comment";
       reviewId?: string;
       threadId?: string;
+      discussionId?: string;
       threadIsResolved?: boolean;
       location?: PullRequestTimelineCommentLocation;
     });
@@ -164,6 +165,13 @@ export interface PullRequestTimelineCommentLocation {
   path: string;
   line?: number;
   startLine?: number;
+  side?: "old" | "new";
+  startSide?: "old" | "new";
+  position?: {
+    baseSha: string;
+    startSha: string;
+    headSha: string;
+  };
   threadId?: string;
   isResolved?: boolean;
   isOutdated?: boolean;
@@ -258,6 +266,13 @@ export type GetPullRequestTimelineOptions = {
   repoOwner: string;
   repoName: string;
 } & ForgeReadOptions;
+
+export interface ReplyToPullRequestDiscussionOptions {
+  cwd: string;
+  changeRequestNumber: number;
+  discussionId: string;
+  body: string;
+}
 
 export type GetCheckDetailsOptions = {
   cwd: string;
@@ -473,6 +488,9 @@ export interface ForgeService {
     } & ForgeReadOptions,
   ): Promise<CurrentPullRequestStatus | null>;
   getPullRequestTimeline(options: GetPullRequestTimelineOptions): Promise<PullRequestTimeline>;
+  replyToPullRequestDiscussion?(
+    options: ReplyToPullRequestDiscussionOptions,
+  ): Promise<PullRequestTimelineItem>;
   getCheckDetails(options: GetCheckDetailsOptions): Promise<CheckDetails>;
   searchIssuesAndPrs(options: SearchIssuesAndPrsOptions): Promise<SearchResult>;
   createPullRequest(options: CreatePullRequestOptions): Promise<PullRequestCreateResult>;
