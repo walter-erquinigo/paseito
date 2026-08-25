@@ -215,6 +215,39 @@
       ]
     },
     {
+      "id": "changes-gitlab-discussions",
+      "commitSubject": "feat(changes): show GitLab MR discussions",
+      "preservationFixes": [
+        "Keep GitLab discussion placement revision-aware and visibly mark every best-effort anchor.",
+        "Keep replies daemon-owned, confirmation-backed and capability-gated on every remote host."
+      ],
+      "permanent": false,
+      "intent": "Show the current branch's GitLab MR discussions inline in Changes and in an adaptive inbox, with confirmed replies.",
+      "invariants": [
+        "The daemon carries GitLab old/new sides and base/start/head SHAs through the neutral timeline contract and Changes diffs report their resolved comparison identity.",
+        "Exact inline placement requires matching comparison SHAs, path, side and line; best-effort placements are always labeled stale and missing targets remain inbox-only.",
+        "General, resolved, outdated and truncated discussion states remain discoverable from the MR comments inbox.",
+        "Replies are posted through a namespaced daemon RPC using the host's glab authentication, appear only after GitLab confirms them and retain their draft after failure.",
+        "Comments refresh every 60 seconds only while Changes is active, on focus or reconnect, and manually.",
+        "Older daemons show an explicit update-host state rather than attempting a degraded placement path."
+      ],
+      "contracts": [
+        "npx vitest run packages/server/src/services/gitlab-service.test.ts packages/app/src/git/changes-discussions.test.ts --bail=1"
+      ],
+      "paths": [
+        "packages/app/src/git",
+        "packages/app/src/review",
+        "packages/client/src/daemon-client.ts",
+        "packages/protocol/src/messages.ts",
+        "packages/server/src/server",
+        "packages/server/src/services",
+        "packages/server/src/utils/checkout-git.ts",
+        "automation/release/package_linux_daemon.py",
+        "automation/remote/deploy_remote_daemons.py",
+        "docs/paseito-changes.md"
+      ]
+    },
+    {
       "id": "changes-source-navigation",
       "commitSubject": "feat(changes): add source search and navigation",
       "preservationFixes": [

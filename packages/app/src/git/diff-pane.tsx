@@ -24,6 +24,7 @@ import {
   ListChevronsDownUp,
   ListChevronsUpDown,
   Maximize2,
+  MessageSquare,
   MoreHorizontal,
   Pilcrow,
   RotateCw,
@@ -108,6 +109,14 @@ import {
   publishInlineWorkingDiffNavigationSnapshot,
   publishWorkingDiffNavigationSnapshot,
 } from "@/workspace/markdown-changes-navigation";
+import { useChangesDiscussions } from "@/git/use-changes-discussions";
+import {
+  buildChangesDiscussionThreads,
+  groupChangesDiscussionsByTarget,
+  isOpenChangesDiscussion,
+  type ChangesDiscussionThread,
+} from "@/git/changes-discussions";
+import { ChangesDiscussionInbox } from "@/git/changes-discussion-inbox";
 
 export type { GitActionId, GitAction, GitActions } from "@/git/policy";
 
@@ -336,6 +345,10 @@ const ThemedMaximize2 = withUnistyles(Maximize2);
 const noopStateChange = () => {};
 const ThemedChevronDown = withUnistyles(ChevronDown);
 const ThemedMoreHorizontal = withUnistyles(MoreHorizontal);
+const ThemedMessageSquare = withUnistyles(MessageSquare);
+const discussionButtonIcon = (
+  <ThemedMessageSquare size={14} uniProps={foregroundMutedIconColorMapping} />
+);
 const DIFF_OPTIONS_WHITESPACE_ICON = (
   <ThemedPilcrow size={14} uniProps={foregroundMutedIconColorMapping} />
 );
@@ -497,6 +510,9 @@ interface ChangesToolbarProps {
   serverId: string;
   workspaceId?: string | null;
   wrapLines: boolean;
+  discussionCount: number;
+  showDiscussionControl: boolean;
+  onOpenDiscussions: () => void;
   onRefresh: () => void;
   onCollapseAll: () => void;
   onExpandAll: () => void;
@@ -544,6 +560,9 @@ function ChangesToolbar(props: ChangesToolbarProps) {
     onMarkAllReviewed,
     onMarkAllUnreviewed,
     onOrganizeByReview,
+    discussionCount,
+    showDiscussionControl,
+    onOpenDiscussions,
   } = props;
   return (
     <PaneContentToolbar style={styles.changesToolbar} testID="changes-header">
@@ -585,6 +604,18 @@ function ChangesToolbar(props: ChangesToolbarProps) {
         ) : null}
       </View>
       <View style={styles.changesToolbarControls}>
+        {showDiscussionControl ? (
+          <Button
+            variant="ghost"
+            size="xs"
+            leftIcon={discussionButtonIcon}
+            onPress={onOpenDiscussions}
+            testID="changes-discussions-button"
+            accessibilityLabel={`MR comments, ${discussionCount} open`}
+          >
+            {isMobile ? String(discussionCount) : `Comments ${discussionCount}`}
+          </Button>
+        ) : null}
         {!isMobile && hasFiles ? (
           <TreeRailToggle
             visible={desktopTreeVisible}
@@ -1539,10 +1570,11 @@ export function ChangesSurface({
     selectUncommitted: handleSelectUncommitted,
     selectBase: handleSelectBase,
     files,
+    comparisonIdentity,
     diffPayloadError,
     diffTooLarge,
     isDiffLoading,
-    reviewActions,
+    reviewActions: localReviewActions,
     reviewAttachment,
     contextExpansion,
     contextExpansionSupported,
@@ -1556,6 +1588,55 @@ export function ChangesSurface({
     enabled: enabled !== false,
     queryScope: modeScope,
   });
+  const discussions = useChangesDiscussions({
+    serverId,
+    cwd,
+    enabled: enabled !== false && isGit,
+  });
+  const discussionThreads = useMemo(
+    () =>
+      buildChangesDiscussionThreads({
+        items: discussions.items,
+        files,
+        comparisonIdentity,
+      }),
+    [comparisonIdentity, discussions.items, files],
+  );
+  const forgeThreadsByTarget = useMemo(
+    () => groupChangesDiscussionsByTarget(discussionThreads),
+    [discussionThreads],
+  );
+  const [discussionInboxOpen, setDiscussionInboxOpen] = useState(false);
+  const [focusedDiscussionId, setFocusedDiscussionId] = useState<string | null>(null);
+  const handleOpenDiscussions = useCallback(() => {
+    setFocusedDiscussionId(null);
+    setDiscussionInboxOpen(true);
+  }, []);
+  const handleOpenForgeDiscussion = useCallback((threadId: string) => {
+    setFocusedDiscussionId(threadId);
+    setDiscussionInboxOpen(true);
+  }, []);
+  const handleCloseDiscussions = useCallback(() => {
+    setDiscussionInboxOpen(false);
+    setFocusedDiscussionId(null);
+  }, []);
+  const handleShowAllDiscussions = useCallback(() => setFocusedDiscussionId(null), []);
+  const expandDiscussionLine = contextExpansion.expandLine;
+  const reviewActions = useMemo(
+    () => ({
+      ...localReviewActions,
+      forgeThreadsByTarget,
+      onOpenForgeThread: handleOpenForgeDiscussion,
+    }),
+    [forgeThreadsByTarget, handleOpenForgeDiscussion, localReviewActions],
+  );
+  useEffect(() => {
+    for (const item of discussions.items) {
+      if (item.kind !== "comment" || !item.location?.line) continue;
+      if ((item.location.side ?? "new") !== "new") continue;
+      void expandDiscussionLine(item.location.path, item.location.line).catch(() => undefined);
+    }
+  }, [discussions.items, expandDiscussionLine]);
   usePublishWorkingDiffAttachment({
     serverId,
     workspaceId: workspaceId ?? undefined,
@@ -1686,6 +1767,24 @@ export function ChangesSurface({
       reveal: undefined,
     }));
   }, []);
+  const handleNavigateDiscussion = useCallback(
+    async (thread: ChangesDiscussionThread) => {
+      if (!thread.targetPath || !thread.location?.line) return;
+      if ((thread.location.side ?? "new") === "new") {
+        await expandDiscussionLine(thread.targetPath, thread.location.line).catch(() => undefined);
+      }
+      setLocalFocusRequest((current) => ({
+        path: thread.targetPath!,
+        revision: nextFocusRevision(current),
+        ...((thread.location?.side ?? "new") === "new"
+          ? { lineStart: thread.location!.line, lineEnd: thread.location!.line }
+          : {}),
+        reveal: "center-if-hidden",
+      }));
+      setDiscussionInboxOpen(false);
+    },
+    [expandDiscussionLine],
+  );
   const handleOpenLspDefinition = useCallback(
     (location: { path: string; lineStart: number; lineEnd: number }) => {
       onOpenFile?.(location.path);
@@ -2033,6 +2132,9 @@ export function ChangesSurface({
           serverId={serverId}
           workspaceId={workspaceId}
           wrapLines={wrapLines}
+          discussionCount={discussionThreads.filter(isOpenChangesDiscussion).length}
+          showDiscussionControl={discussions.isGitLabMr}
+          onOpenDiscussions={handleOpenDiscussions}
           onCollapseAll={handleCollapseAllFiles}
           onExpandAll={handleExpandAllFiles}
           onMarkAllReviewed={handleMarkAllReviewed}
@@ -2079,6 +2181,21 @@ export function ChangesSurface({
         onCommitPress={handleCommitPress}
         collapsed={instanceState.commitsCollapsed}
         onCollapsedChange={handleCommitsCollapsedChange}
+      />
+      <ChangesDiscussionInbox
+        visible={discussionInboxOpen}
+        onClose={handleCloseDiscussions}
+        focusedThreadId={focusedDiscussionId}
+        onShowAllThreads={handleShowAllDiscussions}
+        threads={discussionThreads}
+        truncated={discussions.truncated}
+        mrUrl={discussions.mrUrl}
+        isRefreshing={discussions.isRefreshing}
+        upgradeRequired={discussions.isGitLabMr && !discussions.supported}
+        error={discussions.error}
+        onRefresh={discussions.refresh}
+        onNavigate={handleNavigateDiscussion}
+        onReply={discussions.reply}
       />
     </View>
   );

@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { Code2, Pencil, Plus, Trash2 } from "lucide-react-native";
+import { Code2, MessageSquare, Pencil, Plus, Trash2 } from "lucide-react-native";
 import {
   Pressable,
   type PointerEvent as NativePointerEvent,
@@ -49,6 +49,7 @@ import {
   type InlineReviewEditorState,
   type InlineSuggestionEditorState,
 } from "./inline-review";
+import type { ChangesDiscussionThread } from "@/git/changes-discussions";
 
 export {
   getInlineReviewThreadState,
@@ -118,6 +119,7 @@ const ThemedPencil = withUnistyles(Pencil);
 const ThemedPlus = withUnistyles(Plus);
 const ThemedTrash2 = withUnistyles(Trash2);
 const ThemedCode2 = withUnistyles(Code2);
+const ThemedMessageSquare = withUnistyles(MessageSquare);
 
 interface InlineSuggestionSelectionState {
   kind: "drag" | "shift";
@@ -929,6 +931,10 @@ export function InlineReviewThread({
 
   return (
     <View style={containerStyle} testID={testID}>
+      <ForgeDiscussionBlocks
+        threads={reviewActions.forgeThreadsByTarget?.get(reviewTarget.key) ?? []}
+        onOpen={reviewActions.onOpenForgeThread}
+      />
       <InlineCommentBlocks
         comments={comments}
         editor={editor}
@@ -943,6 +949,58 @@ export function InlineReviewThread({
         reviewActions={reviewActions}
       />
     </View>
+  );
+}
+
+function ForgeDiscussionBlocks({
+  threads,
+  onOpen,
+}: {
+  threads: ChangesDiscussionThread[];
+  onOpen?: (threadId: string) => void;
+}) {
+  return threads.map((thread) => (
+    <ForgeDiscussionBlock key={thread.id} thread={thread} onOpen={onOpen} />
+  ));
+}
+
+function ForgeDiscussionBlock({
+  thread,
+  onOpen,
+}: {
+  thread: ChangesDiscussionThread;
+  onOpen?: (threadId: string) => void;
+}) {
+  const first = thread.comments[0];
+  const handleOpen = useCallback(() => onOpen?.(thread.id), [onOpen, thread.id]);
+  if (!first) return null;
+  const stale = thread.placement === "stale";
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`Open GitLab discussion by ${first.author}`}
+      onPress={handleOpen}
+      style={[
+        styles.forgeDiscussion,
+        thread.isResolved && styles.forgeDiscussionResolved,
+        stale && styles.forgeDiscussionStale,
+      ]}
+    >
+      <ThemedMessageSquare size={14} uniProps={foregroundMutedIconColorMapping} />
+      <View style={styles.forgeDiscussionBody}>
+        <Text style={styles.forgeDiscussionMeta} numberOfLines={1}>
+          {first.author}
+          {thread.comments.length > 1 ? ` · ${thread.comments.length} replies` : ""}
+          {thread.isResolved ? " · Resolved" : ""}
+          {stale ? " · Position may be stale" : ""}
+        </Text>
+        {!thread.isResolved ? (
+          <Text style={styles.commentBody} numberOfLines={2}>
+            {first.body}
+          </Text>
+        ) : null}
+      </View>
+    </Pressable>
   );
 }
 
@@ -1509,6 +1567,37 @@ const styles = StyleSheet.create((theme) => ({
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[2],
+  },
+  forgeDiscussion: {
+    minHeight: 74,
+    backgroundColor: theme.colors.surface2,
+    borderWidth: theme.borderWidth[1],
+    borderColor: theme.colors.borderAccent,
+    borderRadius: theme.borderRadius.lg,
+    paddingHorizontal: theme.spacing[3],
+    paddingVertical: theme.spacing[2],
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
+  },
+  forgeDiscussionResolved: {
+    minHeight: 38,
+    opacity: 0.72,
+  },
+  forgeDiscussionStale: {
+    borderColor: theme.colors.statusWarning,
+  },
+  forgeDiscussionPressed: {
+    backgroundColor: theme.colors.surface3,
+  },
+  forgeDiscussionBody: {
+    flex: 1,
+    minWidth: 0,
+    gap: theme.spacing[1],
+  },
+  forgeDiscussionMeta: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
   },
   suggestionBlock: {
     minHeight: INLINE_SUGGESTION_HEIGHT,

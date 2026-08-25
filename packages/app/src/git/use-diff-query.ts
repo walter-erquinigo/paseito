@@ -94,6 +94,7 @@ export function useCheckoutDiffQuery({
 
   return {
     files: payload?.files ?? [],
+    comparisonIdentity: payload?.comparisonIdentity,
     payloadError,
     diffTooLarge: payload?.diffTooLarge === true,
     isLoading: payload === null && queryEnabled && isConnected,
