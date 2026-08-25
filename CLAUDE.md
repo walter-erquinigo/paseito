@@ -235,6 +235,9 @@ instead of editing the list by hand.
   - Fix: Keep per-line review state scannable with persistent hollow and filled dots in a fixed slot that never overlaps line numbers.
   - Fix: Restore the selected-line E action through every file-opening host so it opens and focuses the mapped current-side source line.
   - Fix: Keep bulk review operations visible in a dedicated progress menu and reserve file-header space for its per-file review control.
+- `changes-gitlab-discussions` — Show the current branch's GitLab MR discussions inline in Changes and in an adaptive inbox, with confirmed replies.
+  - Fix: Keep GitLab discussion placement revision-aware and visibly mark every best-effort anchor.
+  - Fix: Keep replies daemon-owned, confirmation-backed and capability-gated on every remote host.
 - `changes-source-navigation` — Search complete current-side changed files and use shared language intelligence directly from Changes.
   - Fix: Share revision-safe LSP sessions with the editor and suppress stale buffers.
   - Fix: Anchor LSP positions to current-side source text and pause Changes intelligence while the workspace is dirty.
