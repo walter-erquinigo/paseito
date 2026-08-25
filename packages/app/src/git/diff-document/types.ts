@@ -200,6 +200,8 @@ export interface BuildDiffDocumentModelInput {
   measureText: TextMeasurer;
   palette: DiffPalette;
   reviewActions?: InlineReviewActions;
+  /** Fixed space before line numbers for persistent per-line review indicators. */
+  reviewIndicatorWidth?: number;
   labels: { binary: string; tooLarge: string };
   /** A geometry-compatible model whose unchanged file measurements may be reused. */
   reuseFrom?: readonly DiffDocumentModel[];

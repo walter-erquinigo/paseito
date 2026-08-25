@@ -69,6 +69,15 @@ function input(overrides: Partial<BuildDiffDocumentModelInput> = {}): BuildDiffD
 }
 
 describe("diff document model", () => {
+  it("reserves a fixed indicator inset without reducing line-number space", () => {
+    const base = buildDiffDocumentModel(input());
+    const withIndicator = buildDiffDocumentModel(
+      input({ reviewIndicatorWidth: 14 } as Partial<BuildDiffDocumentModelInput>),
+    );
+
+    expect(withIndicator.files[0]!.gutterWidth).toBe(base.files[0]!.gutterWidth + 14);
+  });
+
   it("does not imperatively scroll for a no-op relayout", () => {
     expect(shouldApplyRelayoutScroll(320, 320)).toBe(false);
     expect(shouldApplyRelayoutScroll(320, 320.4)).toBe(false);

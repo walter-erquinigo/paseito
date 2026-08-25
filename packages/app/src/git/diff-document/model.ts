@@ -53,7 +53,9 @@ export function buildDiffDocumentModel(input: BuildDiffDocumentModelInput): Diff
     documentTop += FILE_HEADER_HEIGHT;
     const bodyTop = documentTop;
     const rowStart = rows.length;
-    const gutterWidth = lineNumberGutterWidth(maximumLineNumber(file), input.typography.size);
+    const gutterWidth =
+      lineNumberGutterWidth(maximumLineNumber(file), input.typography.size) +
+      (input.reviewIndicatorWidth ?? 0);
     let maximumHorizontalOverflow = 0;
 
     const reusableModel = input.reuseFrom?.find((candidate) =>

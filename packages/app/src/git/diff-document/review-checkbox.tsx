@@ -8,7 +8,11 @@ import {
 } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import type { Theme } from "@/styles/theme";
-import { reviewCheckboxVisibility, type ReviewCheckboxState } from "./review-checkbox-model";
+import {
+  reviewCheckboxVisibility,
+  type ReviewCheckboxAppearance,
+  type ReviewCheckboxState,
+} from "./review-checkbox-model";
 
 type ReviewPressableState = PressableStateCallbackType & { hovered?: boolean };
 
@@ -21,9 +25,24 @@ const mutedIconMapping = (theme: Theme) => ({
 const activeIconMapping = (theme: Theme) => ({
   color: theme.colors.accent,
 });
+const mutedFilledDotMapping = (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
+  fill: theme.colors.foregroundMuted,
+});
+const activeFilledDotMapping = (theme: Theme) => ({
+  color: theme.colors.accent,
+  fill: theme.colors.accent,
+});
+
+export const LINE_REVIEW_DOT_GUTTER_WIDTH = 14;
+
+export function lineReviewDotGutterWidth(enabled: boolean): number {
+  return enabled ? LINE_REVIEW_DOT_GUTTER_WIDTH : 0;
+}
 
 export const ReviewCheckbox = memo(function ReviewCheckbox({
   state,
+  appearance = "checkbox",
   alwaysVisible = false,
   selected = false,
   accessibilityLabel,
@@ -32,6 +51,7 @@ export const ReviewCheckbox = memo(function ReviewCheckbox({
   testID,
 }: {
   state: ReviewCheckboxState;
+  appearance?: ReviewCheckboxAppearance;
   alwaysVisible?: boolean;
   selected?: boolean;
   accessibilityLabel: string;
@@ -50,12 +70,19 @@ export const ReviewCheckbox = memo(function ReviewCheckbox({
     ({ hovered = false, pressed }: ReviewPressableState) => [
       styles.root,
       style,
-      reviewCheckboxVisibility({ state, alwaysVisible, selected, hovered, focused })
+      reviewCheckboxVisibility({
+        state,
+        appearance,
+        alwaysVisible,
+        selected,
+        hovered,
+        focused,
+      })
         ? styles.visible
         : styles.hidden,
       pressed ? styles.pressed : null,
     ],
-    [alwaysVisible, focused, selected, state, style],
+    [alwaysVisible, appearance, focused, selected, state, style],
   );
   return (
     <Pressable
@@ -70,6 +97,20 @@ export const ReviewCheckbox = memo(function ReviewCheckbox({
     >
       {({ hovered = false }: ReviewPressableState) => {
         const mapping = hovered || focused || selected ? activeIconMapping : mutedIconMapping;
+        if (appearance === "dot") {
+          if (state === "reviewed") {
+            return (
+              <ThemedCircle
+                size={8}
+                strokeWidth={1.8}
+                uniProps={
+                  hovered || focused || selected ? activeFilledDotMapping : mutedFilledDotMapping
+                }
+              />
+            );
+          }
+          return <ThemedCircle size={8} strokeWidth={1.8} uniProps={mapping} />;
+        }
         if (state === "reviewed") {
           return <ThemedCircleCheck size={14} strokeWidth={2} uniProps={mapping} />;
         }

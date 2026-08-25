@@ -8,7 +8,11 @@ import type { ReviewableDiffTarget } from "@/utils/diff-layout";
 import { DocumentFileHeader } from "./document-file-header";
 import { parseDiffContextMarker, type DiffContextRegion } from "@/git/diff-context-expansion";
 import { DiffContextControl } from "./context-control";
-import { ReviewCheckbox } from "./review-checkbox";
+import {
+  LINE_REVIEW_DOT_GUTTER_WIDTH,
+  lineReviewDotGutterWidth,
+  ReviewCheckbox,
+} from "./review-checkbox";
 import { hitTestDiffDocument, selectedSourceText } from "./hit-testing";
 import { retainHorizontalOffsetMapForPaths } from "./horizontal-offsets";
 import { HorizontalScroll } from "./horizontal-scroll.web";
@@ -233,6 +237,7 @@ export function DiffSurface(props: DiffSurfaceProps) {
     [loadedTypography],
   );
   const reviewActions = props.mode.kind === "working" ? props.mode.reviewActions : undefined;
+  const reviewIndicatorWidth = lineReviewDotGutterWidth(props.reviewPresentation !== undefined);
   const workingMode = props.mode.kind === "working" ? props.mode : null;
   const navigationHighlight = useMemo(() => {
     if (!workingMode?.focusPath || !workingMode.focusLineStart) return undefined;
@@ -279,6 +284,7 @@ export function DiffSurface(props: DiffSurfaceProps) {
       loadedTypography,
       measurement,
       props.palette,
+      reviewIndicatorWidth,
       t,
     ] as const;
     const previous = reusableModelRef.current;
@@ -296,6 +302,7 @@ export function DiffSurface(props: DiffSurfaceProps) {
       measureText: measurement,
       palette: props.palette,
       reviewActions,
+      reviewIndicatorWidth,
       labels: {
         binary: t("workspace.git.diff.binaryFile"),
         tooLarge: t("workspace.git.diff.tooLarge"),
@@ -315,6 +322,7 @@ export function DiffSurface(props: DiffSurfaceProps) {
     props.files,
     props.palette,
     reviewActions,
+    reviewIndicatorWidth,
     t,
     desiredTypography.lineHeight,
     loadedTypography,
@@ -1315,6 +1323,7 @@ function WebReviewGutter({
       >
         {changedLine && onToggleLine ? (
           <ReviewCheckbox
+            appearance="dot"
             accessibilityLabel={reviewed ? "Mark line unreviewed" : "Mark line reviewed"}
             alwaysVisible={alwaysVisible}
             onPress={toggleReviewed}
@@ -1517,7 +1526,7 @@ const SHORTCUT_HINT_STYLE: React.CSSProperties = {
   pointerEvents: "none",
 };
 const WEB_LINE_REVIEW_STYLE: ViewStyle = {
-  width: 22,
+  width: LINE_REVIEW_DOT_GUTTER_WIDTH,
   height: 22,
   alignItems: "center",
   justifyContent: "center",

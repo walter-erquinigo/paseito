@@ -14,4 +14,8 @@ describe("reviewCheckboxVisibility", () => {
     expect(reviewCheckboxVisibility({ state: "unreviewed", selected: true })).toBe(true);
     expect(reviewCheckboxVisibility({ state: "unreviewed", alwaysVisible: true })).toBe(true);
   });
+
+  it("keeps hollow line-review dots visible before review", () => {
+    expect(reviewCheckboxVisibility({ state: "unreviewed", appearance: "dot" })).toBe(true);
+  });
 });

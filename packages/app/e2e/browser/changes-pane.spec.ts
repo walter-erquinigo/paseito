@@ -255,7 +255,7 @@ test("line review controls stay in the fixed gutter across diff layouts", async 
 
   await expectLineReviewControls(page, workspace.editedLineCount);
   const reviewCheckboxes = page.getByTestId(/^diff-line-review-/);
-  await expect(reviewCheckboxes.first()).toHaveCSS("opacity", "0");
+  await expect(reviewCheckboxes.first()).toHaveCSS("opacity", "1");
   await reviewCheckboxes.first().hover();
   await expect(reviewCheckboxes.first()).toHaveCSS("opacity", "1");
   const selectedReviewLine = page.locator('[data-paseito-review-selected="true"]');

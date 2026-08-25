@@ -26,7 +26,11 @@ import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
 import { DocumentFileHeader } from "./document-file-header";
 import { parseDiffContextMarker } from "@/git/diff-context-expansion";
 import { DiffContextControl } from "./context-control";
-import { ReviewCheckbox } from "./review-checkbox";
+import {
+  LINE_REVIEW_DOT_GUTTER_WIDTH,
+  lineReviewDotGutterWidth,
+  ReviewCheckbox,
+} from "./review-checkbox";
 import { hitTestDiffBodyPoint } from "./native-hit-testing";
 import { retainDiffViewport } from "./viewport";
 import { HorizontalScroll } from "./horizontal-scroll.native";
@@ -102,6 +106,7 @@ export function DiffSurface(props: DiffSurfaceProps) {
     [family, typography.size],
   );
   const reviewActions = props.mode.kind === "working" ? props.mode.reviewActions : undefined;
+  const reviewIndicatorWidth = lineReviewDotGutterWidth(props.reviewPresentation !== undefined);
   const model = useMemo(() => {
     const dependencies = [
       props.files,
@@ -111,6 +116,7 @@ export function DiffSurface(props: DiffSurfaceProps) {
       typography,
       measurement,
       props.palette,
+      reviewIndicatorWidth,
       t,
     ] as const;
     const previous = reusableModelRef.current;
@@ -128,6 +134,7 @@ export function DiffSurface(props: DiffSurfaceProps) {
       measureText: measurement,
       palette: props.palette,
       reviewActions,
+      reviewIndicatorWidth,
       labels: {
         binary: t("workspace.git.diff.binaryFile"),
         tooLarge: t("workspace.git.diff.tooLarge"),
@@ -147,6 +154,7 @@ export function DiffSurface(props: DiffSurfaceProps) {
     props.files,
     props.palette,
     reviewActions,
+    reviewIndicatorWidth,
     t,
     typography,
     viewport.width,
@@ -525,7 +533,7 @@ function NativeReviewOverlays({
                 reviewed={mode.fileReviews?.reviewedLineIds.has(changed.id) === true}
                 selected={presentation.selectedLineId === changed.id}
                 top={row.top}
-                left={index * columnWidth + model.files[row.fileIndex]!.gutterWidth - 22}
+                left={index * columnWidth}
                 height={model.lineHeight}
               />,
             ]
@@ -585,7 +593,7 @@ function NativeLineReviewControl({
       position: "absolute",
       top,
       left,
-      width: 22,
+      width: LINE_REVIEW_DOT_GUTTER_WIDTH,
       height,
       zIndex: 7,
       borderLeftWidth: selected ? 2 : 0,
@@ -597,6 +605,7 @@ function NativeLineReviewControl({
   );
   return (
     <ReviewCheckbox
+      appearance="dot"
       accessibilityLabel={reviewed ? "Mark line unreviewed" : "Mark line reviewed"}
       alwaysVisible
       testID={`diff-line-review-${targetKey}`}
