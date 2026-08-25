@@ -283,15 +283,17 @@ instead of editing the list by hand.
   - Fix: Keep per-line review state scannable with persistent hollow and filled dots in a fixed slot that never overlaps line numbers.
   - Fix: Restore the selected-line E action through every file-opening host so it opens and focuses the mapped current-side source line.
   - Fix: Keep bulk review operations visible in a dedicated progress menu and reserve file-header space for its per-file review control.
+- `changes-gitlab-discussions` — Show the current branch's GitLab MR discussions inline in Changes and in an adaptive inbox, with confirmed replies.
+  - Fix: Keep GitLab discussion placement revision-aware and visibly mark every best-effort anchor.
+  - Fix: Keep replies daemon-owned, confirmation-backed and capability-gated on every remote host.
+  - Fix: Keep inline GitLab threads in blank interstitial diff rows with a gutter-edge control that collapses presentation without mutating forge resolution, and invalidate cached row geometry whenever those states change.
+  - Fix: Render GitLab discussion bodies through the shared Markdown and HTML-aware renderer instead of exposing source markup.
 - `changes-source-navigation` — Search complete current-side changed files and use shared language intelligence directly from Changes.
   - Fix: Share revision-safe LSP sessions with the editor and suppress stale buffers.
   - Fix: Anchor LSP positions to current-side source text and pause Changes intelligence while the workspace is dirty.
   - Fix: Preserve the exact terminal-newline form when rebuilding paged source for shared LSP sessions.
   - Fix: Keep each file's responsive LSP status inside the file-header action rail so it cannot overlap diff statistics or context rows.
   - Fix: Search complete changed-file source on the daemon without transferring every file before results.
-- `changes-file-tree-navigator` — Navigate large working diffs from a dedicated right-hand file tree in desktop Changes panes.
-  - Fix: Keep repeated file selections monotonic and independent from manual diff scrolling.
-  - Fix: Keep the pane-local Changes navigator responsive and preserve its state across retained tab switches.
 - `lens-shared-editor-lsp` — Provide editor intelligence through the existing Lens language server when available and a daemon-owned clangd fallback for ordinary C/C++ workspaces.
   - Fix: Keep cold-index deadlines, document-version rejection and safe save fallback behavior.
   - Fix: Replay pooled LSP state to late editor leases and keep backend failures visible with retry.

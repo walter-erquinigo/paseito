@@ -1,4 +1,12 @@
-import { useState, useCallback, useMemo, type ReactElement, type ReactNode } from "react";
+import {
+  useState,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  type ReactElement,
+  type ReactNode,
+} from "react";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { TreeRail } from "@/components/tree-rail";
@@ -9,6 +17,7 @@ import {
   Text,
   Pressable,
   FlatList,
+  type LayoutChangeEvent,
   type PressableStateCallbackType,
   type StyleProp,
   type ViewStyle,
@@ -24,6 +33,7 @@ import {
   ListChevronsDownUp,
   ListChevronsUpDown,
   Maximize,
+  MessageSquare,
   MoreHorizontal,
   Pilcrow,
   RotateCw,
@@ -76,6 +86,7 @@ import { useSessionStore } from "@/stores/session-store";
 import { confirmDialog } from "@/utils/confirm-dialog";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Button } from "@/components/ui/button";
+import { StatusBadge } from "@/components/ui/status-badge";
 import {
   PaneContentToolbar,
   paneContentToolbarIconSize,
@@ -105,6 +116,30 @@ import { PullRequestStateIcon } from "@/git/pull-request-state-icon";
 import { openExternalUrl } from "@/utils/open-external-url";
 import { openPreferredWorkspaceTarget } from "@/workspace-tabs/open-beside";
 import type { OpenInSidePanePreferences } from "@/hooks/use-settings";
+import type { WorkspaceFileOpenOptions } from "@/workspace/file-open";
+import { useChangesLsp } from "@/git/use-changes-lsp";
+import type { ChangesSearchMatch } from "@/git/changes-search";
+import type { FileReviewActions, ReviewableChangedLine } from "@/review";
+import { collapseReviewedFiles, revealFileAncestorFolders } from "@/git/file-review-expansion";
+import {
+  clearInlineWorkingDiffNavigationSnapshot,
+  clearWorkingDiffNavigationSnapshot,
+  publishInlineWorkingDiffNavigationSnapshot,
+  publishWorkingDiffNavigationSnapshot,
+} from "@/workspace/markdown-changes-navigation";
+import { useChangesDiscussions } from "@/git/use-changes-discussions";
+import {
+  buildChangesDiscussionThreads,
+  groupChangesDiscussionsByTarget,
+  isOpenChangesDiscussion,
+  type ChangesDiscussionThread,
+} from "@/git/changes-discussions";
+import { ChangesDiscussionInbox } from "@/git/changes-discussion-inbox";
+import { ChangesBaseSelector } from "@/git/changes-base-selector";
+import {
+  applyChangesBaseSelection,
+  getChangesStackParentBadgeKind,
+} from "@/git/changes-base-selection";
 
 export type { GitActionId, GitAction, GitActions } from "@/git/policy";
 
@@ -191,12 +226,26 @@ interface ChangesSurfaceProps {
   modeScope: string;
   focusPath?: string;
   focusRequestId?: number;
-  onOpenFile?: (path: string) => void;
+  focusLineStart?: number;
+  focusLineEnd?: number;
+  focusColumn?: number;
+  focusReveal?: "center-if-hidden";
+  onActivate?: () => void;
+  onOpenFile?: (path: string, options?: WorkspaceFileOpenOptions) => void;
   onOpenToSide?: (path: string) => void;
   onSelectDiffFile?: (path: string) => void;
   onAddToChat?: (path: string) => void;
   state?: ChangesState;
   onStateChange?: (state: ChangesState) => void;
+}
+
+interface ChangesFocusRequest {
+  path: string;
+  revision: number;
+  lineStart?: number;
+  lineEnd?: number;
+  column?: number;
+  reveal?: "center-if-hidden";
 }
 
 type PressableStyleFn = (
@@ -217,6 +266,10 @@ const noopStateChange = () => {};
 const ThemedChevronDown = withUnistyles(ChevronDown);
 const ThemedMoreHorizontal = withUnistyles(MoreHorizontal);
 const ThemedExternalLink = withUnistyles(ExternalLink);
+const ThemedMessageSquare = withUnistyles(MessageSquare);
+const discussionButtonIcon = (
+  <ThemedMessageSquare size={14} uniProps={foregroundMutedIconColorMapping} />
+);
 const DIFF_OPTIONS_WHITESPACE_ICON = (
   <ThemedPilcrow size={14} uniProps={foregroundMutedIconColorMapping} />
 );
@@ -464,21 +517,39 @@ interface ChangesPullRequestLinkModel extends Pick<PrHint, "forge" | "number" | 
   onOpen: () => void;
 }
 
+interface ChangesDiscussionToolbarModel {
+  count: number;
+  onOpen: () => void;
+}
+
+interface ChangesReviewToolbarModel {
+  fileReviews: FileReviewActions;
+  onMarkAllReviewed: () => void;
+  onMarkAllUnreviewed: () => void;
+  onOrganizeByReview: () => void;
+}
+
 interface ChangesRepositoryToolbarModel {
   branchName: string | null;
   cwd: string;
   gitActions: GitActions | null;
+  hasUncommittedChanges: boolean;
   pullRequest: ChangesPullRequestLinkModel | null;
   serverId: string;
   workspaceId?: string | null;
 }
 
 interface ChangesComparisonToolbarModel {
+  baseSelection: ReturnType<typeof useWorkingDiff>["baseSelection"];
   committedDescription?: string;
+  currentBranchName: string | null;
+  cwd: string;
   diffMode: "uncommitted" | "base";
   mode: ChangesToolbarMode;
   selectedDiffStat: { additions: number; deletions: number } | null;
+  serverId: string;
   onSelectBase: () => void;
+  onSelectComparisonBase: (baseRef: string | null) => Promise<void>;
   onSelectUncommitted: () => void;
 }
 
@@ -486,6 +557,8 @@ interface ChangesHeaderProps {
   compact: boolean;
   repository: ChangesRepositoryToolbarModel;
   comparison: ChangesComparisonToolbarModel;
+  discussions: ChangesDiscussionToolbarModel | null;
+  reviews: ChangesReviewToolbarModel | null;
   sidebarSurface: boolean;
 }
 
@@ -495,26 +568,36 @@ interface BuildChangesHeaderModelInput {
   compact: boolean;
   cwd: string;
   diffMode: "uncommitted" | "base";
+  discussions: ChangesDiscussionToolbarModel | null;
+  reviews: ChangesReviewToolbarModel | null;
   gitActions: GitActions;
+  hasUncommittedChanges: boolean;
   mode: ChangesToolbarMode;
   onOpenPullRequest: () => void;
   onSelectBase: () => void;
+  onSelectComparisonBase: (baseRef: string | null) => Promise<void>;
   onSelectUncommitted: () => void;
   pullRequest: PrHint | null;
   selectedDiffStat: { additions: number; deletions: number } | null;
   serverId: string;
+  baseSelection: ReturnType<typeof useWorkingDiff>["baseSelection"];
   workspaceId?: string | null;
 }
 
 function buildChangesHeaderModel(input: BuildChangesHeaderModelInput): {
   repository: ChangesRepositoryToolbarModel;
   comparison: ChangesComparisonToolbarModel;
+  discussions: ChangesDiscussionToolbarModel | null;
+  reviews: ChangesReviewToolbarModel | null;
 } {
   return {
+    discussions: input.discussions,
+    reviews: input.reviews,
     repository: {
       branchName: input.branchName,
       cwd: input.cwd,
       gitActions: input.compact ? input.gitActions : null,
+      hasUncommittedChanges: input.hasUncommittedChanges,
       pullRequest: input.pullRequest
         ? { ...input.pullRequest, onOpen: input.onOpenPullRequest }
         : null,
@@ -522,11 +605,16 @@ function buildChangesHeaderModel(input: BuildChangesHeaderModelInput): {
       workspaceId: input.workspaceId,
     },
     comparison: {
+      baseSelection: input.baseSelection,
       committedDescription: input.committedDescription,
+      currentBranchName: input.branchName,
+      cwd: input.cwd,
       diffMode: input.diffMode,
       mode: input.mode,
       selectedDiffStat: input.selectedDiffStat,
+      serverId: input.serverId,
       onSelectBase: input.onSelectBase,
+      onSelectComparisonBase: input.onSelectComparisonBase,
       onSelectUncommitted: input.onSelectUncommitted,
     },
   };
@@ -534,11 +622,20 @@ function buildChangesHeaderModel(input: BuildChangesHeaderModelInput): {
 
 // Presentation resolves into these two capability models before rendering. The rows
 // never infer which host or Changes presentation produced them.
-function ChangesHeader({ compact, repository, comparison, sidebarSurface }: ChangesHeaderProps) {
+function ChangesHeader({
+  compact,
+  repository,
+  comparison,
+  discussions,
+  reviews,
+  sidebarSurface,
+}: ChangesHeaderProps) {
   if (comparison.mode.kind === "diff") {
     return (
       <ChangesDiffOnlyToolbar
         compact={compact}
+        discussions={discussions}
+        reviews={reviews}
         mode={comparison.mode}
         sidebarSurface={sidebarSurface}
       />
@@ -548,12 +645,16 @@ function ChangesHeader({ compact, repository, comparison, sidebarSurface }: Chan
     <View>
       <ChangesRepositoryToolbar
         compact={compact}
+        discussions={discussions}
+        reviews={reviews}
         model={repository}
         sidebarSurface={sidebarSurface}
       />
       <ChangesComparisonToolbar
         compact={compact}
+        discussions={discussions}
         model={comparison}
+        reviews={reviews}
         sidebarSurface={sidebarSurface}
       />
     </View>
@@ -562,10 +663,14 @@ function ChangesHeader({ compact, repository, comparison, sidebarSurface }: Chan
 
 function ChangesDiffOnlyToolbar({
   compact,
+  discussions,
+  reviews,
   mode,
   sidebarSurface,
 }: {
   compact: boolean;
+  discussions: ChangesDiscussionToolbarModel | null;
+  reviews: ChangesReviewToolbarModel | null;
   mode: Extract<ChangesToolbarMode, { kind: "diff" }>;
   sidebarSurface: boolean;
 }) {
@@ -573,6 +678,8 @@ function ChangesDiffOnlyToolbar({
     <ChangesToolbarRow compact={compact} sidebarSurface={sidebarSurface} testID="changes-header">
       <ChangesToolbarLeading />
       <ChangesToolbarTrailing>
+        <ChangesDiscussionButton compact={compact} model={discussions} />
+        <ReviewBulkMenu model={reviews} />
         <ChangesToolbarActions mode={mode} compact={compact} />
       </ChangesToolbarTrailing>
     </ChangesToolbarRow>
@@ -615,10 +722,14 @@ function ChangesToolbarTrailing({ children }: { children: ReactNode }) {
 
 function ChangesRepositoryToolbar({
   compact,
+  discussions,
+  reviews,
   model,
   sidebarSurface,
 }: {
   compact: boolean;
+  discussions: ChangesDiscussionToolbarModel | null;
+  reviews: ChangesReviewToolbarModel | null;
   model: ChangesRepositoryToolbarModel;
   sidebarSurface: boolean;
 }) {
@@ -637,8 +748,20 @@ function ChangesRepositoryToolbar({
           isGitCheckout
           testID="changes-branch-switcher"
         />
+        <ChangesUncommittedActions
+          serverId={model.serverId}
+          cwd={model.cwd}
+          currentBranchName={model.branchName}
+          hasUncommittedChanges={model.hasUncommittedChanges}
+        />
       </ChangesToolbarLeading>
       <ChangesToolbarTrailing>
+        {!sidebarSurface ? (
+          <>
+            <ChangesDiscussionButton compact={compact} model={discussions} />
+            <ReviewBulkMenu model={reviews} />
+          </>
+        ) : null}
         {model.pullRequest ? (
           <>
             <ChangesPullRequestLink model={model.pullRequest} />
@@ -648,6 +771,145 @@ function ChangesRepositoryToolbar({
         {model.gitActions ? <GitActionsSplitButton gitActions={model.gitActions} menuOnly /> : null}
       </ChangesToolbarTrailing>
     </ChangesToolbarRow>
+  );
+}
+
+function ChangesUncommittedActions({
+  serverId,
+  cwd,
+  currentBranchName,
+  hasUncommittedChanges,
+}: {
+  serverId: string;
+  cwd: string;
+  currentBranchName: string | null;
+  hasUncommittedChanges: boolean;
+}) {
+  const { t } = useTranslation();
+  const toast = useToast();
+  // COMPAT(checkoutCommitAmend): added in Paseito v0.2.5-paseito.1, remove after 2027-02-04.
+  const amendSupported = useSessionStore(
+    (state) => state.sessions[serverId]?.serverInfo?.features?.checkoutCommitAmend === true,
+  );
+  const amend = useCheckoutGitActionsStore((state) => state.amend);
+  const isAmending =
+    useCheckoutGitActionsStore((state) => state.getStatus({ serverId, cwd, actionId: "amend" })) ===
+    "pending";
+  const handleAmend = useCallback(() => {
+    if (!amendSupported) {
+      toast.error(t("workspace.git.diff.amendUpdateHost"));
+      return;
+    }
+    if (isAmending) return;
+    void amend({ serverId, cwd })
+      .then(() => toast.show(t("workspace.git.diff.amendSuccess"), { variant: "success" }))
+      .catch((error) =>
+        toast.error(error instanceof Error ? error.message : t("workspace.git.diff.failedAmend")),
+      );
+  }, [amend, amendSupported, cwd, isAmending, serverId, t, toast]);
+  if (!currentBranchName || !hasUncommittedChanges) return null;
+  return (
+    <>
+      <StatusBadge
+        label={t("workspace.git.diff.uncommitted")}
+        variant="muted"
+        testID="changes-uncommitted-badge"
+      />
+      <Button
+        variant="outline"
+        size="xs"
+        loading={isAmending}
+        onPress={handleAmend}
+        testID="changes-amend-button"
+        accessibilityLabel={t("workspace.git.diff.amend")}
+      >
+        {isAmending ? t("workspace.git.diff.amending") : t("workspace.git.diff.amend")}
+      </Button>
+    </>
+  );
+}
+
+function ChangesDiscussionButton({
+  compact,
+  model,
+}: {
+  compact: boolean;
+  model: ChangesDiscussionToolbarModel | null;
+}) {
+  if (!model) return null;
+  return (
+    <Button
+      variant="ghost"
+      size="xs"
+      leftIcon={discussionButtonIcon}
+      onPress={model.onOpen}
+      testID="changes-discussions-button"
+      accessibilityLabel={`MR comments, ${model.count} open`}
+    >
+      {compact ? String(model.count) : `Comments ${model.count}`}
+    </Button>
+  );
+}
+
+function ReviewBulkMenu({ model }: { model: ChangesReviewToolbarModel | null }) {
+  const { t } = useTranslation();
+  if (!model) return null;
+  const { fileReviews } = model;
+  const hasLineProgress = fileReviews.reviewableLineCount > 0;
+  const reviewed = hasLineProgress ? fileReviews.reviewedLineCount : fileReviews.reviewedCount;
+  const total = hasLineProgress ? fileReviews.reviewableLineCount : fileReviews.reviewableCount;
+  const disabled = !fileReviews.available || fileReviews.reviewableCount === 0;
+  const allReviewed =
+    fileReviews.reviewableCount > 0 && fileReviews.reviewedCount === fileReviews.reviewableCount;
+  const hasReviewedChanges = fileReviews.reviewedCount > 0 || fileReviews.reviewedLineCount > 0;
+  const triggerLabel = t("workspace.git.diff.reviewMenu", { reviewed, total });
+  let accessibilityLabel = t("workspace.git.diff.reviewProgress", {
+    reviewedLines: fileReviews.reviewedLineCount,
+    totalLines: fileReviews.reviewableLineCount,
+    reviewedFiles: fileReviews.reviewedCount,
+    totalFiles: fileReviews.reviewableCount,
+  });
+  if (!fileReviews.supported) {
+    accessibilityLabel = t("workspace.git.diff.reviewUpdateHost");
+  } else if (!fileReviews.available) {
+    accessibilityLabel = t("workspace.git.diff.reviewBranchRequired");
+  }
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        accessibilityRole="button"
+        accessibilityLabel={accessibilityLabel}
+        disabled={disabled}
+        testID="changes-review-menu"
+        style={toolbarLabelTriggerStyle}
+      >
+        {(state) => (
+          <Text style={toolbarLabelTriggerTextStyle(isToolbarLabelTriggerHighlighted(state))}>
+            {triggerLabel}
+          </Text>
+        )}
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" width={280} testID="changes-review-menu-content">
+        <DropdownMenuItem
+          disabled={allReviewed}
+          testID="changes-review-mark-all"
+          onSelect={model.onMarkAllReviewed}
+        >
+          {t("workspace.git.diff.markAllChangesReviewed")}
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          disabled={!hasReviewedChanges}
+          testID="changes-review-clear-all"
+          onSelect={model.onMarkAllUnreviewed}
+        >
+          {t("workspace.git.diff.markAllChangesUnreviewed")}
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem testID="changes-review-organize" onSelect={model.onOrganizeByReview}>
+          {t("workspace.git.diff.organizeByReview")}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -714,11 +976,15 @@ function ChangesPullRequestExternalLink({
 
 function ChangesComparisonToolbar({
   compact,
+  discussions,
   model,
+  reviews,
   sidebarSurface,
 }: {
   compact: boolean;
+  discussions: ChangesDiscussionToolbarModel | null;
   model: ChangesComparisonToolbarModel;
+  reviews: ChangesReviewToolbarModel | null;
   sidebarSurface: boolean;
 }) {
   return (
@@ -730,6 +996,14 @@ function ChangesComparisonToolbar({
           onSelectUncommitted={model.onSelectUncommitted}
           onSelectBase={model.onSelectBase}
         />
+        <ChangesBaseSelectorPlacement
+          visible={!compact}
+          serverId={model.serverId}
+          cwd={model.cwd}
+          currentBranchName={model.currentBranchName}
+          baseSelection={model.baseSelection}
+          onSelect={model.onSelectComparisonBase}
+        />
         {model.selectedDiffStat ? (
           <DiffStat
             additions={model.selectedDiffStat.additions}
@@ -739,9 +1013,61 @@ function ChangesComparisonToolbar({
         ) : null}
       </ChangesToolbarLeading>
       <ChangesToolbarTrailing>
+        {sidebarSurface ? (
+          <>
+            <ChangesDiscussionButton compact model={discussions} />
+            <ReviewBulkMenu model={reviews} />
+          </>
+        ) : null}
         <ChangesToolbarActions mode={model.mode} compact={compact} />
       </ChangesToolbarTrailing>
     </ChangesToolbarRow>
+  );
+}
+
+function ChangesBaseSelectorPlacement({
+  visible,
+  serverId,
+  cwd,
+  currentBranchName,
+  baseSelection,
+  onSelect,
+}: {
+  visible: boolean;
+  serverId: string;
+  cwd: string;
+  currentBranchName: string | null;
+  baseSelection: ReturnType<typeof useWorkingDiff>["baseSelection"];
+  onSelect: (baseRef: string | null) => Promise<void>;
+}) {
+  const { t } = useTranslation();
+  if (!visible || !currentBranchName) return null;
+  const badgeKind = getChangesStackParentBadgeKind(baseSelection.stackParentStatus);
+  return (
+    <>
+      <ChangesBaseSelector
+        serverId={serverId}
+        cwd={cwd}
+        currentBranch={currentBranchName}
+        defaultBaseRef={baseSelection.defaultBaseRef}
+        recordedBaseRef={baseSelection.recordedBaseRef}
+        selectedBaseRef={baseSelection.selectedBaseRef}
+        effectiveBaseRef={baseSelection.effectiveBaseRef}
+        supported={baseSelection.supported}
+        onSelect={onSelect}
+      />
+      {badgeKind ? (
+        <StatusBadge
+          label={t(
+            badgeKind === "malformed"
+              ? "workspace.git.diff.stackParentMalformed"
+              : "workspace.git.diff.stackParentMissing",
+          )}
+          variant="error"
+          testID={`changes-stack-parent-${badgeKind}-badge`}
+        />
+      ) : null}
+    </>
   );
 }
 
@@ -1563,6 +1889,7 @@ function useDiffTabNavigation({
   };
 }
 
+// oxlint-disable-next-line complexity -- this hook composes independent Changes capabilities.
 export function ChangesSurface({
   serverId,
   workspaceId,
@@ -1572,6 +1899,11 @@ export function ChangesSurface({
   modeScope,
   focusPath,
   focusRequestId,
+  focusLineStart,
+  focusLineEnd,
+  focusColumn,
+  focusReveal,
+  onActivate,
   onOpenFile,
   onOpenToSide,
   onSelectDiffFile,
@@ -1583,6 +1915,11 @@ export function ChangesSurface({
   const { preferences, updatePreferences } = useChangesPreferences();
   const { t } = useTranslation();
   const isMobile = useIsCompactFormFactor();
+  const [paneWidth, setPaneWidth] = useState(0);
+  const handlePaneLayout = useCallback(
+    (event: LayoutChangeEvent) => setPaneWidth(event.nativeEvent.layout.width),
+    [],
+  );
   const canUseSplitLayout = isWeb && !isMobile;
   const instanceState = changesState ?? defaultChangesState;
   const updateState = onStateChange ?? noopStateChange;
@@ -1646,6 +1983,9 @@ export function ChangesSurface({
   const fsEntryDuplicateEnabled = useSessionStore(
     (state) => state.sessions[serverId]?.serverInfo?.features?.fsEntryDuplicate === true,
   );
+  const fileEditingSupported = useSessionStore(
+    (state) => state.sessions[serverId]?.serverInfo?.features?.workspaceFileEditing === true,
+  );
   const runRefresh = useCheckoutGitActionsStore((s) => s.refresh);
   const isRefreshing =
     useCheckoutGitActionsStore((s) => s.getStatus({ serverId, cwd, actionId: "refresh" })) ===
@@ -1667,24 +2007,100 @@ export function ChangesSurface({
     notGit,
     statusErrorMessage,
     baseRef,
+    baseSelection,
     currentBranchName,
+    hasUncommittedChanges,
     diffMode,
     selectUncommitted: handleSelectUncommitted,
     selectBase: handleSelectBase,
     files,
+    comparisonIdentity,
     diffPayloadError,
     diffTooLarge,
     isDiffLoading,
-    reviewActions,
+    reviewActions: localReviewActions,
     reviewAttachment,
+    contextExpansion,
+    contextExpansionSupported,
+    diffSearchSupported,
+    fileReviews,
   } = useWorkingDiff({
     serverId,
     workspaceId: workspaceId ?? undefined,
     cwd,
     ignoreWhitespace: preferences.hideWhitespace,
     enabled: enabled !== false,
-    modeScope,
+    queryScope: modeScope,
   });
+  const discussions = useChangesDiscussions({
+    serverId,
+    cwd,
+    enabled: enabled !== false && isGit,
+  });
+  const discussionThreads = useMemo(
+    () =>
+      buildChangesDiscussionThreads({
+        items: discussions.items,
+        files,
+        comparisonIdentity,
+      }),
+    [comparisonIdentity, discussions.items, files],
+  );
+  const forgeThreadsByTarget = useMemo(
+    () => groupChangesDiscussionsByTarget(discussionThreads),
+    [discussionThreads],
+  );
+  const [discussionInboxOpen, setDiscussionInboxOpen] = useState(false);
+  const [focusedDiscussionId, setFocusedDiscussionId] = useState<string | null>(null);
+  const [collapsedForgeThreadIds, setCollapsedForgeThreadIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  const handleOpenDiscussions = useCallback(() => {
+    setFocusedDiscussionId(null);
+    setDiscussionInboxOpen(true);
+  }, []);
+  const handleOpenForgeDiscussion = useCallback((threadId: string) => {
+    setFocusedDiscussionId(threadId);
+    setDiscussionInboxOpen(true);
+  }, []);
+  const handleCloseDiscussions = useCallback(() => {
+    setDiscussionInboxOpen(false);
+    setFocusedDiscussionId(null);
+  }, []);
+  const handleShowAllDiscussions = useCallback(() => setFocusedDiscussionId(null), []);
+  const handleToggleForgeDiscussion = useCallback((threadId: string) => {
+    setCollapsedForgeThreadIds((current) => {
+      const next = new Set(current);
+      if (next.has(threadId)) next.delete(threadId);
+      else next.add(threadId);
+      return next;
+    });
+  }, []);
+  useEffect(() => setCollapsedForgeThreadIds(new Set()), [discussions.mrUrl]);
+  const expandDiscussionLine = contextExpansion.expandLine;
+  const reviewActions = useMemo(
+    () => ({
+      ...localReviewActions,
+      forgeThreadsByTarget,
+      collapsedForgeThreadIds,
+      onOpenForgeThread: handleOpenForgeDiscussion,
+      onToggleForgeThread: handleToggleForgeDiscussion,
+    }),
+    [
+      collapsedForgeThreadIds,
+      forgeThreadsByTarget,
+      handleOpenForgeDiscussion,
+      handleToggleForgeDiscussion,
+      localReviewActions,
+    ],
+  );
+  useEffect(() => {
+    for (const item of discussions.items) {
+      if (item.kind !== "comment" || !item.location?.line) continue;
+      if ((item.location.side ?? "new") !== "new") continue;
+      void expandDiscussionLine(item.location.path, item.location.line).catch(() => undefined);
+    }
+  }, [discussions.items, expandDiscussionLine]);
   usePublishWorkingDiffAttachment({
     serverId,
     workspaceId: workspaceId ?? undefined,
@@ -1795,13 +2211,20 @@ export function ChangesSurface({
     [client, cwd, t, toast],
   );
   const onRevertPath = useDiscardChangesAction({ serverId, cwd, diffMode });
-  const [localFocusRequest, setLocalFocusRequest] = useState<{
-    path: string;
-    revision: number;
-  } | null>(null);
-  const externalFocusRequest = useMemo(
-    () => (focusPath ? { path: focusPath, revision: focusRequestId ?? 0 } : null),
-    [focusPath, focusRequestId],
+  const [localFocusRequest, setLocalFocusRequest] = useState<ChangesFocusRequest | null>(null);
+  const externalFocusRequest = useMemo<ChangesFocusRequest | null>(
+    () =>
+      focusPath
+        ? {
+            path: focusPath,
+            revision: focusRequestId ?? 0,
+            lineStart: focusLineStart,
+            lineEnd: focusLineEnd,
+            column: focusColumn,
+            reveal: focusReveal,
+          }
+        : null,
+    [focusColumn, focusLineEnd, focusLineStart, focusPath, focusRequestId, focusReveal],
   );
   const documentFocusRequest =
     localFocusRequest &&
@@ -1821,14 +2244,82 @@ export function ChangesSurface({
     },
     [onSelectDiffFile, presentation],
   );
-  const workingMode = useMemo(
+  const handleNavigateDiscussion = useCallback(
+    async (thread: ChangesDiscussionThread) => {
+      if (!thread.targetPath || !thread.location?.line) return;
+      if ((thread.location.side ?? "new") === "new") {
+        await expandDiscussionLine(thread.targetPath, thread.location.line).catch(() => undefined);
+      }
+      setLocalFocusRequest((current) => ({
+        path: thread.targetPath!,
+        revision: Math.max(Date.now(), (current?.revision ?? 0) + 1),
+        ...((thread.location?.side ?? "new") === "new"
+          ? { lineStart: thread.location!.line, lineEnd: thread.location!.line }
+          : {}),
+        reveal: "center-if-hidden",
+      }));
+      setDiscussionInboxOpen(false);
+    },
+    [expandDiscussionLine],
+  );
+  const handleOpenLspDefinition = useCallback(
+    (location: { path: string; lineStart: number; lineEnd: number }) => {
+      onOpenFile?.(location.path, {
+        lineStart: location.lineStart,
+        lineEnd: location.lineEnd,
+        openMode: "source",
+      });
+    },
+    [onOpenFile],
+  );
+  const handleEditLine = useCallback(
+    (line: ReviewableChangedLine) => {
+      const lineStart = line.target.editLineNumber;
+      if (!lineStart) return;
+      onOpenFile?.(line.target.filePath, { lineStart, openMode: "source" });
+    },
+    [onOpenFile],
+  );
+  const loadChangesLspSource = contextExpansion.loadSource;
+  const expandSearchLine = contextExpansion.expandLine;
+  const searchChanges = contextExpansion.search;
+  useEffect(() => {
+    if (!documentFocusRequest?.lineStart) return;
+    void expandSearchLine(documentFocusRequest.path, documentFocusRequest.lineStart).catch(
+      () => undefined,
+    );
+  }, [documentFocusRequest, expandSearchLine]);
+  const changesLsp = useChangesLsp({
+    serverId,
+    cwd,
+    active: enabled !== false,
+    dirty: hasUncommittedChanges,
+    loadSource: loadChangesLspSource,
+    onOpenDefinition: handleOpenLspDefinition,
+  });
+  const revealSearchMatch = useCallback(
+    async (match: ChangesSearchMatch) => {
+      if (match.kind === "text") await expandSearchLine(match.filePath, match.lineNumber);
+    },
+    [expandSearchLine],
+  );
+  const workingMode = useMemo<WorkingDiffMode>(
     () => ({
       kind: "working" as const,
       reviewActions,
+      fileReviews,
+      onExpandContext: contextExpansionSupported ? contextExpansion.expand : undefined,
+      onExpandFile: contextExpansion.expandFile,
       focusPath: documentFocusRequest?.path,
       focusRequestId: documentFocusRequest?.revision,
+      focusLineStart: documentFocusRequest?.lineStart,
+      focusLineEnd: documentFocusRequest?.lineEnd,
+      focusColumn: documentFocusRequest?.column,
+      focusReveal: documentFocusRequest?.reveal,
+      onActivate,
       workspaceFileDragScope: workspaceId ? { serverId, workspaceId } : undefined,
       onOpenFile,
+      onEditLine: onOpenFile && fileEditingSupported ? handleEditLine : undefined,
       onOpenToSide,
       onAddToChat,
       onCopyPath: handleCopyPath,
@@ -1838,14 +2329,30 @@ export function ChangesSurface({
       onDownload: handleDownloadPath,
       onDuplicate: fsEntryDuplicateEnabled ? handleDuplicatePath : undefined,
       onRevert: onRevertPath,
+      onSearch: searchChanges,
+      searchSupported: diffSearchSupported,
+      onRevealSearchMatch: revealSearchMatch,
+      lsp: changesLsp,
+      lspStatusPresentation: isMobile || (paneWidth > 0 && paneWidth < 480) ? "icon" : "label",
     }),
     [
       reviewActions,
+      fileReviews,
+      contextExpansionSupported,
+      contextExpansion.expand,
+      contextExpansion.expandFile,
       documentFocusRequest?.path,
       documentFocusRequest?.revision,
+      documentFocusRequest?.lineStart,
+      documentFocusRequest?.lineEnd,
+      documentFocusRequest?.column,
+      documentFocusRequest?.reveal,
+      onActivate,
       serverId,
       workspaceId,
       onOpenFile,
+      fileEditingSupported,
+      handleEditLine,
       onOpenToSide,
       onAddToChat,
       handleCopyPath,
@@ -1856,10 +2363,57 @@ export function ChangesSurface({
       fileManagerTarget,
       fsEntryDuplicateEnabled,
       onRevertPath,
+      searchChanges,
+      diffSearchSupported,
+      revealSearchMatch,
+      changesLsp,
+      isMobile,
+      paneWidth,
     ],
   );
 
   const hasChanges = files.length > 0;
+  const navigationOwner = useRef({});
+  const workspaceKey = useMemo(
+    () => buildWorkspaceTabPersistenceKey({ serverId, workspaceId: workspaceId ?? cwd }),
+    [cwd, serverId, workspaceId],
+  );
+  useEffect(() => {
+    if (!workspaceKey) return;
+    const owner = navigationOwner.current;
+    const snapshot = { files, isLoading: isDiffLoading, contextExpansionSupported };
+    if (presentation === "diff") {
+      publishWorkingDiffNavigationSnapshot(workspaceKey, owner, {
+        ...snapshot,
+        tabId: modeScope,
+      });
+      return () => clearWorkingDiffNavigationSnapshot(workspaceKey, owner);
+    }
+    if (enabled === false) return;
+    publishInlineWorkingDiffNavigationSnapshot(workspaceKey, owner, {
+      ...snapshot,
+      navigate: (target) => {
+        if (!target.focusPath) return;
+        setLocalFocusRequest({
+          path: target.focusPath,
+          revision: target.focusRequestId ?? Date.now(),
+          lineStart: target.focusLineStart,
+          lineEnd: target.focusLineEnd,
+          column: target.focusColumn,
+          reveal: target.focusReveal,
+        });
+      },
+    });
+    return () => clearInlineWorkingDiffNavigationSnapshot(workspaceKey, owner);
+  }, [
+    contextExpansionSupported,
+    enabled,
+    files,
+    isDiffLoading,
+    modeScope,
+    presentation,
+    workspaceKey,
+  ]);
   const selectedDiffStat = useMemo(
     () => computeSelectedDiffStat(files, isDiffLoading),
     [files, isDiffLoading],
@@ -1874,6 +2428,25 @@ export function ChangesSurface({
     () => updateCollapsedFilePaths([]),
     [updateCollapsedFilePaths],
   );
+  const handleMarkAllReviewed = useCallback(() => {
+    fileReviews.markAll();
+    updateCollapsedFilePaths(files.map((file) => file.path));
+  }, [fileReviews, files, updateCollapsedFilePaths]);
+  const handleMarkAllUnreviewed = useCallback(() => {
+    fileReviews.clearAll();
+  }, [fileReviews]);
+  const handleOrganizeByReview = useCallback(() => {
+    const filePaths = files.map((file) => file.path);
+    const incompletePaths = filePaths.filter((path) => !fileReviews.reviewedPaths.has(path));
+    updateState({
+      ...instanceState,
+      collapsedFilePaths: collapseReviewedFiles(filePaths, fileReviews.reviewedPaths),
+      collapsedFolderPaths: revealFileAncestorFolders(
+        instanceState.collapsedFolderPaths,
+        incompletePaths,
+      ),
+    });
+  }, [fileReviews.reviewedPaths, files, instanceState, updateState]);
   const diffErrorMessage = diffPayloadError?.message ?? null;
   const prErrorMessage = computePrErrorMessage(githubFeaturesEnabled, prPayloadError);
   const baseRefLabel = useMemo(
@@ -1903,6 +2476,15 @@ export function ChangesSurface({
     selectUncommitted: handleSelectUncommitted,
     selectBase: handleSelectBase,
   });
+  const handleSelectComparisonBase = useCallback(
+    (nextBaseRef: string | null) =>
+      applyChangesBaseSelection({
+        baseRef: nextBaseRef,
+        setOverride: baseSelection.setOverride,
+        showCommitted: handleSelectBase,
+      }),
+    [baseSelection.setOverride, handleSelectBase],
+  );
 
   const diffContent: ReactElement = (
     <DiffBodyContent
@@ -1995,15 +2577,32 @@ export function ChangesSurface({
   const changesHeaderModel = useMemo(
     () =>
       buildChangesHeaderModel({
+        baseSelection,
         branchName: currentBranchName,
         committedDescription: committedDiffDescription,
         compact: isMobile,
         cwd,
         diffMode,
+        discussions: discussions.isGitLabMr
+          ? {
+              count: discussionThreads.filter(isOpenChangesDiscussion).length,
+              onOpen: handleOpenDiscussions,
+            }
+          : null,
+        reviews: hasChanges
+          ? {
+              fileReviews,
+              onMarkAllReviewed: handleMarkAllReviewed,
+              onMarkAllUnreviewed: handleMarkAllUnreviewed,
+              onOrganizeByReview: handleOrganizeByReview,
+            }
+          : null,
         gitActions,
+        hasUncommittedChanges,
         mode: toolbarMode,
         onOpenPullRequest: handleOpenPullRequest,
         onSelectBase: handleSelectBase,
+        onSelectComparisonBase: handleSelectComparisonBase,
         onSelectUncommitted: handleSelectUncommitted,
         pullRequest: selectPrHintFromStatus(pullRequestStatus, forge),
         selectedDiffStat,
@@ -2011,14 +2610,25 @@ export function ChangesSurface({
         workspaceId,
       }),
     [
+      baseSelection,
       committedDiffDescription,
       currentBranchName,
       cwd,
       diffMode,
+      discussionThreads,
+      discussions.isGitLabMr,
+      fileReviews,
       gitActions,
+      handleMarkAllReviewed,
+      handleMarkAllUnreviewed,
+      handleOrganizeByReview,
+      handleOpenDiscussions,
       handleOpenPullRequest,
       handleSelectBase,
+      handleSelectComparisonBase,
       handleSelectUncommitted,
+      hasChanges,
+      hasUncommittedChanges,
       isMobile,
       forge,
       pullRequestStatus,
@@ -2035,12 +2645,15 @@ export function ChangesSurface({
         onContextMenu: (event: { preventDefault?: () => void }) => event.preventDefault?.(),
       }}
       style={styles.container}
+      onLayout={handlePaneLayout}
     >
       {isGit ? (
         <ChangesHeader
           compact={isMobile}
           repository={changesHeaderModel.repository}
           comparison={changesHeaderModel.comparison}
+          discussions={changesHeaderModel.discussions}
+          reviews={changesHeaderModel.reviews}
           sidebarSurface={presentation === "tree"}
         />
       ) : null}
@@ -2063,6 +2676,21 @@ export function ChangesSurface({
         collapsed={instanceState.commitsCollapsed}
         onCollapsedChange={handleCommitsCollapsedChange}
       />
+      <ChangesDiscussionInbox
+        visible={discussionInboxOpen}
+        onClose={handleCloseDiscussions}
+        focusedThreadId={focusedDiscussionId}
+        onShowAllThreads={handleShowAllDiscussions}
+        threads={discussionThreads}
+        truncated={discussions.truncated}
+        mrUrl={discussions.mrUrl}
+        isRefreshing={discussions.isRefreshing}
+        upgradeRequired={discussions.isGitLabMr && !discussions.supported}
+        error={discussions.error}
+        onRefresh={discussions.refresh}
+        onNavigate={handleNavigateDiscussion}
+        onReply={discussions.reply}
+      />
     </View>
   );
 }
@@ -2084,6 +2712,7 @@ const styles = StyleSheet.create((theme) => ({
   changesToolbarIdentity: {
     flex: 1,
     minWidth: 0,
+    overflow: "hidden",
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[1],

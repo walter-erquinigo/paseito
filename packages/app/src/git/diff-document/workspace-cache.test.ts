@@ -1,5 +1,12 @@
 import type { ParsedDiffFile } from "@getpaseo/protocol/messages";
 import { describe, expect, it } from "vitest";
+import type { ChangesDiscussionThread } from "@/git/changes-discussions";
+import {
+  INLINE_COLLAPSED_FORGE_DISCUSSION_HEIGHT,
+  INLINE_FORGE_DISCUSSION_HEIGHT,
+  INLINE_RESOLVED_FORGE_DISCUSSION_HEIGHT,
+  type InlineReviewActions,
+} from "@/review/inline-review";
 import { createDiffDocumentWorkspaceCache } from "./workspace-cache";
 import type { BuildDiffDocumentModelInput, DiffPalette, TextMeasurer } from "./types";
 
@@ -46,6 +53,60 @@ function countingMeasurer() {
     },
   };
   return { measureText, stats };
+}
+
+function reviewActions(overrides: Partial<InlineReviewActions> = {}): InlineReviewActions {
+  return {
+    canSuggest: false,
+    composerMode: null,
+    commentsByTarget: new Map(),
+    editor: null,
+    suggestionsByTarget: new Map(),
+    suggestionEditor: null,
+    selectedRangeTargetKeys: new Set(),
+    suggestionRangeError: null,
+    onStartComment: () => undefined,
+    onEditComment: () => undefined,
+    onCancelEditor: () => undefined,
+    onSaveEditor: () => undefined,
+    onDeleteComment: () => undefined,
+    onStartSuggestion: () => undefined,
+    onSwitchSuggestionToComment: () => undefined,
+    onBeginSuggestionDrag: () => undefined,
+    onUpdateSuggestionDrag: () => undefined,
+    onShiftSuggestionRange: () => undefined,
+    onPressReviewGutter: () => undefined,
+    onCancelSuggestionRange: () => undefined,
+    onClearSuggestionRangeError: () => undefined,
+    onCancelSuggestion: () => undefined,
+    onEditSuggestion: () => undefined,
+    onExtendSuggestion: () => undefined,
+    onSaveSuggestion: () => undefined,
+    onDeleteSuggestion: () => undefined,
+    ...overrides,
+  };
+}
+
+function forgeThread(overrides: Partial<ChangesDiscussionThread> = {}): ChangesDiscussionThread {
+  return {
+    id: "discussion-1",
+    comments: [
+      {
+        id: "note-1",
+        kind: "comment",
+        author: "Greptile",
+        authorUrl: null,
+        avatarUrl: null,
+        body: "Review feedback",
+        createdAt: 1,
+        url: "https://gitlab.example/note/1",
+      },
+    ],
+    placement: "exact",
+    targetKey: "src/a.ts:new:1",
+    targetPath: "src/a.ts",
+    ...overrides,
+  };
 }
 
 function modelInput(
@@ -135,6 +196,49 @@ describe("diff document workspace cache", () => {
 
     expect(first.rows[0]).toMatchObject({ kind: "status", label: "Binary" });
     expect(second.rows[0]).toMatchObject({ kind: "status", label: "Binary blob" });
+  });
+
+  it("invalidates cached row geometry when forge threads load or collapse", () => {
+    const cache = createDiffDocumentWorkspaceCache();
+    const { measureText } = countingMeasurer();
+    const files = [diffFile()];
+    const input = modelInput(files, measureText, { reviewActions: reviewActions() });
+    const thread = forgeThread();
+
+    const withoutThread = cache.buildModel(input);
+    const expanded = cache.buildModel({
+      ...input,
+      reviewActions: reviewActions({
+        forgeThreadsByTarget: new Map([["src/a.ts:new:1", [thread]]]),
+      }),
+    });
+    const collapsed = cache.buildModel({
+      ...input,
+      reviewActions: reviewActions({
+        forgeThreadsByTarget: new Map([["src/a.ts:new:1", [thread]]]),
+        collapsedForgeThreadIds: new Set([thread.id]),
+      }),
+    });
+    const resolved = cache.buildModel({
+      ...input,
+      reviewActions: reviewActions({
+        forgeThreadsByTarget: new Map([["src/a.ts:new:1", [{ ...thread, isResolved: true }]]]),
+      }),
+    });
+
+    expect(withoutThread.rows[0]).toMatchObject({ kind: "line", reviewHeight: 0 });
+    expect(expanded.rows[0]).toMatchObject({
+      kind: "line",
+      reviewHeight: INLINE_FORGE_DISCUSSION_HEIGHT,
+    });
+    expect(collapsed.rows[0]).toMatchObject({
+      kind: "line",
+      reviewHeight: INLINE_COLLAPSED_FORGE_DISCUSSION_HEIGHT,
+    });
+    expect(resolved.rows[0]).toMatchObject({
+      kind: "line",
+      reviewHeight: INLINE_RESOLVED_FORGE_DISCUSSION_HEIGHT,
+    });
   });
 
   it("shares loaded typography and its text measurer across mounts", async () => {
