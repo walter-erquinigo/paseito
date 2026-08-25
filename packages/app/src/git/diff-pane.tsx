@@ -1444,6 +1444,7 @@ export function ChangesSurface({
   const { settings: appSettings } = useAppSettings();
   const { t } = useTranslation();
   const isMobile = useIsCompactFormFactor();
+  const [paneWidth, setPaneWidth] = useState(0);
   const canUseSplitLayout = isWeb && !isMobile;
   const instanceState = resolveChangesState(changesState);
   const updateState = resolveStateChange(onStateChange);
@@ -1745,6 +1746,7 @@ export function ChangesSurface({
           searchSupported: diffSearchSupported,
           onRevealSearchMatch: revealSearchMatch,
           lsp: changesLsp,
+          lspStatusPresentation: isMobile || (paneWidth > 0 && paneWidth < 480) ? "icon" : "label",
         },
         contextExpansionSupported,
         expandContext: contextExpansion.expand,
@@ -1781,11 +1783,12 @@ export function ChangesSurface({
       diffSearchSupported,
       revealSearchMatch,
       changesLsp,
+      isMobile,
+      paneWidth,
     ],
   );
 
   const hasChanges = files.length > 0;
-  const [paneWidth, setPaneWidth] = useState(0);
   const navigatorOwner = useRef({});
   const selectedNavigatorPath = retainSelectedChangesFile(
     instanceState.selectedFilePath ?? null,

@@ -1,6 +1,9 @@
 import { useCallback } from "react";
 import { Text, View } from "react-native";
-import { StyleSheet } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
+import { Code2 } from "lucide-react-native";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import type { Theme } from "@/styles/theme";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -23,6 +26,49 @@ export interface LspStatusMenuProps {
   onFormatOnSaveChange?(enabled: boolean): void;
   onRetry(): void;
   testIDPrefix?: string;
+  presentation?: "label" | "icon";
+}
+
+const ThemedCode2 = withUnistyles(Code2);
+const secondaryIconColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
+const errorIconColorMapping = (theme: Theme) => ({ color: theme.colors.palette.red[300] });
+
+function LspStatusTrigger({
+  presentation,
+  statusLabel,
+  unavailable,
+  testIDPrefix,
+}: {
+  presentation: "label" | "icon";
+  statusLabel: string;
+  unavailable: boolean;
+  testIDPrefix: string;
+}) {
+  const trigger = (
+    <DropdownMenuTrigger
+      style={[styles.trigger, presentation === "icon" && styles.iconTrigger]}
+      accessibilityLabel={`Language server settings: ${statusLabel}`}
+      testID={`${testIDPrefix}-menu`}
+    >
+      {presentation === "icon" ? (
+        <ThemedCode2
+          size={14}
+          uniProps={unavailable ? errorIconColorMapping : secondaryIconColorMapping}
+        />
+      ) : (
+        <Text style={unavailable ? styles.error : styles.secondary}>{statusLabel}</Text>
+      )}
+    </DropdownMenuTrigger>
+  );
+  if (presentation !== "icon") return trigger;
+  return (
+    <Tooltip delayDuration={300} enabledOnDesktop enabledOnMobile={false}>
+      <TooltipTrigger asChild>{trigger}</TooltipTrigger>
+      <TooltipContent side="bottom">
+        <Text style={styles.tooltipText}>{statusLabel}</Text>
+      </TooltipContent>
+    </Tooltip>
+  );
 }
 
 export function LspStatusMenu({
@@ -36,6 +82,7 @@ export function LspStatusMenu({
   onFormatOnSaveChange,
   onRetry,
   testIDPrefix = "file-lsp",
+  presentation = "label",
 }: LspStatusMenuProps) {
   const paused = Boolean(pausedReason);
   const statusLabel = lspStatusLabel(enabled, snapshot, paused);
@@ -47,13 +94,12 @@ export function LspStatusMenu({
   const unavailable = snapshot.status === "unavailable" && enabled && !paused;
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger
-        style={styles.trigger}
-        accessibilityLabel="Language server settings"
-        testID={`${testIDPrefix}-menu`}
-      >
-        <Text style={unavailable ? styles.error : styles.secondary}>{statusLabel}</Text>
-      </DropdownMenuTrigger>
+      <LspStatusTrigger
+        presentation={presentation}
+        statusLabel={statusLabel}
+        unavailable={unavailable}
+        testIDPrefix={testIDPrefix}
+      />
       <DropdownMenuContent align="end" width={320}>
         <DropdownMenuItem
           selected={enabled}
@@ -146,8 +192,10 @@ const styles = StyleSheet.create((theme) => ({
     paddingHorizontal: theme.spacing[2],
     borderRadius: theme.borderRadius.sm,
   },
+  iconTrigger: { minWidth: 24, width: 24, paddingHorizontal: 0 },
   secondary: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.sm },
   error: { color: theme.colors.palette.red[300], fontSize: theme.fontSize.sm },
+  tooltipText: { color: theme.colors.popoverForeground, fontSize: theme.fontSize.sm },
   detail: {
     paddingHorizontal: theme.spacing[3],
     paddingVertical: theme.spacing[2],

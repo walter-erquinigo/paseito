@@ -1115,6 +1115,21 @@ test("Changes LSP navigates a clean C++ revision and pauses while the workspace 
   await expect(page.getByTestId("git-diff-canvas-root")).toBeVisible({ timeout: 30_000 });
   const fileLsp = page.getByTestId("changes-lsp-src/main.cc-menu");
   await expect(fileLsp).toContainText("clangd", { timeout: 30_000 });
+  const wideHeaderBounds = await page.getByTestId("diff-file-0-header-content").boundingBox();
+  const wideLspBounds = await fileLsp.boundingBox();
+  expect(wideHeaderBounds).not.toBeNull();
+  expect(wideLspBounds).not.toBeNull();
+  expect(wideLspBounds!.y).toBeGreaterThanOrEqual(wideHeaderBounds!.y);
+  expect(wideLspBounds!.y + wideLspBounds!.height).toBeLessThanOrEqual(
+    wideHeaderBounds!.y + wideHeaderBounds!.height,
+  );
+
+  await page.setViewportSize({ width: 560, height: 900 });
+  await expect(fileLsp).toHaveText("");
+  await expect(fileLsp.locator("svg")).toHaveCount(1);
+  await expect(fileLsp).toHaveAccessibleName(/clangd/);
+  await page.setViewportSize({ width: 1400, height: 900 });
+  await expect(fileLsp).toContainText("clangd");
 
   const addPosition = await sourceTokenPosition(page, "return add(3, 4);", "add");
   await page.mouse.move(addPosition.x, addPosition.y);

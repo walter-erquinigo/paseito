@@ -54,6 +54,7 @@ export interface WorkingDiffMode {
   onRevealSearchMatch?: (match: ChangesSearchMatch) => void | Promise<void>;
   /** The shared editor session controller. Only current-side canvas cells become targets. */
   lsp?: ChangesLspController;
+  lspStatusPresentation?: "label" | "icon";
 }
 
 export interface DiffReviewPresentation {

@@ -80,6 +80,50 @@ function WorkingDocumentFileHeader({
     () => <DocumentFileReviewControl file={file} mode={mode} onToggleFile={onToggleFile} />,
     [file, mode, onToggleFile],
   );
+  const canExpandCompleteFile = Boolean(
+    onExpandFile && buildDiffContextRegions(file.file).length > 0,
+  );
+  const headerActions = useMemo(
+    () => (
+      <View style={styles.headerActions}>
+        {canExpandCompleteFile ? (
+          <Tooltip delayDuration={300} enabledOnDesktop enabledOnMobile={false}>
+            <TooltipTrigger asChild>
+              <Button
+                accessibilityLabel={`Show entire ${file.path} file`}
+                leftIcon={ListChevronsUpDown}
+                onPress={expandFile}
+                size="xs"
+                style={styles.expandFileControl}
+                testID={`diff-file-${file.fileIndex}-expand-file`}
+                variant="ghost"
+              />
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              <Text style={styles.tooltipText}>Show entire file</Text>
+            </TooltipContent>
+          </Tooltip>
+        ) : null}
+        {mode.lsp ? (
+          <DocumentFileLspStatus
+            filePath={file.path}
+            lsp={mode.lsp}
+            presentation={mode.lspStatusPresentation ?? "label"}
+          />
+        ) : null}
+        {reviewControl}
+      </View>
+    ),
+    [
+      canExpandCompleteFile,
+      expandFile,
+      file.fileIndex,
+      file.path,
+      mode.lsp,
+      mode.lspStatusPresentation,
+      reviewControl,
+    ],
+  );
   return (
     <View style={styles.root}>
       <FileHeader
@@ -99,28 +143,9 @@ function WorkingDocumentFileHeader({
         onDownload={mode.onDownload}
         onDuplicate={mode.onDuplicate}
         onRevert={mode.onRevert}
-        trailingContent={reviewControl}
+        trailingContent={headerActions}
         testID={`diff-file-${file.fileIndex}`}
       />
-      {onExpandFile && buildDiffContextRegions(file.file).length > 0 ? (
-        <Tooltip delayDuration={300} enabledOnDesktop enabledOnMobile={false}>
-          <TooltipTrigger asChild>
-            <Button
-              accessibilityLabel={`Show entire ${file.path} file`}
-              leftIcon={ListChevronsUpDown}
-              onPress={expandFile}
-              size="xs"
-              style={styles.expandFileControl}
-              testID={`diff-file-${file.fileIndex}-expand-file`}
-              variant="ghost"
-            />
-          </TooltipTrigger>
-          <TooltipContent side="bottom">
-            <Text style={styles.tooltipText}>Show entire file</Text>
-          </TooltipContent>
-        </Tooltip>
-      ) : null}
-      {mode.lsp ? <DocumentFileLspStatus filePath={file.path} lsp={mode.lsp} /> : null}
     </View>
   );
 }
@@ -164,7 +189,15 @@ function DocumentFileReviewControl({
   );
 }
 
-function DocumentFileLspStatus({ filePath, lsp }: { filePath: string; lsp: ChangesLspController }) {
+function DocumentFileLspStatus({
+  filePath,
+  lsp,
+  presentation,
+}: {
+  filePath: string;
+  lsp: ChangesLspController;
+  presentation: "label" | "icon";
+}) {
   const language = lspLanguageForFile(filePath);
   const subscribe = useCallback(
     (listener: () => void) => lsp.subscribeFile(filePath, listener),
@@ -191,6 +224,7 @@ function DocumentFileLspStatus({ filePath, lsp }: { filePath: string; lsp: Chang
       }
       onEnabledChange={lsp.setEnabled}
       onRetry={retry}
+      presentation={presentation}
       testIDPrefix={`changes-lsp-${filePath}`}
     />
   );
@@ -204,13 +238,16 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     justifyContent: "center",
   },
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[1],
+    flexShrink: 0,
+  },
   expandFileControl: {
-    position: "absolute",
-    right: 34,
-    top: 1,
-    width: 28,
+    width: 24,
+    height: 24,
     paddingHorizontal: 0,
-    zIndex: 8,
   },
   tooltipText: { color: theme.colors.foreground, fontSize: theme.fontSize.sm },
 }));
@@ -222,23 +259,33 @@ function documentFileHeaderPropsEqual(
   if (!documentFileHeaderIdentityMatches(previous, next)) return false;
   if (previous.mode.kind === "commit" || next.mode.kind === "commit") return true;
   return (
-    previous.mode.onFilePress === next.mode.onFilePress &&
-    previous.mode.workspaceFileDragScope === next.mode.workspaceFileDragScope &&
-    previous.mode.onOpenFile === next.mode.onOpenFile &&
-    previous.mode.onAddToChat === next.mode.onAddToChat &&
-    previous.mode.onCopyPath === next.mode.onCopyPath &&
-    previous.mode.onCopyRelativePath === next.mode.onCopyRelativePath &&
-    previous.mode.onReveal === next.mode.onReveal &&
-    previous.mode.revealTargetName === next.mode.revealTargetName &&
-    previous.mode.onDownload === next.mode.onDownload &&
-    previous.mode.onDuplicate === next.mode.onDuplicate &&
-    previous.mode.onRevert === next.mode.onRevert &&
-    previous.mode.onExpandFile === next.mode.onExpandFile &&
-    previous.mode.onSearch === next.mode.onSearch &&
-    previous.mode.onRevealSearchMatch === next.mode.onRevealSearchMatch &&
-    previous.mode.searchSupported === next.mode.searchSupported &&
-    previous.mode.lsp === next.mode.lsp &&
+    documentFileHeaderWorkingModeMatches(previous.mode, next.mode) &&
     previous.onFocusDocument === next.onFocusDocument
+  );
+}
+
+function documentFileHeaderWorkingModeMatches(
+  previous: Extract<DiffDocumentProps["mode"], { kind: "working" }>,
+  next: Extract<DiffDocumentProps["mode"], { kind: "working" }>,
+): boolean {
+  return (
+    previous.onFilePress === next.onFilePress &&
+    previous.workspaceFileDragScope === next.workspaceFileDragScope &&
+    previous.onOpenFile === next.onOpenFile &&
+    previous.onAddToChat === next.onAddToChat &&
+    previous.onCopyPath === next.onCopyPath &&
+    previous.onCopyRelativePath === next.onCopyRelativePath &&
+    previous.onReveal === next.onReveal &&
+    previous.revealTargetName === next.revealTargetName &&
+    previous.onDownload === next.onDownload &&
+    previous.onDuplicate === next.onDuplicate &&
+    previous.onRevert === next.onRevert &&
+    previous.onExpandFile === next.onExpandFile &&
+    previous.onSearch === next.onSearch &&
+    previous.onRevealSearchMatch === next.onRevealSearchMatch &&
+    previous.searchSupported === next.searchSupported &&
+    previous.lsp === next.lsp &&
+    previous.lspStatusPresentation === next.lspStatusPresentation
   );
 }
 
