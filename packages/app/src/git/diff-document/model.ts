@@ -338,7 +338,19 @@ export function reviewGeometryKey(
         reviewActions.suggestionEditor.suggestionId,
       ]
     : null;
-  return JSON.stringify([comments, suggestions, editor, suggestionEditor]);
+  const forgeThreads = [...(reviewActions.forgeThreadsByTarget?.entries() ?? [])]
+    .map(([target, threads]) => [
+      target,
+      threads
+        .map((thread) => [
+          thread.id,
+          thread.isResolved === true,
+          reviewActions.collapsedForgeThreadIds?.has(thread.id) === true,
+        ])
+        .sort(([left], [right]) => String(left).localeCompare(String(right))),
+    ])
+    .sort(([left], [right]) => String(left).localeCompare(String(right)));
+  return JSON.stringify([comments, suggestions, editor, suggestionEditor, forgeThreads]);
 }
 
 export function expandedBodyBorderTop(file: DiffFileSection): number | null {

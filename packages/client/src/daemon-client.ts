@@ -51,6 +51,7 @@ import type {
   CheckoutGithubGetCheckDetailsResponse,
   CheckoutPrStatusResponse,
   PullRequestTimelineResponse,
+  CheckoutForgeDiscussionReplyResponse,
   CheckoutSwitchBranchResponse,
   StashSaveResponse,
   StashPopResponse,
@@ -414,6 +415,7 @@ type CheckoutForgeGetCheckDetailsPayload = CheckoutForgeGetCheckDetailsResponse[
 type CheckoutGithubGetCheckDetailsPayload = CheckoutGithubGetCheckDetailsResponse["payload"];
 type CheckoutPrStatusPayload = CheckoutPrStatusResponse["payload"];
 type PullRequestTimelinePayload = PullRequestTimelineResponse["payload"];
+type CheckoutForgeDiscussionReplyPayload = CheckoutForgeDiscussionReplyResponse["payload"];
 type CheckoutSwitchBranchPayload = CheckoutSwitchBranchResponse["payload"];
 export type RenameBranchResult = z.infer<typeof CheckoutRenameBranchResponseSchema>["payload"];
 type StashSavePayload = StashSaveResponse["payload"];
@@ -3716,6 +3718,7 @@ export class DaemonClient {
         files: payload.files,
         error: payload.error,
         diffTooLarge: payload.diffTooLarge,
+        comparisonIdentity: payload.comparisonIdentity,
         requestId: payload.requestId,
       };
     } finally {
@@ -4123,6 +4126,24 @@ export class DaemonClient {
         repoName: input.repoName,
       },
       responseType: "pull_request_timeline_response",
+    });
+  }
+
+  async replyToForgeDiscussion(
+    input: {
+      cwd: string;
+      changeRequestNumber: number;
+      discussionId: string;
+      body: string;
+    },
+    requestId?: string,
+  ): Promise<CheckoutForgeDiscussionReplyPayload> {
+    return this.sendNamespacedCorrelatedSessionRequest<"checkout.forge.discussion.reply.response">({
+      requestId,
+      message: {
+        type: "checkout.forge.discussion.reply.request",
+        ...input,
+      },
     });
   }
 

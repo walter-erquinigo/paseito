@@ -147,13 +147,10 @@ function secondaryWorkspaceTabTargetsEqual(
       left.focusReveal === right.focusReveal
     );
   }
-  if (left.kind === "files" && right.kind === "files") {
-    return true;
-  }
-  if (left.kind === "changes_tree" && right.kind === "changes_tree") {
-    return true;
-  }
-  if (left.kind === "pull_request" && right.kind === "pull_request") {
+  if (
+    left.kind === right.kind &&
+    (left.kind === "files" || left.kind === "changes_tree" || left.kind === "pull_request")
+  ) {
     return true;
   }
   if (left.kind === "setup" && right.kind === "setup") {
