@@ -22,6 +22,13 @@ export function expandOnlyUnreviewedFiles(
   return filePaths.filter((path) => !reviewedPaths.has(path));
 }
 
+export function collapseReviewedFiles(
+  filePaths: readonly string[],
+  reviewedPaths: ReadonlySet<string>,
+): string[] {
+  return filePaths.filter((path) => reviewedPaths.has(path));
+}
+
 export function revealFileAncestorFolders(
   collapsedFolders: readonly string[],
   filePaths: readonly string[],

@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useSyncExternalStore } from "react";
+import { memo, useCallback, useEffect, useMemo, useSyncExternalStore } from "react";
 import { Text, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import { ListChevronsUpDown } from "lucide-react-native";
@@ -76,6 +76,10 @@ function WorkingDocumentFileHeader({
     await onExpandFile?.(file.path);
     onFocusDocument?.();
   }, [file.path, onExpandFile, onFocusDocument]);
+  const reviewControl = useMemo(
+    () => <DocumentFileReviewControl file={file} mode={mode} onToggleFile={onToggleFile} />,
+    [file, mode, onToggleFile],
+  );
   return (
     <View style={styles.root}>
       <FileHeader
@@ -95,6 +99,7 @@ function WorkingDocumentFileHeader({
         onDownload={mode.onDownload}
         onDuplicate={mode.onDuplicate}
         onRevert={mode.onRevert}
+        trailingContent={reviewControl}
         testID={`diff-file-${file.fileIndex}`}
       />
       {onExpandFile && buildDiffContextRegions(file.file).length > 0 ? (
@@ -116,7 +121,6 @@ function WorkingDocumentFileHeader({
         </Tooltip>
       ) : null}
       {mode.lsp ? <DocumentFileLspStatus filePath={file.path} lsp={mode.lsp} /> : null}
-      <DocumentFileReviewControl file={file} mode={mode} onToggleFile={onToggleFile} />
     </View>
   );
 }
@@ -140,10 +144,12 @@ function DocumentFileReviewControl({
   const toggleReview = useCallback(
     (event: { stopPropagation?: () => void }) => {
       event.stopPropagation?.();
-      reviews?.toggle(file.path);
-      if (reviewed && file.isCollapsed) onToggleFile(file.path);
+      const nextReviewed = reviews?.toggle(file.path);
+      if (nextReviewed !== undefined && file.isCollapsed !== nextReviewed) {
+        onToggleFile(file.path);
+      }
     },
-    [file.isCollapsed, file.path, onToggleFile, reviewed, reviews],
+    [file.isCollapsed, file.path, onToggleFile, reviews],
   );
   if (!reviews?.available || !file.file.contentRevision) return null;
   return (
@@ -152,7 +158,7 @@ function DocumentFileReviewControl({
       alwaysVisible
       onPress={toggleReview}
       state={reviewState}
-      style={styles.reviewControl}
+      style={styles.headerControl}
       testID={`diff-file-review-${file.path}`}
     />
   );
@@ -192,15 +198,11 @@ function DocumentFileLspStatus({ filePath, lsp }: { filePath: string; lsp: Chang
 
 const styles = StyleSheet.create((theme) => ({
   root: { position: "relative" },
-  reviewControl: {
-    position: "absolute",
-    right: 8,
-    top: 4,
+  headerControl: {
     width: 22,
     height: 22,
     alignItems: "center",
     justifyContent: "center",
-    zIndex: 8,
   },
   expandFileControl: {
     position: "absolute",

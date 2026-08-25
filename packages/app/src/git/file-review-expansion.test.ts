@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   collapseReviewedFile,
+  collapseReviewedFiles,
   expandOnlyUnreviewedFiles,
   expandInvalidatedFiles,
   expandUnreviewedFile,
@@ -42,6 +43,15 @@ describe("file review expansion", () => {
     expect(
       expandOnlyUnreviewedFiles(["src/a.ts", "src/b.ts"], new Set(["src/a.ts", "src/b.ts"])),
     ).toEqual([]);
+  });
+
+  it("collapses reviewed files and leaves incomplete files expanded", () => {
+    expect(
+      collapseReviewedFiles(
+        ["src/a.ts", "src/b.ts", "src/c.ts"],
+        new Set(["src/a.ts", "src/c.ts"]),
+      ),
+    ).toEqual(["src/a.ts", "src/c.ts"]);
   });
 
   it("opens only the tree folders needed to reveal incomplete files", () => {

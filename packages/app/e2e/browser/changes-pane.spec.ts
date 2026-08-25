@@ -425,6 +425,45 @@ test("line review controls stay in the fixed gutter across diff layouts", async 
   );
 });
 
+test("Review menu marks, clears, and organizes every changed file", async ({ page }) => {
+  const workspace = await createWorkspaceWithMountedTabDiff({ includeNestedFolders: true });
+  await useUnwrappedDiffLines(page);
+  await openWorkspaceChanges(page, workspace);
+
+  const reviewMenu = page.getByTestId("changes-review-menu");
+  const fileHeaders = page.getByTestId(/^diff-file-\d+-toggle$/);
+  const fileReviewControls = page.getByTestId(/^diff-file-review-/);
+  await expect(reviewMenu).toBeVisible();
+  await expect(reviewMenu).toContainText(/^Review 0\//);
+  await expect(fileHeaders).toHaveCount(3);
+  await expect(fileReviewControls).toHaveCount(3);
+
+  const firstStatBounds = await page.getByTestId("diff-file-0-stat").boundingBox();
+  const firstReviewBounds = await fileReviewControls.first().boundingBox();
+  expect(firstStatBounds).not.toBeNull();
+  expect(firstReviewBounds).not.toBeNull();
+  expect(firstStatBounds!.x + firstStatBounds!.width).toBeLessThanOrEqual(firstReviewBounds!.x);
+
+  await reviewMenu.click();
+  await page.getByTestId("changes-review-mark-all").click();
+  for (const header of await fileHeaders.all()) {
+    await expect(header).toHaveAttribute("aria-expanded", "false");
+  }
+
+  await reviewMenu.click();
+  await page.getByTestId("changes-review-clear-all").click();
+  await expect(fileReviewControls.first()).toHaveAccessibleName("Mark file reviewed");
+  for (const header of await fileHeaders.all()) {
+    await expect(header).toHaveAttribute("aria-expanded", "false");
+  }
+
+  await reviewMenu.click();
+  await page.getByTestId("changes-review-organize").click();
+  for (const header of await fileHeaders.all()) {
+    await expect(header).toHaveAttribute("aria-expanded", "true");
+  }
+});
+
 test("E opens the selected review line in a focused side editor", async ({ page }) => {
   const workspace = await createWorkspaceWithMountedTabDiff();
   await useUnwrappedDiffLines(page);

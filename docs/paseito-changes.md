@@ -75,10 +75,10 @@ content regardless of the selected comparison base or diff mode.
 
 Marking a file reviewed collapses it, and marking that file unreviewed expands it. If its content
 revision changes, Paseito clears the visible check and reopens the file once; returning to the
-reviewed content restores the check. The toolbar shows reviewed progress and can mark and collapse,
-or clear without expanding, every file in the current diff. A separate toolbar action expands every
-file that is not fully reviewed and collapses every completed file; in tree view it also opens the
-ancestor folders needed to reveal those incomplete files. The same records are used by Committed and
+reviewed content restores the check. The toolbar's Review progress menu can mark and collapse every
+file, clear every review without changing expansion state, or organize the diff by expanding every
+incomplete file and collapsing every completed file. Organizing also opens the ancestor folders
+needed to reveal incomplete files in either file tree. The same records are used by Committed and
 Uncommitted views, but are not committed, synchronized, sent to an agent, or posted to a forge. Older
 daemons expose an update-host message instead of attempting to infer content identity from patch
 text.
