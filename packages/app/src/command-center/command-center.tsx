@@ -411,13 +411,16 @@ function useCommandCenterState(): CommandCenterState {
     ],
   );
 
-  const updateQuery = useCallback((nextQuery: string) => {
-    fileActionRequestRef.current += 1;
-    fileActionPendingRef.current = false;
-    setFileActionError(null);
-    setFileActionLoading(false);
-    setQuery(nextQuery);
-  }, []);
+  const updateQuery = useCallback(
+    (nextQuery: string) => {
+      fileActionRequestRef.current += 1;
+      fileActionPendingRef.current = false;
+      setFileActionError(null);
+      setFileActionLoading(false);
+      setQuery(nextQuery);
+    },
+    [setQuery],
+  );
 
   useEffect(() => {
     const wasOpen = previousOpenRef.current;

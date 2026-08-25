@@ -971,8 +971,22 @@ export type CheckoutStatusGit = CheckoutStatusGitNonPaseo | CheckoutStatusGitPas
 export type CheckoutStatusResult = CheckoutStatus | CheckoutStatusGit;
 
 export type CheckoutDiffResult =
-  | { diff: string; structured?: ParsedDiffFile[]; diffTooLarge?: false }
-  | { diff: ""; structured: []; diffTooLarge: true };
+  | {
+      diff: string;
+      structured?: ParsedDiffFile[];
+      diffTooLarge?: false;
+      comparisonIdentity?: CheckoutDiffComparisonIdentity;
+    }
+  | {
+      diff: "";
+      structured: [];
+      diffTooLarge: true;
+      comparisonIdentity?: CheckoutDiffComparisonIdentity;
+    };
+
+export type CheckoutDiffComparisonIdentity =
+  | { kind: "commit_range"; baseSha: string; headSha: string }
+  | { kind: "working_tree"; baseSha: string };
 
 export interface CheckoutDiffCompare {
   mode: "uncommitted" | "base";
@@ -3469,6 +3483,30 @@ async function resolveCheckoutDiffRefs(
   };
 }
 
+async function resolveCheckoutDiffComparisonIdentity(
+  cwd: string,
+  compare: CheckoutDiffCompare,
+  refs: CheckoutDiffRefs,
+): Promise<CheckoutDiffComparisonIdentity | undefined> {
+  try {
+    const base = await runGitCommand(["rev-parse", refs.baseRef], {
+      cwd,
+      envOverlay: READ_ONLY_GIT_ENV,
+    });
+    const baseSha = base.stdout.trim();
+    if (!baseSha) return undefined;
+    if (compare.mode === "uncommitted") return { kind: "working_tree", baseSha };
+    const head = await runGitCommand(["rev-parse", refs.targetRef ?? "HEAD"], {
+      cwd,
+      envOverlay: READ_ONLY_GIT_ENV,
+    });
+    const headSha = head.stdout.trim();
+    return headSha ? { kind: "commit_range", baseSha, headSha } : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 const CHECKOUT_DIFF_CONTEXT_MAX_LINES = 5_000;
 const CHECKOUT_DIFF_CONTEXT_MAX_BYTES = 1024 * 1024;
 const DELETED_CONTENT_REVISION = "deleted:v1";
@@ -3845,6 +3883,11 @@ export async function getCheckoutDiff(
     effectiveRefsForDiff = { ...refsForDiff, baseRef: EMPTY_TREE_OBJECT_ID };
     changes = await listCheckoutFileChanges(cwd, effectiveRefsForDiff, ignoreWhitespace);
   }
+  const comparisonIdentity = await resolveCheckoutDiffComparisonIdentity(
+    cwd,
+    compare,
+    effectiveRefsForDiff,
+  );
   changes.sort((a, b) => {
     if (a.path === b.path) return 0;
     return a.path < b.path ? -1 : 1;
@@ -3903,7 +3946,7 @@ export async function getCheckoutDiff(
       appendTrackedPlaceholderComment,
     });
     if (!didAppendTrackedDiffs) {
-      return { diff: "", structured: [], diffTooLarge: true };
+      return { diff: "", structured: [], diffTooLarge: true, comparisonIdentity };
     }
   } else {
     for (const change of trackedChanges) {
@@ -3927,18 +3970,18 @@ export async function getCheckoutDiff(
       appendDiff,
     });
     if (!didAppendUntrackedDiff) {
-      return { diff: "", structured: [], diffTooLarge: true };
+      return { diff: "", structured: [], diffTooLarge: true, comparisonIdentity };
     }
   }
 
   if (compare.includeStructured) {
     const files = await attachContentRevisions(cwd, effectiveRefsForDiff, structured.files);
     if (Buffer.byteLength(JSON.stringify(files), "utf8") > CHECKOUT_DIFF_MAX_STRUCTURED_BYTES) {
-      return { diff: "", structured: [], diffTooLarge: true };
+      return { diff: "", structured: [], diffTooLarge: true, comparisonIdentity };
     }
-    return { diff: diffText, structured: files };
+    return { diff: diffText, structured: files, comparisonIdentity };
   }
-  return { diff: diffText };
+  return { diff: diffText, comparisonIdentity };
 }
 
 export async function commitChanges(

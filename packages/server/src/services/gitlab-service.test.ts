@@ -838,7 +838,7 @@ describe("createGitLabService", () => {
     expect(comment).toMatchObject({
       kind: "comment",
       id: "401",
-      author: "reviewer-a",
+      author: "Reviewer A",
       authorUrl: "https://gl/reviewer-a",
       avatarUrl: "https://gl/avatar-a.png",
       body: "Looks good to me",
@@ -902,6 +902,7 @@ describe("createGitLabService", () => {
     expect(byId.get("501")).not.toHaveProperty("location");
     // A standalone (individual) note must not be turned into a thread.
     expect(byId.get("503")).not.toHaveProperty("threadId");
+    expect(byId.get("503")).toMatchObject({ discussionId: "disc-standalone" });
   });
 
   it("maps general resolvable discussion resolution to threadIsResolved", async () => {
@@ -1320,5 +1321,104 @@ describe("createGitLabService", () => {
     await expect(service.searchIssuesAndPrs({ cwd: "/repo", query: "release" })).rejects.toThrow(
       GlabCommandError,
     );
+  });
+
+  it("maps GitLab diff identity and old-side multiline anchors", async () => {
+    const { service } = makeService((args) => {
+      if (args[0] === "mr") return ok(JSON.stringify(NESTED_GROUP_MR));
+      if (args[0] === "api") {
+        return ok(
+          JSON.stringify([
+            {
+              id: "discussion-anchor",
+              individual_note: false,
+              notes: [
+                {
+                  id: 900,
+                  body: "Old-side range",
+                  system: false,
+                  author: { username: "reviewer" },
+                  position: {
+                    base_sha: "base",
+                    start_sha: "start",
+                    head_sha: "head",
+                    old_path: "src/old.ts",
+                    new_path: "src/new.ts",
+                    old_line: 14,
+                    new_line: null,
+                    line_range: {
+                      start: { type: "old", old_line: 12, new_line: null },
+                      end: { type: "old", old_line: 14, new_line: null },
+                    },
+                  },
+                },
+              ],
+            },
+          ]),
+        );
+      }
+      throw new Error(`unexpected call: ${args.join(" ")}`);
+    });
+
+    const timeline = await service.getPullRequestTimeline({
+      cwd: "/repo",
+      prNumber: 14,
+      repoOwner: "example-group",
+      repoName: "example-project",
+    });
+    expect(timeline.items[0]).toMatchObject({
+      location: {
+        path: "src/old.ts",
+        side: "old",
+        line: 14,
+        startLine: 12,
+        position: { baseSha: "base", startSha: "start", headSha: "head" },
+      },
+    });
+  });
+
+  it("posts a discussion reply and redacts its body from classified failures", async () => {
+    const { service, calls } = makeService((args) => {
+      if (args[0] === "mr") return ok(JSON.stringify(NESTED_GROUP_MR));
+      if (args[0] === "api") {
+        return ok(
+          JSON.stringify({
+            id: 901,
+            body: "Confirmed reply",
+            system: false,
+            created_at: "2026-08-25T12:00:00Z",
+            author: { username: "author" },
+          }),
+        );
+      }
+      throw new Error(`unexpected call: ${args.join(" ")}`);
+    });
+
+    await expect(
+      service.replyToPullRequestDiscussion?.({
+        cwd: "/repo",
+        changeRequestNumber: 14,
+        discussionId: "discussion-1",
+        body: "Confirmed reply",
+      }),
+    ).resolves.toMatchObject({
+      kind: "comment",
+      body: "Confirmed reply",
+      threadId: "discussion-1",
+    });
+    expect(calls[1]).toContain("body=Confirmed reply");
+
+    const failed = makeService((args) => {
+      if (args[0] === "mr") return ok(JSON.stringify(NESTED_GROUP_MR));
+      throw { code: 1, stderr: "request failed" };
+    }).service;
+    await expect(
+      failed.replyToPullRequestDiscussion?.({
+        cwd: "/repo",
+        changeRequestNumber: 14,
+        discussionId: "discussion-1",
+        body: "secret reply body",
+      }),
+    ).rejects.not.toThrow("secret reply body");
   });
 });

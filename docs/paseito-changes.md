@@ -36,6 +36,18 @@ the expected current-file revision; a changed file rejects the request instead o
 Expansion is session-local, while persisted comments and suggestions automatically reveal their
 target region when the Changes view reopens.
 
+## GitLab discussions
+
+For a branch with an open GitLab MR, Changes shows MR discussions beside their diff lines and in
+an adaptive **MR comments** inbox. GitLab positions carry their old/new side and diff-version SHAs;
+an exact placement requires those SHAs to match the active committed comparison. A path and line
+that still exists under another comparison may be shown as **Position may be stale**, while general
+or missing positions remain in the inbox.
+
+The inbox polls while Changes is visible and supports replies through the connected host's `glab`
+authentication. A reply appears only after GitLab accepts it, and failed replies retain their text.
+Resolved threads stay collapsed inline. Older hosts keep the control visible and require an update.
+
 ## Suggested edits
 
 Starting a comment on a current-side added or context line exposes **Suggest edit**. On macOS, drag
@@ -113,19 +125,16 @@ the same uniquely anchored region are unchanged; inserted, removed, or moved amb
 are cleared. Existing file-level records are materialized as reviewed lines the first time the
 upgraded client observes that diff.
 
-## Desktop file navigator
+## Desktop file tree
 
-The full desktop Changes tab and the inline right Changes sidebar have a fixed 240px file navigator
-on the right when their containing surface is at least 800px wide. It reuses the Changes directory
-hierarchy, compresses single-child folder chains, and shows file status plus addition and deletion
-counts. Folder expansion and selection belong to each retained surface, while the whole navigator's
-collapsed preference persists across tabs and app launches. A narrower surface suppresses the
-navigator without changing that preference, so it returns automatically when the surface widens.
+Changes uses the upstream resizable tree rail as its only desktop file navigator. The rail reuses the
+Changes directory hierarchy, compresses single-child folder chains, shows file status and diff
+counts, and persists its width and folder expansion in the retained Changes surface. Its toolbar
+toggle controls the same rail; Paseito does not add a second fixed-width navigator.
 
-Selecting a navigator file expands its diff, aligns the virtualized file header with the top of the
-diff viewport, and focuses the diff surface. Repeated selections issue new focus requests. Manual
-diff scrolling does not change selection, and a selection is cleared only when that path disappears
-from the active comparison. Commit diffs and compact layouts do not render the navigator.
+Selecting a tree file expands and focuses its diff. Repeated selections issue new focus requests,
+while manual diff scrolling remains independent from tree selection. Compact layouts and commit
+diffs do not render the rail.
 
 `/` searches changed filenames and complete current-side source with smart-case matching after
 Enter. The daemon validates the displayed file set and content revisions, then returns at most

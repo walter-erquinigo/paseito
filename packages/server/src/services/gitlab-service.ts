@@ -49,6 +49,7 @@ import type {
   PullRequestTimelineError,
   PullRequestTimelineErrorKind,
   PullRequestTimelineItem,
+  ReplyToPullRequestDiscussionOptions,
   SearchIssuesAndPrsOptions,
   SearchResult,
 } from "./forge-service.js";
@@ -167,6 +168,14 @@ const GitLabMergeRequestSchema = z
     updated_at: z.string().optional(),
     references: z.object({ full: z.string().optional() }).passthrough().optional(),
     head_pipeline: GitLabPipelineSchema.nullable().optional(),
+    diff_refs: z
+      .object({
+        base_sha: z.string().nullable().optional(),
+        start_sha: z.string().nullable().optional(),
+        head_sha: z.string().nullable().optional(),
+      })
+      .nullable()
+      .optional(),
   })
   .passthrough();
 
@@ -196,11 +205,15 @@ const GitLabNoteLineRangeEndpointSchema = z
   .object({
     new_line: z.number().nullable().optional(),
     old_line: z.number().nullable().optional(),
+    type: z.enum(["old", "new"]).optional(),
   })
   .passthrough();
 
 const GitLabNotePositionSchema = z
   .object({
+    base_sha: z.string().nullable().optional(),
+    start_sha: z.string().nullable().optional(),
+    head_sha: z.string().nullable().optional(),
     new_path: z.string().nullable().optional(),
     old_path: z.string().nullable().optional(),
     new_line: z.number().nullable().optional(),
@@ -460,18 +473,28 @@ function resolvePositionLine(endpoint: GitLabNoteLineRangeEndpoint): number | un
   return endpoint.new_line ?? endpoint.old_line ?? undefined;
 }
 
+function resolvePositionSide(endpoint: GitLabNoteLineRangeEndpoint): "old" | "new" | undefined {
+  if (endpoint.type) return endpoint.type;
+  if (endpoint.new_line != null) return "new";
+  return endpoint.old_line != null ? "old" : undefined;
+}
+
 function toTimelineCommentLocation(
   note: GitLabNote,
   discussion: GitLabDiscussion,
 ): PullRequestTimelineCommentLocation | undefined {
   const position = note.position;
-  const path = position?.new_path ?? position?.old_path ?? undefined;
-  if (!position || !path) {
+  if (!position) {
     return undefined;
   }
   const line = resolvePositionLine(position);
+  const side = resolvePositionSide(position);
+  const path = resolvePositionPath(position, side);
+  if (!path) return undefined;
   const start = position.line_range?.start;
   const startLine = start ? resolvePositionLine(start) : undefined;
+  const startSide = start ? resolvePositionSide(start) : undefined;
+  const positionIdentity = resolvePositionIdentity(position);
   // Only emit a resolution state GitLab can actually own: a note that is not
   // resolvable (ordinary comments, system context) has no meaningful resolved
   // flag, and defaulting it to `false` would render a fake "unresolved" badge.
@@ -480,8 +503,29 @@ function toTimelineCommentLocation(
     path,
     ...(line != null ? { line } : {}),
     ...(startLine != null && startLine !== line ? { startLine } : {}),
+    ...(side ? { side } : {}),
+    ...(startSide && startSide !== side ? { startSide } : {}),
+    ...(positionIdentity ? { position: positionIdentity } : {}),
     threadId: discussion.id,
     ...(isResolved !== undefined ? { isResolved } : {}),
+  };
+}
+
+function resolvePositionPath(
+  position: NonNullable<GitLabNote["position"]>,
+  side?: "old" | "new",
+): string | undefined {
+  return side === "old"
+    ? (position.old_path ?? position.new_path ?? undefined)
+    : (position.new_path ?? position.old_path ?? undefined);
+}
+
+function resolvePositionIdentity(position: NonNullable<GitLabNote["position"]>) {
+  if (!position.base_sha || !position.start_sha || !position.head_sha) return undefined;
+  return {
+    baseSha: position.base_sha,
+    startSha: position.start_sha,
+    headSha: position.head_sha,
   };
 }
 
@@ -510,12 +554,13 @@ function toTimelineComment(
   return {
     kind: "comment",
     id: String(note.id),
-    author: note.author?.username ?? note.author?.name ?? "unknown",
+    author: note.author?.name ?? note.author?.username ?? "unknown",
     authorUrl: note.author?.web_url ?? null,
     avatarUrl: note.author?.avatar_url ?? null,
     body: note.body ?? "",
     createdAt: parseGitLabTimestamp(note.created_at),
     url: `${mrWebUrl}#note_${note.id}`,
+    discussionId: discussion.id,
     ...(threadId ? { threadId } : {}),
     ...(threadIsResolved !== undefined ? { threadIsResolved } : {}),
     ...(location ? { location } : {}),
@@ -857,6 +902,33 @@ export function createGitLabService(options: CreateGitLabServiceOptions = {}): F
     });
   }
 
+  async function runSensitiveJson<T>(
+    args: string[],
+    redactedArgs: string[],
+    runOptions: GlabCommandRunnerOptions,
+    schema: z.ZodType<T>,
+  ): Promise<T> {
+    const glabPath = await resolveGlab();
+    if (!glabPath) throw new GlabCliMissingError();
+    let stdout: string;
+    try {
+      stdout = (await runner(args, runOptions)).stdout.trim();
+    } catch (error) {
+      throw glabCliRunner.normalizeError(error, {
+        args: redactedArgs,
+        cwd: runOptions.cwd,
+      });
+    }
+    return parseCliJsonOutput({
+      commandName: "glab",
+      args: redactedArgs,
+      cwd: runOptions.cwd,
+      stdout,
+      schema,
+      createCommandError: (params) => new GlabCommandError(params),
+    });
+  }
+
   async function viewMergeRequest(cwd: string, ref: string): Promise<GitLabMergeRequest> {
     assertSafeGlabPositional(ref);
     return runJson(["mr", "view", ref, "-F", "json"], { cwd }, GitLabMergeRequestSchema);
@@ -1163,6 +1235,31 @@ export function createGitLabService(options: CreateGitLabServiceOptions = {}): F
       } catch (error) {
         return { ...identity, items: [], truncated: false, error: mapGlabTimelineError(error) };
       }
+    },
+
+    async replyToPullRequestDiscussion(
+      input: ReplyToPullRequestDiscussionOptions,
+    ): Promise<PullRequestTimelineItem> {
+      const body = input.body.trim();
+      if (!body) throw new Error("Reply text is required");
+      const mr = await viewMergeRequest(input.cwd, String(input.changeRequestNumber));
+      const projectPath = extractProjectPath(mr.references?.full);
+      if (!projectPath) throw new Error("GitLab merge request project path is unavailable");
+      const endpoint = `projects/${encodeURIComponent(projectPath)}/merge_requests/${mr.iid}/discussions/${encodeURIComponent(input.discussionId)}/notes`;
+      const bodyArg = `body=${body}`;
+      const note = await runSensitiveJson(
+        ["api", endpoint, "--method", "POST", "--raw-field", bodyArg],
+        ["api", endpoint, "--method", "POST", "--raw-field", "body=<redacted>"],
+        { cwd: input.cwd },
+        GitLabNoteSchema,
+      );
+      const item = toTimelineComment(
+        note,
+        { id: input.discussionId, individual_note: false, notes: [note] },
+        mr.web_url,
+      );
+      if (!item) throw new Error("GitLab returned an unreadable discussion reply");
+      return item;
     },
 
     /**

@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { Code2, Pencil, Plus, Trash2 } from "lucide-react-native";
+import { Code2, MessageSquare, Pencil, Plus, Trash2 } from "lucide-react-native";
 import {
   Pressable,
   type PointerEvent as NativePointerEvent,
@@ -49,6 +49,7 @@ import {
   type InlineReviewEditorState,
   type InlineSuggestionEditorState,
 } from "./inline-review";
+import type { ChangesDiscussionThread } from "@/git/changes-discussions";
 
 export {
   getInlineReviewThreadState,
@@ -118,6 +119,28 @@ const ThemedPencil = withUnistyles(Pencil);
 const ThemedPlus = withUnistyles(Plus);
 const ThemedTrash2 = withUnistyles(Trash2);
 const ThemedCode2 = withUnistyles(Code2);
+const ThemedMessageSquare = withUnistyles(MessageSquare);
+
+export function InlineReviewAddButton({
+  onPress,
+  style,
+}: {
+  onPress: () => void;
+  style?: StyleProp<ViewStyle>;
+}) {
+  const { t } = useTranslation();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={t("review.comment.add")}
+      hitSlop={SMALL_ACTION_HIT_SLOP}
+      onPress={onPress}
+      style={[styles.floatingAddAction, style]}
+    >
+      <ThemedPlus size={16} strokeWidth={2.4} uniProps={accentForegroundIconColorMapping} />
+    </Pressable>
+  );
+}
 
 interface InlineSuggestionSelectionState {
   kind: "drag" | "shift";
@@ -728,6 +751,7 @@ export function InlineReviewGutterCell({
   reviewTarget,
   comments,
   isLineHovered = false,
+  showCommentAffordance = true,
   lineHeight,
   onStartComment,
   reviewActions,
@@ -740,6 +764,7 @@ export function InlineReviewGutterCell({
   comments: readonly ReviewDraftComment[];
   isEditorOpen: boolean;
   isLineHovered?: boolean;
+  showCommentAffordance?: boolean;
   lineHeight?: number;
   onStartComment: (target: ReviewableDiffTarget) => void;
   reviewActions?: InlineReviewActions;
@@ -748,7 +773,8 @@ export function InlineReviewGutterCell({
   testID?: string;
 }) {
   const { t } = useTranslation();
-  const canComment = Boolean(reviewTarget);
+  const canPress = Boolean(reviewTarget);
+  const canComment = canPress && showCommentAffordance;
   const hasComments = comments.length > 0;
   const [isGutterHovered, setIsGutterHovered] = useState(false);
   const [isPressed, setIsPressed] = useState(false);
@@ -870,7 +896,7 @@ export function InlineReviewGutterCell({
       accessibilityRole={canComment ? "button" : undefined}
       accessibilityLabel={canComment ? t("review.comment.add") : undefined}
       hitSlop={canComment ? SMALL_ACTION_HIT_SLOP : undefined}
-      disabled={!canComment}
+      disabled={!canPress}
       onPress={handlePress}
       onHoverIn={handleHoverIn}
       onHoverOut={handleHoverOut}
@@ -929,6 +955,10 @@ export function InlineReviewThread({
 
   return (
     <View style={containerStyle} testID={testID}>
+      <ForgeDiscussionBlocks
+        threads={reviewActions.forgeThreadsByTarget?.get(reviewTarget.key) ?? []}
+        onOpen={reviewActions.onOpenForgeThread}
+      />
       <InlineCommentBlocks
         comments={comments}
         editor={editor}
@@ -943,6 +973,58 @@ export function InlineReviewThread({
         reviewActions={reviewActions}
       />
     </View>
+  );
+}
+
+function ForgeDiscussionBlocks({
+  threads,
+  onOpen,
+}: {
+  threads: ChangesDiscussionThread[];
+  onOpen?: (threadId: string) => void;
+}) {
+  return threads.map((thread) => (
+    <ForgeDiscussionBlock key={thread.id} thread={thread} onOpen={onOpen} />
+  ));
+}
+
+function ForgeDiscussionBlock({
+  thread,
+  onOpen,
+}: {
+  thread: ChangesDiscussionThread;
+  onOpen?: (threadId: string) => void;
+}) {
+  const first = thread.comments[0];
+  const handleOpen = useCallback(() => onOpen?.(thread.id), [onOpen, thread.id]);
+  if (!first) return null;
+  const stale = thread.placement === "stale";
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`Open GitLab discussion by ${first.author}`}
+      onPress={handleOpen}
+      style={[
+        styles.forgeDiscussion,
+        thread.isResolved && styles.forgeDiscussionResolved,
+        stale && styles.forgeDiscussionStale,
+      ]}
+    >
+      <ThemedMessageSquare size={14} uniProps={foregroundMutedIconColorMapping} />
+      <View style={styles.forgeDiscussionBody}>
+        <Text style={styles.forgeDiscussionMeta} numberOfLines={1}>
+          {first.author}
+          {thread.comments.length > 1 ? ` · ${thread.comments.length} replies` : ""}
+          {thread.isResolved ? " · Resolved" : ""}
+          {stale ? " · Position may be stale" : ""}
+        </Text>
+        {!thread.isResolved ? (
+          <Text style={styles.commentBody} numberOfLines={2}>
+            {first.body}
+          </Text>
+        ) : null}
+      </View>
+    </Pressable>
   );
 }
 
@@ -1342,12 +1424,30 @@ export function InlineReviewEditor({
     [body, onSuggestEdit],
   );
   const cancelShortcut = useMemo(
-    () => (showKeyboardHints ? <Shortcut keys={REVIEW_CANCEL_SHORTCUT_KEYS} /> : null),
-    [showKeyboardHints],
+    () =>
+      canShowKeyboardHints ? (
+        <View
+          accessibilityElementsHidden={!showKeyboardHints}
+          importantForAccessibility={showKeyboardHints ? "auto" : "no-hide-descendants"}
+          style={!showKeyboardHints ? styles.shortcutHidden : undefined}
+        >
+          <Shortcut keys={REVIEW_CANCEL_SHORTCUT_KEYS} />
+        </View>
+      ) : null,
+    [canShowKeyboardHints, showKeyboardHints],
   );
   const saveShortcut = useMemo(
-    () => (showKeyboardHints ? <Shortcut keys={REVIEW_SAVE_SHORTCUT_KEYS} /> : null),
-    [showKeyboardHints],
+    () =>
+      canShowKeyboardHints ? (
+        <View
+          accessibilityElementsHidden={!showKeyboardHints}
+          importantForAccessibility={showKeyboardHints ? "auto" : "no-hide-descendants"}
+          style={!showKeyboardHints ? styles.shortcutHidden : undefined}
+        >
+          <Shortcut keys={REVIEW_SAVE_SHORTCUT_KEYS} />
+        </View>
+      ) : null,
+    [canShowKeyboardHints, showKeyboardHints],
   );
 
   useEffect(() => {
@@ -1466,6 +1566,14 @@ const styles = StyleSheet.create((theme) => ({
     zIndex: 10,
     elevation: 10,
   },
+  floatingAddAction: {
+    width: 22,
+    height: 22,
+    borderRadius: theme.borderRadius.md,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: theme.colors.accent,
+  },
   placeholderColor: {
     color: theme.colors.foregroundMuted,
   },
@@ -1509,6 +1617,37 @@ const styles = StyleSheet.create((theme) => ({
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[2],
+  },
+  forgeDiscussion: {
+    minHeight: 74,
+    backgroundColor: theme.colors.surface2,
+    borderWidth: theme.borderWidth[1],
+    borderColor: theme.colors.borderAccent,
+    borderRadius: theme.borderRadius.lg,
+    paddingHorizontal: theme.spacing[3],
+    paddingVertical: theme.spacing[2],
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
+  },
+  forgeDiscussionResolved: {
+    minHeight: 38,
+    opacity: 0.72,
+  },
+  forgeDiscussionStale: {
+    borderColor: theme.colors.statusWarning,
+  },
+  forgeDiscussionPressed: {
+    backgroundColor: theme.colors.surface3,
+  },
+  forgeDiscussionBody: {
+    flex: 1,
+    minWidth: 0,
+    gap: theme.spacing[1],
+  },
+  forgeDiscussionMeta: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
   },
   suggestionBlock: {
     minHeight: INLINE_SUGGESTION_HEIGHT,
@@ -1624,5 +1763,8 @@ const styles = StyleSheet.create((theme) => ({
     justifyContent: "flex-end",
     alignItems: "center",
     gap: theme.spacing[2],
+  },
+  shortcutHidden: {
+    opacity: 0,
   },
 }));

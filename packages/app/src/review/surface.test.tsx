@@ -138,6 +138,7 @@ vi.mock("lucide-react-native", () => {
     Check: createIcon("Check"),
     CircleDot: createIcon("CircleDot"),
     Code2: createIcon("Code2"),
+    MessageSquare: createIcon("MessageSquare"),
     Pencil: createIcon("Pencil"),
     Plus: createIcon("Plus"),
     Trash2: createIcon("Trash2"),
@@ -686,13 +687,13 @@ describe("InlineReviewEditor", () => {
     expect(workspaceFocus.restore).not.toHaveBeenCalled();
   });
 
-  it("shows shared shortcut hints while focused on a fine-pointer screen", () => {
+  it("reserves shortcut hint space while focus moves to an action", () => {
     window.matchMedia = vi.fn().mockReturnValue({
       matches: true,
       addEventListener: vi.fn(),
       removeEventListener: vi.fn(),
     });
-    const { getByTestId, getByText, queryByText } = render(
+    const { getByTestId, getByText } = render(
       <InlineReviewEditor
         initialBody="ready"
         onCancel={vi.fn()}
@@ -706,7 +707,7 @@ describe("InlineReviewEditor", () => {
     expect(getByText(/(?:⌘⏎|Ctrl\+⏎)/)).toBeTruthy();
 
     fireEvent.blur(input);
-    expect(queryByText("Esc")).toBeNull();
+    expect(getByText("Esc")).toBeTruthy();
   });
 });
 

@@ -234,10 +234,6 @@ function renderHostSettingsContent(
   }
 }
 
-function renderWhen(enabled: boolean, content: ReactNode): ReactNode {
-  return enabled ? content : null;
-}
-
 // ---------------------------------------------------------------------------
 // Trigger + sidebar style helpers
 // ---------------------------------------------------------------------------
@@ -1452,6 +1448,7 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
   if (view.kind === "section" && view.section === "layout") {
     content = isDesktopApp ? <LayoutSection /> : null;
   } else {
+    // oxlint-disable-next-line complexity -- section routing is intentionally exhaustive here.
     content = (() => {
       if (view.kind === "host") {
         return renderHostSettingsContent(view, handleHostRemoved);
