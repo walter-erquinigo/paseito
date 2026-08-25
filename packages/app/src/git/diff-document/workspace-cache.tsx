@@ -123,7 +123,10 @@ function exactModelKey(input: Omit<BuildDiffDocumentModelInput, "reuseFrom">): s
           .map(([target, comments]) => [target, comments.map((comment) => comment.id).sort()])
           .sort(([left], [right]) => String(left).localeCompare(String(right))),
         editor: input.reviewActions.editor
-          ? [input.reviewActions.editor.target.key, input.reviewActions.editor.commentId]
+          ? [
+              input.reviewActions.editor.targets.map((target) => target.key),
+              input.reviewActions.editor.commentId,
+            ]
           : null,
       }
     : null;

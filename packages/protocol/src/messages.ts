@@ -2277,6 +2277,15 @@ export const PullRequestTimelineRequestSchema = z.object({
   requestId: z.string(),
 });
 
+export const CheckoutForgeDiscussionReplyRequestSchema = z.object({
+  type: z.literal("checkout.forge.discussion.reply.request"),
+  cwd: z.string(),
+  changeRequestNumber: z.number().int().positive(),
+  discussionId: z.string().min(1),
+  body: z.string().min(1),
+  requestId: z.string(),
+});
+
 export const ValidateBranchRequestSchema = z.object({
   type: z.literal("validate_branch_request"),
   cwd: z.string(),
@@ -3227,6 +3236,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   CheckoutGithubGetCheckDetailsRequestSchema,
   CheckoutPrStatusRequestSchema,
   PullRequestTimelineRequestSchema,
+  CheckoutForgeDiscussionReplyRequestSchema,
   CheckoutSwitchBranchRequestSchema,
   CheckoutRenameBranchRequestSchema,
   StashSaveRequestSchema,
@@ -3592,6 +3602,9 @@ export const ServerInfoStatusPayloadSchema = z
         // COMPAT(fileReviewV1): added in Paseito v0.2.5-paseito.8,
         // remove gate after 2027-02-07.
         fileReviewV1: z.boolean().optional(),
+        // COMPAT(changesForgeDiscussionsV1): added in Paseito v0.5.2-paseito.9,
+        // remove the gate after 2027-02-25.
+        changesForgeDiscussionsV1: z.boolean().optional(),
         // COMPAT(providerRemoval): added in v0.1.105, drop the gate when floor >= v0.1.105.
         providerRemoval: z.boolean().optional(),
         // COMPAT(importSessionWorkspaceTarget): added in v0.1.110, remove gate after 2027-01-16.
@@ -5142,6 +5155,20 @@ const CheckoutDiffSubscriptionPayloadSchema = z.object({
   cwd: z.string(),
   files: z.array(ParsedDiffFileSchema),
   error: CheckoutErrorSchema.nullable(),
+  // COMPAT(changesForgeDiscussionsV1): added in Paseito v0.5.2-paseito.9.
+  comparisonIdentity: z
+    .discriminatedUnion("kind", [
+      z.object({
+        kind: z.literal("commit_range"),
+        baseSha: z.string(),
+        headSha: z.string(),
+      }),
+      z.object({
+        kind: z.literal("working_tree"),
+        baseSha: z.string(),
+      }),
+    ])
+    .optional(),
   // COMPAT(diffTooLarge): added in v0.2.4, keep optional until the daemon floor is v0.2.4.
   diffTooLarge: z.boolean().optional(),
 });
@@ -5503,6 +5530,10 @@ const PullRequestTimelineCommentItemSchema = z.object({
   // reply chains group into one thread; file-position threads also carry it.
   // Absent on standalone comments and on timelines from daemons that predate it.
   threadId: z.string().optional(),
+  // Forge-native discussion id used for reply mutations. Unlike `threadId`, this
+  // is also present for standalone GitLab notes that are represented by a
+  // single-note discussion. Absent on older daemons and unsupported forges.
+  discussionId: z.string().optional(),
   // Forge-neutral resolution state for a thread that has no file position, e.g. a
   // GitLab general (non-file) discussion that is resolvable. File-position threads
   // carry their resolution under `location.isResolved` instead. Absent on ordinary
@@ -5513,6 +5544,17 @@ const PullRequestTimelineCommentItemSchema = z.object({
       path: z.string(),
       line: z.number().optional(),
       startLine: z.number().optional(),
+      // COMPAT(changesForgeDiscussionsV1): added in Paseito v0.5.2-paseito.9,
+      // remove optional after 2027-02-25 once the daemon floor includes revision-safe anchors.
+      side: z.enum(["old", "new"]).optional(),
+      startSide: z.enum(["old", "new"]).optional(),
+      position: z
+        .object({
+          baseSha: z.string(),
+          startSha: z.string(),
+          headSha: z.string(),
+        })
+        .optional(),
       threadId: z.string().optional(),
       isResolved: z.boolean().optional(),
       isOutdated: z.boolean().optional(),
@@ -5555,6 +5597,18 @@ export const PullRequestTimelineResponseSchema = z.object({
     })
     .optional()
     .prefault({}),
+});
+
+export const CheckoutForgeDiscussionReplyResponseSchema = z.object({
+  type: z.literal("checkout.forge.discussion.reply.response"),
+  payload: z.object({
+    cwd: z.string(),
+    changeRequestNumber: z.number().int().positive(),
+    discussionId: z.string(),
+    comment: PullRequestTimelineCommentItemSchema.nullable(),
+    error: CheckoutErrorSchema.nullable(),
+    requestId: z.string(),
+  }),
 });
 
 export const CheckoutSwitchBranchResponseSchema = z.object({
@@ -6598,6 +6652,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   CheckoutGithubGetCheckDetailsResponseSchema,
   CheckoutPrStatusResponseSchema,
   PullRequestTimelineResponseSchema,
+  CheckoutForgeDiscussionReplyResponseSchema,
   CheckoutSwitchBranchResponseSchema,
   CheckoutRenameBranchResponseSchema,
   StashSaveResponseSchema,
@@ -6999,6 +7054,12 @@ export type CheckoutPrStatusResponse = z.infer<typeof CheckoutPrStatusResponseSc
 export type PullRequestTimelineRequest = z.infer<typeof PullRequestTimelineRequestSchema>;
 export type PullRequestTimelineItem = z.infer<typeof PullRequestTimelineItemSchema>;
 export type PullRequestTimelineResponse = z.infer<typeof PullRequestTimelineResponseSchema>;
+export type CheckoutForgeDiscussionReplyRequest = z.infer<
+  typeof CheckoutForgeDiscussionReplyRequestSchema
+>;
+export type CheckoutForgeDiscussionReplyResponse = z.infer<
+  typeof CheckoutForgeDiscussionReplyResponseSchema
+>;
 export type CheckoutSwitchBranchRequest = z.infer<typeof CheckoutSwitchBranchRequestSchema>;
 export type CheckoutSwitchBranchResponse = z.infer<typeof CheckoutSwitchBranchResponseSchema>;
 export type CheckoutRenameBranchRequest = z.infer<typeof CheckoutRenameBranchRequestSchema>;

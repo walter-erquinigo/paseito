@@ -105,7 +105,7 @@ export async function openChangesTreePanel(page: Page): Promise<void> {
 export async function openChangesPanel(page: Page): Promise<void> {
   await openChangesTreePanel(page);
   const changedFile = page
-    .locator('[data-testid^="diff-tree-file-"][data-testid$="-toggle"]')
+    .locator('[data-testid^="diff-tree-file-"]:not([data-testid$="-name"])')
     .filter({ visible: true })
     .first();
   await expect(changedFile).toBeVisible({ timeout: 30_000 });

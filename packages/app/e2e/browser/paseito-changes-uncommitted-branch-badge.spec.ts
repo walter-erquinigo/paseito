@@ -8,7 +8,11 @@ import { daemonWsRoutePattern } from "../support/helpers/daemon-port";
 import { getServerId } from "../support/helpers/server-id";
 import { connectSeedClient } from "../support/helpers/seed-client";
 import { createTempGitRepo } from "../support/helpers/workspace";
-import { openChangesPanel, waitForWorkspaceTabsVisible } from "../support/helpers/workspace-tabs";
+import {
+  openChangesPanel,
+  openChangesTreePanel,
+  waitForWorkspaceTabsVisible,
+} from "../support/helpers/workspace-tabs";
 
 const CLEAN_SOURCE = "export const branchState = 'clean';\n";
 const DIRTY_SOURCE = "export const branchState = 'dirty';\n";
@@ -61,7 +65,7 @@ test("the branch badge amends changes independently of the selected comparison",
     await page.setViewportSize({ width: 1400, height: 900 });
     await page.goto(buildHostWorkspaceRoute(getServerId(), created.workspace.id));
     await waitForWorkspaceTabsVisible(page);
-    await openChangesPanel(page);
+    await openChangesTreePanel(page);
     await expect(page.getByTestId("changes-header")).toBeVisible({ timeout: 30_000 });
 
     const badge = page.getByTestId("changes-uncommitted-badge");
@@ -72,6 +76,8 @@ test("the branch badge amends changes independently of the selected comparison",
 
     const originalSha = execSync("git rev-parse HEAD", { cwd: repo.path }).toString().trim();
     await writeFile(path.join(repo.path, "src/branch-state.ts"), DIRTY_SOURCE);
+    await client.checkoutRefresh(repo.path);
+    await openChangesPanel(page);
     await expect(badge).toHaveText("Uncommitted", { timeout: 30_000 });
     await expect(amend).toHaveText("Amend");
 
