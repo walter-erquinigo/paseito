@@ -499,22 +499,21 @@ function NativeReviewOverlays({
   return model.rows.flatMap((row) => {
     if (row.kind !== "line") return [];
     const columnWidth = model.viewportWidth / row.cells.length;
+    const file = model.files[row.fileIndex];
+    if (!file) return [];
     return row.cells.flatMap((cell, index) => {
       const marker = cell && parseDiffContextMarker(cell.content);
       if (marker && presentation?.onExpandContext && index === row.cells.length - 1) {
-        const file = model.files[row.fileIndex];
-        return file
-          ? [
-              <NativeContextControl
-                key={`${file.path}:${row.index}`}
-                filePath={file.path}
-                region={marker}
-                top={row.top}
-                height={row.height}
-                onExpand={presentation.onExpandContext}
-              />,
-            ]
-          : [];
+        return [
+          <NativeContextControl
+            key={`${file.path}:${row.index}`}
+            filePath={file.path}
+            region={marker}
+            top={row.top}
+            height={row.height}
+            onExpand={presentation.onExpandContext}
+          />,
+        ];
       }
       if (!cell?.reviewTarget) return [];
       const thread = getInlineReviewThreadState({
@@ -557,6 +556,7 @@ function NativeReviewOverlays({
             reviewActions={reviewActions}
             height={row.reviewHeight}
             viewportWidth={columnWidth}
+            gutterWidth={file.gutterWidth}
             pinToViewport={!model.wrapLines}
           />
         </View>,

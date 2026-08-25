@@ -4,7 +4,12 @@ import type { ViewStyle } from "react-native";
 import type { WorkspaceLspHover } from "@getpaseo/protocol/messages";
 import { DomOverlayScrollbar } from "@/components/ui/overlay-scrollbar/dom-overlay-scrollbar";
 import { useIsCompactFormFactor } from "@/constants/layout";
-import { getInlineReviewThreadState, InlineReviewGutterCell, InlineReviewThread } from "@/review";
+import {
+  getInlineReviewThreadState,
+  InlineReviewAddButton,
+  InlineReviewGutterCell,
+  InlineReviewThread,
+} from "@/review";
 import type { ReviewableDiffTarget } from "@/utils/diff-layout";
 import { DocumentFileHeader } from "./document-file-header";
 import { parseDiffContextMarker, type DiffContextRegion } from "@/git/diff-context-expansion";
@@ -30,6 +35,7 @@ import { retainDiffViewport } from "./viewport";
 import type {
   DiffCell,
   DiffDocumentModel,
+  DiffHit,
   DiffSelection,
   DiffSurfaceProps,
   DiffTypography,
@@ -176,6 +182,7 @@ function navigationMarkers(
   return markers;
 }
 
+// oxlint-disable-next-line complexity -- canvas interaction modes share one coordinated surface.
 export function DiffSurface(props: DiffSurfaceProps) {
   const { t } = useTranslation();
   const workspaceCache = useDiffDocumentWorkspaceCache();
@@ -207,6 +214,12 @@ export function DiffSurface(props: DiffSurfaceProps) {
   const forcePaintRef = useRef(true);
   const canvasWindowRef = useRef({ top: 0, height: 0 });
   const [viewport, setViewport] = useState({ width: 0, height: 0 });
+  const [hoveredAffordance, setHoveredAffordance] = useState<{
+    hit: Extract<DiffHit, { kind: "cell" }>;
+    left: number;
+    top: number;
+  } | null>(null);
+  const hasHoveredAffordanceRef = useRef(false);
   const [search, setSearch] = useState<ChangesSearchState>({
     open: false,
     query: "",
@@ -336,7 +349,6 @@ export function DiffSurface(props: DiffSurfaceProps) {
         lineHeight: desiredTypography.lineHeight,
       });
     }
-    return workspaceCache.buildModel({
     return workspaceCache.buildModel({
       files: props.files,
       collapsedFilePaths: props.collapsedFilePaths,
@@ -624,6 +636,10 @@ export function DiffSurface(props: DiffSurfaceProps) {
     (scrollElement: HTMLDivElement) => {
       const scrollTop = scrollElement.scrollTop;
       scrollTopRef.current = scrollTop;
+      if (hasHoveredAffordanceRef.current) {
+        hasHoveredAffordanceRef.current = false;
+        setHoveredAffordance(null);
+      }
       const currentModel = modelRef.current;
       const currentWindow = canvasWindowRef.current;
       if (!currentModel || currentWindow.height === 0) {
@@ -967,11 +983,33 @@ export function DiffSurface(props: DiffSurfaceProps) {
         });
       }
       const hit = pointHit(event);
+      if (hit?.kind === "cell") {
+        const row = modelRef.current?.rows[hit.position.rowIndex];
+        const file = modelRef.current?.files[hit.position.fileIndex];
+        const sideIndex =
+          row?.kind === "line" && row.cells.length === 2 && hit.position.side === "new" ? 1 : 0;
+        if (row && file && hit.target) {
+          const columnWidth = viewport.width / (row.kind === "line" ? row.cells.length : 1);
+          const gutterBorder = sideIndex * columnWidth + file.gutterWidth;
+          hasHoveredAffordanceRef.current = true;
+          setHoveredAffordance({
+            hit,
+            left: gutterBorder - 12,
+            top: row.top - scrollTopRef.current + (modelRef.current!.lineHeight - 22) / 2,
+          });
+        } else {
+          hasHoveredAffordanceRef.current = false;
+          setHoveredAffordance(null);
+        }
+      } else {
+        hasHoveredAffordanceRef.current = false;
+        setHoveredAffordance(null);
+      }
       if (!drag || hit?.kind !== "cell") return;
       selectionRef.current = { anchor: drag.anchor, focus: hit.position };
       schedulePaint();
     },
-    [pointHit, schedulePaint],
+    [pointHit, schedulePaint, viewport.width],
   );
   const pointerUp = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
@@ -1055,6 +1093,18 @@ export function DiffSurface(props: DiffSurfaceProps) {
     }),
     [desiredTypography, loadedTypography, model.viewportWidth],
   );
+  const affordanceStyle = useMemo<ViewStyle>(
+    () => ({
+      ...AFFORDANCE_STYLE,
+      left: hoveredAffordance?.left ?? 0,
+      top: hoveredAffordance?.top ?? 0,
+    }),
+    [hoveredAffordance?.left, hoveredAffordance?.top],
+  );
+  const addHoveredComment = useCallback(() => {
+    const target = hoveredAffordance?.hit.target;
+    if (target) reviewActions?.onStartComment(target);
+  }, [hoveredAffordance?.hit.target, reviewActions]);
 
   return (
     <div
@@ -1164,6 +1214,7 @@ export function DiffSurface(props: DiffSurfaceProps) {
                         left={index * columnWidth}
                         width={columnWidth}
                         height={row.reviewHeight}
+                        gutterWidth={file.gutterWidth}
                         pinToViewport={!model.wrapLines}
                       />
                     ) : null,
@@ -1205,6 +1256,9 @@ export function DiffSurface(props: DiffSurfaceProps) {
         </div>
       </div>
       <DomOverlayScrollbar scrollContainerRef={scrollRef} onUserScrollUp={noop} />
+      {hoveredAffordance?.hit.target && reviewActions ? (
+        <InlineReviewAddButton onPress={addHoveredComment} style={affordanceStyle} />
+      ) : null}
       {search.open ? (
         <div style={SEARCH_STYLE} data-testid="changes-search-bar">
           <span>/</span>
@@ -1368,6 +1422,7 @@ function WebReviewGutter({
         isEditorOpen={
           getInlineReviewThreadState({ reviewTarget: target, reviewActions: actions }) !== null
         }
+        showCommentAffordance={false}
         lineHeight={height}
         onStartComment={actions.onStartComment}
         reviewActions={actions}
@@ -1465,6 +1520,7 @@ function WebReviewThread({
   left,
   width,
   height,
+  gutterWidth,
   pinToViewport,
 }: {
   target: ReviewableDiffTarget;
@@ -1473,6 +1529,7 @@ function WebReviewThread({
   left: number;
   width: number;
   height: number;
+  gutterWidth: number;
   pinToViewport: boolean;
 }) {
   const style = useMemo<React.CSSProperties>(
@@ -1486,6 +1543,7 @@ function WebReviewThread({
         reviewActions={actions}
         height={height}
         viewportWidth={width}
+        gutterWidth={gutterWidth}
         pinToViewport={pinToViewport}
       />
     </div>
@@ -1603,6 +1661,10 @@ const CANVAS_STYLE: React.CSSProperties = {
   left: 0,
   zIndex: 1,
   pointerEvents: "none",
+};
+const AFFORDANCE_STYLE: ViewStyle = {
+  position: "absolute",
+  zIndex: 5,
 };
 function emptyDiffDocumentModel(input: {
   layout: "unified" | "split";

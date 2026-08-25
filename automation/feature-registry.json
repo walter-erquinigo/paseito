@@ -216,6 +216,43 @@
       ]
     },
     {
+      "id": "changes-gitlab-discussions",
+      "commitSubject": "feat(changes): show GitLab MR discussions",
+      "preservationFixes": [
+        "Keep GitLab discussion placement revision-aware and visibly mark every best-effort anchor.",
+        "Keep replies daemon-owned, confirmation-backed and capability-gated on every remote host.",
+        "Keep inline GitLab threads in blank interstitial diff rows with a gutter-edge control that collapses presentation without mutating forge resolution, and invalidate cached row geometry whenever those states change.",
+        "Render GitLab discussion bodies through the shared Markdown and HTML-aware renderer instead of exposing source markup."
+      ],
+      "permanent": false,
+      "intent": "Show the current branch's GitLab MR discussions inline in Changes and in an adaptive inbox, with confirmed replies.",
+      "invariants": [
+        "The daemon carries GitLab old/new sides and base/start/head SHAs through the neutral timeline contract and Changes diffs report their resolved comparison identity.",
+        "Exact inline placement requires matching comparison SHAs, path, side and line; best-effort placements are always labeled stale and missing targets remain inbox-only.",
+        "General, resolved, outdated and truncated discussion states remain discoverable from the MR comments inbox.",
+        "Replies are posted through a namespaced daemon RPC using the host's glab authentication, appear only after GitLab confirms them and retain their draft after failure.",
+        "Comments refresh every 60 seconds only while Changes is active, on focus or reconnect, and manually.",
+        "Inline thread cards begin after the line-number gutter, reserve their own vertical diff space even when discussions arrive after the diff model is cached, and can be collapsed independently without opening the discussion inbox or changing GitLab state.",
+        "Inline GitLab bodies render supported Markdown and linked badge images without exposing literal HTML markup.",
+        "Older daemons show an explicit update-host state rather than attempting a degraded placement path."
+      ],
+      "contracts": [
+        "npx vitest run packages/server/src/services/gitlab-service.test.ts packages/app/src/git/changes-discussions.test.ts --bail=1"
+      ],
+      "paths": [
+        "packages/app/src/git",
+        "packages/app/src/review",
+        "packages/client/src/daemon-client.ts",
+        "packages/protocol/src/messages.ts",
+        "packages/server/src/server",
+        "packages/server/src/services",
+        "packages/server/src/utils/checkout-git.ts",
+        "automation/release/package_linux_daemon.py",
+        "automation/remote/deploy_remote_daemons.py",
+        "docs/paseito-changes.md"
+      ]
+    },
+    {
       "id": "changes-source-navigation",
       "commitSubject": "feat(changes): add source search and navigation",
       "preservationFixes": [
@@ -243,8 +280,7 @@
       ],
       "contracts": [
         "npx vitest run packages/protocol/src/messages.checkout-diff-context.test.ts packages/server/src/utils/checkout-git.context.test.ts packages/app/src/git/changes-search.test.ts packages/app/src/git/changes-lsp-controller.test.ts packages/app/src/git/revisioned-source.test.ts packages/app/src/file-pane/editor/lsp-session-pool.test.ts --bail=1",
-        "npm run test:browser --workspace=@getpaseo/app -- src/git/changes-lsp-target.browser.test.ts --bail=1",
-        "npm run test:e2e --workspace=@getpaseo/app -- e2e/browser/changes-pane.spec.ts --grep 'Changes LSP'"
+        "npm run test:browser --workspace=@getpaseo/app -- src/git/changes-lsp-target.browser.test.ts --bail=1"
       ],
       "paths": [
         "packages/app/src/git/changes-search.ts",
@@ -259,35 +295,6 @@
         "packages/client/src/daemon-client.ts",
         "packages/protocol/src/messages.ts",
         "packages/server/src/utils/checkout-git.ts"
-      ]
-    },
-    {
-      "id": "changes-file-tree-navigator",
-      "commitSubject": "feat(changes): add the file-tree navigator",
-      "preservationFixes": [
-        "Keep repeated file selections monotonic and independent from manual diff scrolling.",
-        "Keep the pane-local Changes navigator responsive and preserve its state across retained tab switches."
-      ],
-      "permanent": false,
-      "intent": "Navigate large working diffs from a dedicated right-hand file tree in desktop Changes panes.",
-      "invariants": [
-        "Every sufficiently wide working Changes pane renders the 240px right-hand navigator; commit diffs and compact or narrow panes remain unchanged.",
-        "The navigator starts open, persists its whole-rail collapsed preference in pane-local Changes state and suppresses itself below an 800px containing-pane width without changing that preference.",
-        "Compressed directory folders and file selection remain pane-local and survive retained tab switches.",
-        "Selecting a file expands its diff, reissues a monotonic focus request, aligns its header to the top and focuses the diff scroll surface; repeated selections work.",
-        "Manual diff scrolling does not follow-select another tree row, and selection clears only when the selected path disappears from the active comparison."
-      ],
-      "contracts": [
-        "npx vitest run packages/app/src/git/changes-file-tree-navigation.test.ts --bail=1",
-        "npm run test:e2e --workspace=@getpaseo/app -- e2e/browser/paseito-changes-file-tree-navigator.spec.ts"
-      ],
-      "paths": [
-        "packages/app/src/git/changes-file-tree-navigation.ts",
-        "packages/app/src/git/changes-file-tree-navigator.tsx",
-        "packages/app/src/git/diff-pane.tsx",
-        "packages/app/src/panels/diff-panel.tsx",
-        "packages/app/src/panels/changes/state.ts",
-        "docs/paseito-changes.md"
       ]
     },
     {
@@ -451,11 +458,11 @@
         "Absolute path queries autocomplete files from the immediate host directory without using the Git index or recursively scanning the filesystem, and are independently capability-gated.",
         "Absolute results retain their host path and open through filesystem-root-scoped read, observation and atomic-write operations; Changes navigation accepts only paths inside the active workspace.",
         "Enter and pointer activation open the normal file tab, while Command+Enter on web moves or reveals the canonical Changes tab in the right sidebar, even when it was already open elsewhere, and checks the file against that tab's exact loaded comparison.",
-        "A present Changes file expands and centers its header only when hidden; an already-visible header does not move, and file-tree navigation retains top alignment.",
+        "A present Changes file expands and centers its header only when hidden; an already-visible header does not move, and the upstream Changes tree rail remains the sole file navigator.",
         "An absent file leaves Command+P open with an accessible inline error, while loading and transport failures remain distinct from absence."
       ],
       "contracts": [
-        "npx vitest run packages/server/src/utils/directory-suggestions.test.ts packages/app/src/workspace/markdown-changes-navigation.test.ts packages/app/src/git/changes-file-tree-navigation.test.ts packages/app/src/workspace-tabs/identity.test.ts packages/app/src/stores/workspace-layout-store.test.ts --bail=1",
+        "npx vitest run packages/server/src/utils/directory-suggestions.test.ts packages/app/src/workspace/markdown-changes-navigation.test.ts packages/app/src/workspace-tabs/identity.test.ts packages/app/src/stores/workspace-layout-store.test.ts --bail=1",
         "npm run test:e2e --workspace=@getpaseo/app -- e2e/browser/command-center-file-search.spec.ts"
       ],
       "paths": [

@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
 import { useReviewDraftStore, type ReviewDraftComment, type ReviewDraftSuggestion } from "./store";
 import { buildReviewableDiffTargetKey, type ReviewableDiffTarget } from "@/utils/diff-layout";
+import type { ChangesDiscussionThread } from "@/git/changes-discussions";
 import {
   getInlineReviewThreadState,
   getInlineReviewThreadViewportStyle,
@@ -30,7 +31,7 @@ const { theme, pressablePropsByLabel, electronMac, workspaceFocus } = vi.hoisted
       borderWidth: { 1: 1 },
       borderRadius: { base: 4, md: 6, lg: 8, xl: 12, full: 999 },
       opacity: { 50: 0.5 },
-      fontSize: { xs: 11, sm: 13 },
+      fontSize: { xs: 11, sm: 13, content: 15 },
       fontWeight: { normal: "400", medium: "500" },
       fontFamily: { mono: "monospace" },
       lineHeight: { diff: 18 },
@@ -41,6 +42,7 @@ const { theme, pressablePropsByLabel, electronMac, workspaceFocus } = vi.hoisted
         destructive: "#ff453a",
         foreground: "#fff",
         foregroundMuted: "#aaa",
+        interactionHighlight: "rgba(255, 255, 255, 0.08)",
         surface1: "#111",
         surface2: "#222",
         surface3: "#333",
@@ -55,6 +57,11 @@ const { theme, pressablePropsByLabel, electronMac, workspaceFocus } = vi.hoisted
 
 vi.mock("@/workspace/focus", () => ({
   useWorkspaceFocusRestoration: () => workspaceFocus,
+}));
+
+vi.mock("@/components/markdown/renderer", () => ({
+  MarkdownRenderer: ({ text }: { text: string }) =>
+    React.createElement("span", { "data-testid": "markdown-renderer" }, text),
 }));
 
 vi.mock("react-native", async (importOriginal) => {
@@ -137,7 +144,10 @@ vi.mock("lucide-react-native", () => {
   return {
     Check: createIcon("Check"),
     CircleDot: createIcon("CircleDot"),
+    ChevronsDownUp: createIcon("ChevronsDownUp"),
+    ChevronsUpDown: createIcon("ChevronsUpDown"),
     Code2: createIcon("Code2"),
+    MessageSquare: createIcon("MessageSquare"),
     Pencil: createIcon("Pencil"),
     Plus: createIcon("Plus"),
     Trash2: createIcon("Trash2"),
@@ -229,6 +239,29 @@ function suggestion(overrides: Partial<ReviewDraftSuggestion> = {}): ReviewDraft
     ...overrides,
   };
 }
+
+function forgeThread(overrides: Partial<ChangesDiscussionThread> = {}): ChangesDiscussionThread {
+  return {
+    id: "discussion-1",
+    comments: [
+      {
+        id: "note-1",
+        kind: "comment",
+        author: "Greptile",
+        authorUrl: null,
+        avatarUrl: null,
+        body: "Guard this option before invoking the SASS path.",
+        createdAt: Date.now() - 5 * 60_000,
+        url: "https://gitlab.example/note/1",
+      },
+    ],
+    placement: "exact",
+    targetKey: "src/example.ts:new:2",
+    targetPath: "src/example.ts",
+    ...overrides,
+  };
+}
+
 describe("useInlineReviewController", () => {
   beforeEach(() => {
     useReviewDraftStore.setState({ drafts: {}, suggestions: {}, diffModeOverrides: {} });
@@ -491,6 +524,21 @@ describe("git diff inline review helpers", () => {
     expect(rowState?.height).toBe(248);
   });
 
+  it("shrinks a collapsed GitLab discussion without removing its interstitial row", () => {
+    const reviewTarget = target();
+    const thread = forgeThread();
+    const expanded = buildReviewActions({
+      forgeThreadsByTarget: new Map([[reviewTarget.key, [thread]]]),
+    });
+    const collapsed = buildReviewActions({
+      forgeThreadsByTarget: new Map([[reviewTarget.key, [thread]]]),
+      collapsedForgeThreadIds: new Set([thread.id]),
+    });
+
+    expect(getInlineReviewThreadState({ reviewTarget, reviewActions: expanded })?.height).toBe(152);
+    expect(getInlineReviewThreadState({ reviewTarget, reviewActions: collapsed })?.height).toBe(46);
+  });
+
   it("pins no-wrap review threads to the visible diff viewport", () => {
     expect(
       getInlineReviewThreadViewportStyle({
@@ -701,13 +749,13 @@ describe("InlineReviewEditor", () => {
     expect(workspaceFocus.restore).not.toHaveBeenCalled();
   });
 
-  it("shows shared shortcut hints while focused on a fine-pointer screen", () => {
+  it("reserves shortcut hint space while focus moves to an action", () => {
     window.matchMedia = vi.fn().mockReturnValue({
       matches: true,
       addEventListener: vi.fn(),
       removeEventListener: vi.fn(),
     });
-    const { getByTestId, getByText, queryByText } = render(
+    const { getByTestId, getByText } = render(
       <InlineReviewEditor
         initialBody="ready"
         onCancel={vi.fn()}
@@ -721,7 +769,7 @@ describe("InlineReviewEditor", () => {
     expect(getByText(/(?:⌘⏎|Ctrl\+⏎)/)).toBeTruthy();
 
     fireEvent.blur(input);
-    expect(queryByText("Esc")).toBeNull();
+    expect(getByText("Esc")).toBeTruthy();
   });
 });
 
@@ -774,6 +822,46 @@ describe("InlineReviewThread", () => {
     expect(getByText("const value = changed;")).toBeTruthy();
     expect(getByTestId("inline-review-content-rail").style.marginLeft).toBe("64px");
   });
+
+  it("collapses a GitLab discussion from its gutter control", () => {
+    const reviewTarget = target();
+    const thread = forgeThread();
+    const onToggleForgeThread = vi.fn();
+    const actions = buildReviewActions({
+      forgeThreadsByTarget: new Map([[reviewTarget.key, [thread]]]),
+      collapsedForgeThreadIds: new Set(),
+      onToggleForgeThread,
+    });
+    const collapsedActions = buildReviewActions({
+      ...actions,
+      collapsedForgeThreadIds: new Set([thread.id]),
+    });
+    const { getByLabelText, getByTestId, getByText, queryByText, rerender } = render(
+      <InlineReviewThread
+        reviewTarget={reviewTarget}
+        reviewActions={actions}
+        gutterWidth={48}
+        height={152}
+      />,
+    );
+
+    expect(getByText(thread.comments[0]?.body ?? "")).toBeTruthy();
+    expect(getByTestId(`forge-discussion-thread-${thread.id}`).style.marginLeft).toBe("48px");
+    fireEvent.click(getByLabelText("Collapse GitLab discussion by Greptile"));
+    expect(onToggleForgeThread).toHaveBeenCalledWith(thread.id);
+
+    rerender(
+      <InlineReviewThread
+        reviewTarget={reviewTarget}
+        reviewActions={collapsedActions}
+        gutterWidth={48}
+        height={46}
+      />,
+    );
+    expect(queryByText(thread.comments[0]?.body ?? "")).toBeNull();
+    expect(getByLabelText("Expand GitLab discussion by Greptile")).toBeTruthy();
+  });
+
   it("switches a new code-change draft back to a comment", () => {
     const reviewTarget = target({ sourceRevision: "revision-1" });
     const actions = buildReviewActions({
