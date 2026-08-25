@@ -180,7 +180,8 @@
         "Require the review-state capability in packaged and remote releases.",
         "Preserve repeated reviewed edits only when their uniquely anchored sequence mapping is unambiguous.",
         "Show the live Changes-focus binding in the selected-line shortcut widget.",
-        "Keep per-line review state scannable with persistent hollow and filled dots in a fixed slot that never overlaps line numbers."
+        "Keep per-line review state scannable with persistent hollow and filled dots in a fixed slot that never overlaps line numbers.",
+        "Restore the selected-line E action through every file-opening host so it opens and focuses the mapped current-side source line."
       ],
       "permanent": false,
       "intent": "Let reviewers mark branch files or individual edited lines reviewed while preserving checks only for identical branch-side content.",
@@ -195,6 +196,7 @@
         "Keyboard review uses lowercase m to approve and move down and comma to approve and move up; Shift+M expands the next hidden block below and Shift+. expands the previous hidden block above. A compact accent marker follows the selected line, and a destination with fewer than five visible same-file rows below is centered only when the file actually has five later rows.",
         "Command+semicolon focuses the last selected Changes line, then the first unreviewed line, then any reviewable line or file header; Command+L remains the counterpart that focuses the message input.",
         "The selected-line shortcut widget resolves the current Changes-focus binding from the shortcut registry so user overrides are displayed accurately.",
+        "Lowercase E opens the selected review line in a focused side editor at its mapped current-side line; deleted content without a current-side mapping reports that editing is unavailable.",
         "Line identity includes side, change type, exact content and surrounding context; unique unchanged edits survive revisions, and repeated edits survive only when their count and ordinal position inside unchanged unique anchors prove the mapping.",
         "The feature is capability-gated and never infers unreliable content identity from an older daemon."
       ],

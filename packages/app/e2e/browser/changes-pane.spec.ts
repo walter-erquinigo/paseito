@@ -425,6 +425,21 @@ test("line review controls stay in the fixed gutter across diff layouts", async 
   );
 });
 
+test("E opens the selected review line in a focused side editor", async ({ page }) => {
+  const workspace = await createWorkspaceWithMountedTabDiff();
+  await useUnwrappedDiffLines(page);
+  await openWorkspaceChanges(page, workspace);
+
+  const firstReviewDot = page.getByTestId(/^diff-line-review-/).first();
+  await firstReviewDot.click();
+  await page.keyboard.press("e");
+
+  await expect(page.getByTestId("workspace-file-pane")).toBeVisible();
+  await expect(page.getByTestId("workspace-tab-file_src/use-mounted-tab-set.ts")).toBeVisible();
+  await expect(page.getByTestId("file-source-editor")).toBeVisible();
+  await expect(page.locator(".cm-editor.cm-focused")).toBeVisible();
+});
+
 test("Changes keyboard focus, full expansion, and source search share one review surface", async ({
   page,
 }) => {

@@ -29,6 +29,7 @@ import { useMountedTabSet } from "@/screens/workspace/use-mounted-tab-set";
 import { usePullRequestPanelAvailability } from "@/panels/pull-request-availability";
 import { PullRequestContent } from "@/panels/pull-request";
 import { useAddFileToChat } from "@/panels/use-add-file-to-chat";
+import type { WorkspaceFileOpenOptions } from "@/workspace/file-open";
 
 function logExplorerSidebar(_event: string, _details: Record<string, unknown>): void {}
 
@@ -37,7 +38,7 @@ interface ExplorerSidebarProps {
   workspaceId?: string | null;
   workspaceRoot: string;
   isGit: boolean;
-  onOpenFile?: (filePath: string) => void;
+  onOpenFile?: (filePath: string, options?: WorkspaceFileOpenOptions) => void;
 }
 
 interface ExplorerSidebarSharedState {
@@ -176,7 +177,7 @@ interface SidebarContentProps {
   workspaceRoot: string;
   isGit: boolean;
   isOpen: boolean;
-  onOpenFile?: (filePath: string) => void;
+  onOpenFile?: (filePath: string, options?: WorkspaceFileOpenOptions) => void;
 }
 
 function ExplorerSidebarContent({

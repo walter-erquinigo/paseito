@@ -10,6 +10,8 @@ export interface WorkspaceFileLocation {
   openMode?: "source";
 }
 
+export type WorkspaceFileOpenOptions = Omit<WorkspaceFileLocation, "path">;
+
 export type WorkspaceFileTabTarget = { kind: "file" } & WorkspaceFileLocation;
 
 export interface WorkspaceFileOpenRequest {

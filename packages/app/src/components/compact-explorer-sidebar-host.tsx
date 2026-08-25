@@ -12,6 +12,7 @@ import type { WorkspaceTabTarget } from "@/workspace-tabs/model";
 import { useWorkspaceCheckoutStatus } from "@/screens/workspace/use-workspace-checkout-status";
 import { openWorkspaceFileFromExplorer } from "@/screens/workspace/workspace-file-open-command";
 import { isWeb } from "@/constants/platform";
+import type { WorkspaceFileOpenOptions } from "@/workspace/file-open";
 import {
   resolveCompactExplorerSidebarHostModel,
   type CompactExplorerSidebarHostModel,
@@ -120,12 +121,13 @@ export function CompactExplorerSidebarHost({ children, enabled }: CompactExplore
   }, [model, openCompactFileExplorer]);
 
   const handleOpenFile = useCallback(
-    (filePath: string) => {
+    (filePath: string, location?: WorkspaceFileOpenOptions) => {
       if (!model) {
         return;
       }
       openWorkspaceFileFromExplorer({
         filePath,
+        location,
         persistenceKey: model.persistenceKey,
         showMobileAgent,
         openWorkspaceTabInFocusedPane,

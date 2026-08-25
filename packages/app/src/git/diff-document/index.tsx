@@ -36,6 +36,7 @@ interface LineReviewKeyboardContext {
   orderedLines: ReviewableChangedLine[];
   selectedLine: ReviewableChangedLine;
   clearSelection: () => void;
+  editLine: (line: ReviewableChangedLine) => void;
   expandFile: (path: string) => void;
   selectLine: (line: ReviewableChangedLine) => void;
   showNoUncheckedLines: () => void;
@@ -101,6 +102,7 @@ function handleLineReviewKeyDown(event: KeyboardEvent, context: LineReviewKeyboa
   event.preventDefault();
   if (action === "clear") return context.clearSelection();
   if (action === "toggle") return context.toggleLine(context.selectedLine);
+  if (action === "edit") return context.editLine(context.selectedLine);
   if (action === "move-down" || action === "move-up") {
     moveLineReviewSelection(action === "move-down" ? "down" : "up", context);
     return;
@@ -207,6 +209,16 @@ function useDiffDocumentReview({
     },
     [collapseFile, fileReviews],
   );
+  const editLine = useCallback(
+    (line: ReviewableChangedLine) => {
+      if (mode.kind === "working" && mode.onEditLine && line.target.editLineNumber) {
+        mode.onEditLine(line);
+        return;
+      }
+      toast.show(t("workspace.git.diff.editLineUnavailable"));
+    },
+    [mode, t, toast],
+  );
   const focusChanges = useCallback(() => {
     if (mode.kind === "working") mode.onActivate?.();
     const target =
@@ -249,6 +261,7 @@ function useDiffDocumentReview({
       orderedLines,
       selectedLine,
       clearSelection: () => setSelectedLineId(null),
+      editLine,
       expandFile,
       selectLine,
       showNoUncheckedLines: () => toast.show("No unchecked lines"),
@@ -258,6 +271,7 @@ function useDiffDocumentReview({
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [
+    editLine,
     expandFile,
     fileReviews,
     files,

@@ -85,6 +85,8 @@ import { isWeb } from "@/constants/platform";
 import { usePublishWorkingDiffAttachment, useWorkingDiff } from "@/git/use-working-diff";
 import { useChangesLsp } from "@/git/use-changes-lsp";
 import type { ChangesSearchMatch } from "@/git/changes-search";
+import type { ReviewableChangedLine } from "@/review";
+import type { WorkspaceFileOpenOptions } from "@/workspace/file-open";
 import type { CheckoutStatusPayload } from "@/git/use-status-query";
 import { DiffTooLargeState } from "@/git/diff-too-large-state";
 import { openDesktopTarget, useDesktopOpenTargets } from "@/workspace/desktop-open-targets";
@@ -310,7 +312,7 @@ interface ChangesSurfaceProps {
   focusColumn?: number;
   focusReveal?: "center-if-hidden";
   onActivate?: () => void;
-  onOpenFile?: (path: string) => void;
+  onOpenFile?: (path: string, options?: WorkspaceFileOpenOptions) => void;
   onAddToChat?: (path: string) => void;
   state?: ChangesState;
   onStateChange?: (state: ChangesState) => void;
@@ -1409,6 +1411,9 @@ export function ChangesSurface({
   const fsEntryDuplicateEnabled = useSessionStore(
     (state) => state.sessions[serverId]?.serverInfo?.features?.fsEntryDuplicate === true,
   );
+  const fileEditingSupported = useSessionStore(
+    (state) => state.sessions[serverId]?.serverInfo?.features?.workspaceFileEditing === true,
+  );
   const runRefresh = useCheckoutGitActionsStore((s) => s.refresh);
   const isRefreshing =
     useCheckoutGitActionsStore((s) => s.getStatus({ serverId, cwd, actionId: "refresh" })) ===
@@ -1590,6 +1595,14 @@ export function ChangesSurface({
     },
     [onOpenFile],
   );
+  const handleEditLine = useCallback(
+    (line: ReviewableChangedLine) => {
+      const lineStart = line.target.editLineNumber;
+      if (!lineStart) return;
+      onOpenFile?.(line.target.filePath, { lineStart, openMode: "source" });
+    },
+    [onOpenFile],
+  );
   const loadChangesLspSource = contextExpansion.loadSource;
   const expandSearchLine = contextExpansion.expandLine;
   const searchChanges = contextExpansion.search;
@@ -1623,6 +1636,7 @@ export function ChangesSurface({
           onActivate,
           onFilePress: onChangesFilePress,
           onOpenFile,
+          onEditLine: onOpenFile && fileEditingSupported ? handleEditLine : undefined,
           onAddToChat,
           onCopyPath: handleCopyPath,
           onCopyRelativePath: handleCopyRelativePath,
@@ -1656,6 +1670,8 @@ export function ChangesSurface({
       serverId,
       workspaceId,
       onOpenFile,
+      fileEditingSupported,
+      handleEditLine,
       onAddToChat,
       handleCopyPath,
       handleCopyRelativePath,
