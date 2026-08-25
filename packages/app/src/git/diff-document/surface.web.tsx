@@ -13,6 +13,7 @@ import {
 import { useToast } from "@/contexts/toast-context";
 import {
   getInlineReviewThreadState,
+  InlineReviewAddButton,
   InlineReviewGutterCell,
   InlineReviewThread,
 } from "@/review";
@@ -225,6 +226,7 @@ function navigationMarkers(
   return markers;
 }
 
+// oxlint-disable-next-line complexity -- canvas interaction modes share one coordinated surface.
 export function DiffSurface(props: DiffSurfaceProps) {
   const { t } = useTranslation();
   const toast = useToast();
@@ -266,6 +268,12 @@ export function DiffSurface(props: DiffSurfaceProps) {
   const [interactionFiles, setInteractionFiles] = useState<
     ReturnType<typeof buildDiffDocumentModel>["files"]
   >([]);
+  const [hoveredAffordance, setHoveredAffordance] = useState<{
+    hit: Extract<DiffHit, { kind: "cell" }>;
+    left: number;
+    top: number;
+  } | null>(null);
+  const hasHoveredAffordanceRef = useRef(false);
   const [hasSelection, setHasSelection] = useState(false);
   const [contextHit, setContextHit] = useState<Extract<DiffHit, { kind: "cell" }> | null>(null);
   const [search, setSearch] = useState<ChangesSearchState>({
@@ -800,6 +808,10 @@ export function DiffSurface(props: DiffSurfaceProps) {
         schedulePaint();
       }
       updateInteractionFiles(scrollTop);
+      if (hasHoveredAffordanceRef.current) {
+        hasHoveredAffordanceRef.current = false;
+        setHoveredAffordance(null);
+      }
       const currentModel = modelRef.current;
       if (currentModel) paintStickyHeaderPool(currentModel, scrollTop);
       const currentWindow = canvasWindowRef.current;
@@ -1177,10 +1189,32 @@ export function DiffSurface(props: DiffSurfaceProps) {
         });
       }
       const hit = pointHit(event);
+      if (hit?.kind === "cell") {
+        const row = modelRef.current?.rows[hit.position.rowIndex];
+        const file = modelRef.current?.files[hit.position.fileIndex];
+        const sideIndex =
+          row?.kind === "line" && row.cells.length === 2 && hit.position.side === "new" ? 1 : 0;
+        if (row && file && hit.target) {
+          const columnWidth = viewport.width / (row.kind === "line" ? row.cells.length : 1);
+          const gutterBorder = sideIndex * columnWidth + file.gutterWidth;
+          hasHoveredAffordanceRef.current = true;
+          setHoveredAffordance({
+            hit,
+            left: gutterBorder - 12,
+            top: row.top - scrollTopRef.current + (modelRef.current!.lineHeight - 22) / 2,
+          });
+        } else {
+          hasHoveredAffordanceRef.current = false;
+          setHoveredAffordance(null);
+        }
+      } else {
+        hasHoveredAffordanceRef.current = false;
+        setHoveredAffordance(null);
+      }
       if (!drag || hit?.kind !== "cell") return;
       setSelection({ anchor: drag.anchor, focus: hit.position });
     },
-    [pointHit, setSelection, updateActiveHeader],
+    [pointHit, setSelection, updateActiveHeader, viewport.width],
   );
   const pointerUp = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
@@ -1317,6 +1351,18 @@ export function DiffSurface(props: DiffSurfaceProps) {
     }),
     [desiredTypography, loadedTypography],
   );
+  const affordanceStyle = useMemo<ViewStyle>(
+    () => ({
+      ...AFFORDANCE_STYLE,
+      left: hoveredAffordance?.left ?? 0,
+      top: hoveredAffordance?.top ?? 0,
+    }),
+    [hoveredAffordance?.left, hoveredAffordance?.top],
+  );
+  const addHoveredComment = useCallback(() => {
+    const target = hoveredAffordance?.hit.target;
+    if (target) reviewActions?.onStartComment(target);
+  }, [hoveredAffordance?.hit.target, reviewActions]);
 
   const surface = (
     <div
@@ -1432,6 +1478,7 @@ export function DiffSurface(props: DiffSurfaceProps) {
                         left={index * columnWidth}
                         width={columnWidth}
                         height={row.reviewHeight}
+                        gutterWidth={file.gutterWidth}
                         pinToViewport={!model.wrapLines}
                       />
                     ) : null,
@@ -1473,6 +1520,9 @@ export function DiffSurface(props: DiffSurfaceProps) {
         </div>
       </div>
       <DomOverlayScrollbar scrollContainerRef={scrollRef} onUserScrollUp={noop} />
+      {hoveredAffordance?.hit.target && reviewActions ? (
+        <InlineReviewAddButton onPress={addHoveredComment} style={affordanceStyle} />
+      ) : null}
       {search.open ? (
         <div style={SEARCH_STYLE} data-testid="changes-search-bar">
           <span>/</span>
@@ -1695,6 +1745,7 @@ function WebReviewGutter({
         isEditorOpen={
           getInlineReviewThreadState({ reviewTarget: target, reviewActions: actions }) !== null
         }
+        showCommentAffordance={false}
         lineHeight={height}
         onStartComment={actions.onStartComment}
         reviewActions={actions}
@@ -1792,6 +1843,7 @@ function WebReviewThread({
   left,
   width,
   height,
+  gutterWidth,
   pinToViewport,
 }: {
   target: ReviewableDiffTarget;
@@ -1800,6 +1852,7 @@ function WebReviewThread({
   left: number;
   width: number;
   height: number;
+  gutterWidth: number;
   pinToViewport: boolean;
 }) {
   const style = useMemo<React.CSSProperties>(
@@ -1813,6 +1866,7 @@ function WebReviewThread({
         reviewActions={actions}
         height={height}
         viewportWidth={width}
+        gutterWidth={gutterWidth}
         pinToViewport={pinToViewport}
       />
     </div>
@@ -1950,6 +2004,10 @@ const CANVAS_STYLE: React.CSSProperties = {
   left: 0,
   zIndex: 1,
   pointerEvents: "none",
+};
+const AFFORDANCE_STYLE: ViewStyle = {
+  position: "absolute",
+  zIndex: 5,
 };
 function emptyDiffDocumentModel(input: {
   layout: "unified" | "split";

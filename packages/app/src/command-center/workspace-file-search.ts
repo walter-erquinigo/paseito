@@ -8,7 +8,7 @@ import { useWorkspaceDirectory } from "@/stores/session-store-hooks";
 import { useWorkspaceLayoutStore } from "@/stores/workspace-layout-store";
 import { clearCommandCenterFocusRestoreElement } from "@/utils/command-center-focus-restore";
 import { buildWorkspaceTabPersistenceKey } from "@/workspace-tabs/model";
-import { openTabInSidePanel } from "@/workspace-tabs/side-panel";
+import { openWorkspaceTargetBeside } from "@/workspace-tabs/open-beside";
 import { resolveWorkspaceFilePaths } from "@/workspace/file-open";
 import { isAbsolutePath } from "@/utils/path";
 import {
@@ -241,20 +241,16 @@ export function useWorkspaceFileSearch(input: { enabled: boolean; query: string 
         );
         return "opened";
       }
-      const tabId = openTabInSidePanel({
-        isCompact: false,
+      const tabId = openWorkspaceTargetBeside({
         workspaceKey,
-        checkout,
         target: { kind: "working_diff" },
       });
       if (!tabId) throw new Error("Changes could not be opened.");
       const snapshot = await waitForWorkingDiffNavigationSnapshot({ workspaceKey, tabId });
       if (!snapshot.files.some((file) => file.path === changesPath)) return "absent";
       clearCommandCenterFocusRestoreElement();
-      openTabInSidePanel({
-        isCompact: false,
+      openWorkspaceTargetBeside({
         workspaceKey,
-        checkout,
         target: createWorkingDiffFileNavigationTarget({
           current: { kind: "working_diff" },
           path: changesPath,

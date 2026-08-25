@@ -1347,6 +1347,50 @@ export class CheckoutSession {
     }
   }
 
+  async handleCheckoutForgeDiscussionReplyRequest(
+    msg: Extract<SessionInboundMessage, { type: "checkout.forge.discussion.reply.request" }>,
+  ): Promise<void> {
+    const { cwd, changeRequestNumber, discussionId, body, requestId } = msg;
+    try {
+      const resolvedForge = await this.resolveForgeService(cwd);
+      if (!resolvedForge?.service.replyToPullRequestDiscussion) {
+        throw new Error("Discussion replies are not supported for this forge");
+      }
+      const comment = await resolvedForge.service.replyToPullRequestDiscussion({
+        cwd,
+        changeRequestNumber,
+        discussionId,
+        body,
+      });
+      if (comment.kind !== "comment") {
+        throw new Error("Forge returned a non-comment discussion reply");
+      }
+      this.host.emit({
+        type: "checkout.forge.discussion.reply.response",
+        payload: {
+          cwd,
+          changeRequestNumber,
+          discussionId,
+          comment,
+          error: null,
+          requestId,
+        },
+      });
+    } catch (error) {
+      this.host.emit({
+        type: "checkout.forge.discussion.reply.response",
+        payload: {
+          cwd,
+          changeRequestNumber,
+          discussionId,
+          comment: null,
+          error: toCheckoutError(error),
+          requestId,
+        },
+      });
+    }
+  }
+
   async handleCheckoutForgeGetCheckDetailsRequest(
     msg: Extract<
       SessionInboundMessage,
