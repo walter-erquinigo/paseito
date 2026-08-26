@@ -1,6 +1,7 @@
 import {
   GitLabReadOnlyClient,
   projectPathFromMergeRequestUrl,
+  type GitLabDiscussionActivityOptions,
   type GitLabMergeRequest,
 } from "./gitlab-client.js";
 import { normalizeGitLabMergeRequestUrl } from "@getpaseo/protocol/mr-deep-link";
@@ -42,7 +43,7 @@ export interface GitLabTrackerClient {
   discussions(
     projectRef: string | number,
     iid: number,
-    activityUsers?: readonly GitLabUserSummary[],
+    activityOptions?: GitLabDiscussionActivityOptions,
   ): Promise<MergeRequestDiscussionSummary>;
 }
 
@@ -725,7 +726,13 @@ export class MRTrackerService {
       client.discussions(
         value.project_id,
         value.iid,
-        seed.sources.includes("me") ? this.settings.activityUsers : [],
+        seed.sources.includes("me")
+          ? {
+              alwaysShowUsers: this.settings.activityUsers,
+              discoverAuthors: true,
+              excludedUserIds: [value.author.id],
+            }
+          : undefined,
       ),
     ]);
     const pipeline = resolvePipeline(pipelineResult, value, previous, onPartialError);

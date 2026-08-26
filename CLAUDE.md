@@ -272,7 +272,7 @@ instead of editing the list by hand.
   - Fix: Keep every local triage label understandable through concise desktop hover and keyboard-focus explanations.
   - Fix: Keep MR triage left-anchored while summary navigation, detail expansion, and importance controls remain independent interactions.
   - Fix: Keep MR triage binary as Important or Ignore, normalize legacy local choices to Ignore, and provide an accessible Important-only filter beside search.
-  - Fix: Keep configured GitLab activity badges scoped to owner-authored MRs and keyed by stable user identity instead of ambiguous display names.
+  - Fix: Keep always-show GitLab accounts visible before activity while discovering other commenters only after activity, scoped to owner-authored MRs and keyed by stable user identity.
   - Fix: Keep the Chrome bridge token-free and origin-opt-in while repeated links reveal, expand, center and highlight the resolved MR.
 
 <!-- PASEITO-LOCAL-FEATURES:END -->

@@ -143,11 +143,91 @@ describe("GitLabReadOnlyClient", () => {
       avatarUrl: null,
     };
 
-    expect(await client.discussions(10, 42, [greptile])).toEqual({
+    expect(await client.discussions(10, 42, { alwaysShowUsers: [greptile] })).toEqual({
       resolvableCount: 1,
       unresolvedCount: 1,
       activity: [{ user: greptile, noteCount: 2, unresolvedCount: 1 }],
       error: null,
     });
+  });
+
+  it("keeps configured users visible and discovers other commenters except the MR author", async () => {
+    const fetchImpl = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify([
+            {
+              notes: [
+                {
+                  author: { id: 91, username: "aman", name: "Aman" },
+                  system: false,
+                  resolvable: false,
+                  resolved: null,
+                },
+                {
+                  author: { id: 92, username: "zoe", name: "Zoe" },
+                  system: false,
+                  resolvable: true,
+                  resolved: false,
+                },
+                {
+                  author: { id: 7, username: "owner", name: "Owner" },
+                  system: false,
+                  resolvable: false,
+                  resolved: null,
+                },
+                {
+                  author: { id: 93, username: "system_bot", name: "System bot" },
+                  system: true,
+                  resolvable: false,
+                  resolved: null,
+                },
+              ],
+            },
+          ]),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+    );
+    const client = new GitLabReadOnlyClient({
+      baseUrl: "https://gitlab.example.com",
+      token: "secret",
+      tokenType: "private-token",
+      fetchImpl: fetchImpl as typeof fetch,
+    });
+    const greptile = {
+      id: 80,
+      username: "group_bot",
+      name: "Greptile",
+      webUrl: null,
+      avatarUrl: null,
+    };
+    const silentBot = {
+      id: 81,
+      username: "silent_bot",
+      name: "Silent bot",
+      webUrl: null,
+      avatarUrl: null,
+    };
+
+    const result = await client.discussions(10, 42, {
+      alwaysShowUsers: [greptile, greptile, silentBot],
+      discoverAuthors: true,
+      excludedUserIds: [7],
+    });
+
+    expect(result.activity).toEqual([
+      { user: greptile, noteCount: 0, unresolvedCount: 0 },
+      { user: silentBot, noteCount: 0, unresolvedCount: 0 },
+      {
+        user: { id: 91, username: "aman", name: "Aman", webUrl: null, avatarUrl: null },
+        noteCount: 1,
+        unresolvedCount: 0,
+      },
+      {
+        user: { id: 92, username: "zoe", name: "Zoe", webUrl: null, avatarUrl: null },
+        noteCount: 1,
+        unresolvedCount: 1,
+      },
+    ]);
   });
 });

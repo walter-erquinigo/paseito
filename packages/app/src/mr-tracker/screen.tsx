@@ -258,11 +258,6 @@ export function MRTrackerScreen({ tab, focusId, focusRevision }: MRTrackerScreen
     () => buildMRStacks(visibleMergeRequests, tab, search),
     [search, tab, visibleMergeRequests],
   );
-  const activityUserIds = useMemo(
-    () => new Set(state?.settings.activityUsers.map((user) => user.id) ?? []),
-    [state?.settings.activityUsers],
-  );
-
   const run = useCallback(
     async (id: string, action: () => Promise<unknown>) => {
       setPendingAction(id);
@@ -389,7 +384,6 @@ export function MRTrackerScreen({ tab, focusId, focusRevision }: MRTrackerScreen
                 onToggle={handleToggle}
                 onImportance={handleImportance}
                 onRemove={handleRemove}
-                activityUserIds={activityUserIds}
               />
             ))}
           </View>
@@ -503,28 +497,20 @@ function MRFocusHighlight({
   );
 }
 
-function MRActivityBadges({
-  value,
-  activityUserIds,
-}: {
-  value: MergeRequestSnapshot;
-  activityUserIds: ReadonlySet<number>;
-}) {
+function MRActivityBadges({ value }: { value: MergeRequestSnapshot }) {
   const { t } = useTranslation();
   if (!value.isOwned) return null;
-  return value.discussions.activity
-    .filter((activity) => activityUserIds.has(activity.user.id))
-    .map((activity) => {
-      const badge = activityBadge(activity, t);
-      return (
-        <StatusBadge
-          key={activity.user.id}
-          label={badge.text}
-          variant={badge.variant}
-          testID={`mr-activity-${value.id}-${activity.user.id}`}
-        />
-      );
-    });
+  return value.discussions.activity.map((activity) => {
+    const badge = activityBadge(activity, t);
+    return (
+      <StatusBadge
+        key={activity.user.id}
+        label={badge.text}
+        variant={badge.variant}
+        testID={`mr-activity-${value.id}-${activity.user.id}`}
+      />
+    );
+  });
 }
 
 function MRRow({
@@ -538,7 +524,6 @@ function MRRow({
   onToggle,
   onImportance,
   onRemove,
-  activityUserIds,
 }: {
   value: MergeRequestSnapshot;
   depth: number;
@@ -550,7 +535,6 @@ function MRRow({
   onToggle: (id: string) => void;
   onImportance: (id: string, value: MRImportance) => void;
   onRemove: (id: string) => void;
-  activityUserIds: ReadonlySet<number>;
 }) {
   const { t } = useTranslation();
   const rowStyle = useMemo(() => [styles.row, context && styles.contextRow], [context]);
@@ -675,7 +659,7 @@ function MRRow({
                   />
                 ) : null}
                 {approval ? <Badge text={approval.text} tone={approval.tone} /> : null}
-                <MRActivityBadges value={value} activityUserIds={activityUserIds} />
+                <MRActivityBadges value={value} />
               </View>
             </View>
           </Pressable>

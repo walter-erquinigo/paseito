@@ -479,7 +479,7 @@
         "Keep every local triage label understandable through concise desktop hover and keyboard-focus explanations.",
         "Keep MR triage left-anchored while summary navigation, detail expansion, and importance controls remain independent interactions.",
         "Keep MR triage binary as Important or Ignore, normalize legacy local choices to Ignore, and provide an accessible Important-only filter beside search.",
-        "Keep configured GitLab activity badges scoped to owner-authored MRs and keyed by stable user identity instead of ambiguous display names.",
+        "Keep always-show GitLab accounts visible before activity while discovering other commenters only after activity, scoped to owner-authored MRs and keyed by stable user identity.",
         "Keep the Chrome bridge token-free and origin-opt-in while repeated links reveal, expand, center and highlight the resolved MR."
       ],
       "permanent": false,
@@ -490,7 +490,7 @@
         "GitLab integration issues GET requests only; local tracking and importance never mutate GitLab.",
         "After token submission, desktop main never returns the stored GitLab token to renderer state; nonsecret state is stored separately, and the token remains in a separate owner-only local file without macOS Keychain.",
         "MR readiness and notifications use generic GitLab mergeability, overall pipeline, approvals and blocking-discussion facts; MR Tracker automations and product-specific integrations remain excluded.",
-        "Configured GitLab accounts show No activity, Open or All clear only on owner-authored MRs; non-system notes establish activity and only authored resolvable notes can remain open.",
+        "Configured GitLab accounts show No activity, Open or All clear only on owner-authored MRs; other non-system commenters except the MR author appear automatically after activity, and only authored resolvable notes can remain open.",
         "The first complete refresh is notification-silent, partial refreshes preserve cached results without advancing transitions, and later complete refreshes notify only for new owned MRs, readiness, or a new failed pipeline.",
         "The locally loadable Chrome extension requests access per HTTPS GitLab origin, makes no GitLab API requests, opens a validated paseito:// MR link, and stores no credentials.",
         "MR links resolve through desktop main, locally track a missing open MR without mutating GitLab, choose My MRs or Others by resolved ownership, and make repeated focus visible."

@@ -66,20 +66,6 @@ function trackerState(): MRTrackerViewState {
           webUrl: null,
           avatarUrl: null,
         },
-        {
-          id: 81,
-          name: "Review bot",
-          username: "review_bot",
-          webUrl: null,
-          avatarUrl: null,
-        },
-        {
-          id: 82,
-          name: "Lint bot",
-          username: "lint_bot",
-          webUrl: null,
-          avatarUrl: null,
-        },
       ],
       includeReviewerMergeRequests: true,
       tokenType: "private-token",
@@ -137,30 +123,19 @@ function trackerState(): MRTrackerViewState {
                 webUrl: null,
                 avatarUrl: null,
               },
-              noteCount: 1,
+              noteCount: 0,
               unresolvedCount: 0,
             },
             {
               user: {
                 id: 81,
-                name: "Review bot",
-                username: "review_bot",
+                name: "Aman",
+                username: "aman",
                 webUrl: null,
                 avatarUrl: null,
               },
               noteCount: 2,
               unresolvedCount: 1,
-            },
-            {
-              user: {
-                id: 82,
-                name: "Lint bot",
-                username: "lint_bot",
-                webUrl: null,
-                avatarUrl: null,
-              },
-              noteCount: 0,
-              unresolvedCount: 0,
             },
           ],
           error: null,
@@ -223,9 +198,9 @@ test.describe("MR tracker row interactions", () => {
     const workspace = await withWorkspace({ prefix: "mr-tracker-settings-" });
     await workspace.navigateTo();
     await page.getByRole("button", { name: "MR tracker settings", exact: true }).click();
-    await expect(page.getByText("Activity badges for my MRs", { exact: true })).toBeVisible();
+    await expect(page.getByText("Always-show activity badges", { exact: true })).toBeVisible();
 
-    await page.getByRole("button", { name: "Add GitLab user", exact: true }).click();
+    await page.getByRole("button", { name: "Add always-show user", exact: true }).click();
     await page.getByPlaceholder("Search GitLab users").fill("Greptile");
     await expect(page.getByRole("button", { name: "Greptile", exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Greptile", exact: true }).click();
@@ -254,7 +229,7 @@ test.describe("MR tracker row interactions", () => {
     const workspace = await withWorkspace({ prefix: "mr-tracker-settings-error-" });
     await workspace.navigateTo();
     await page.getByRole("button", { name: "MR tracker settings", exact: true }).click();
-    await page.getByRole("button", { name: "Add GitLab user", exact: true }).click();
+    await page.getByRole("button", { name: "Add always-show user", exact: true }).click();
     await page.getByPlaceholder("Search GitLab users").fill("Greptile");
 
     await expect(page.getByText("GitLab user search unavailable.", { exact: true })).toBeVisible();
@@ -286,9 +261,9 @@ test.describe("MR tracker row interactions", () => {
     await expect(summary).toBeVisible();
     await expect(importance.first()).toBeVisible();
     await expect(page.getByText(IGNORED_MR_TITLE, { exact: true })).toBeVisible();
-    await expect(page.getByText("Greptile · All clear", { exact: true })).toHaveCount(1);
-    await expect(page.getByText("Review bot · Open", { exact: true })).toHaveCount(1);
-    await expect(page.getByText("Lint bot · No activity", { exact: true })).toHaveCount(1);
+    await expect(page.getByText("Greptile · No activity", { exact: true })).toHaveCount(1);
+    await expect(page.getByText("Aman · Open", { exact: true })).toHaveCount(1);
+    await expect(page.getByText("Lint bot · No activity", { exact: true })).toHaveCount(0);
 
     await importantOnly.click();
     await expect(importantOnly).toHaveAttribute("aria-pressed", "true");

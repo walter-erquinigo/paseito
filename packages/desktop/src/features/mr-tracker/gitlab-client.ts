@@ -13,6 +13,12 @@ interface GitLabClientOptions {
   fetchImpl?: typeof fetch;
 }
 
+export interface GitLabDiscussionActivityOptions {
+  alwaysShowUsers?: readonly GitLabUserSummary[];
+  discoverAuthors?: boolean;
+  excludedUserIds?: readonly number[];
+}
+
 export interface GitLabMergeRequest {
   id?: number;
   iid: number;
@@ -210,20 +216,43 @@ export class GitLabReadOnlyClient {
   async discussions(
     projectRef: string | number,
     iid: number,
-    activityUsers: readonly GitLabUserSummary[] = [],
+    activityOptions: GitLabDiscussionActivityOptions = {},
   ): Promise<MergeRequestDiscussionSummary> {
     const values = await this.getAll<GitLabApiDiscussion>(
       `projects/${encodeURIComponent(String(projectRef))}/merge_requests/${iid}/discussions`,
     );
     const notes = values.flatMap((discussion) => discussion.notes ?? []);
     const resolvable = notes.filter((note) => note.resolvable === true);
+    const nonSystemNotes = notes.filter((note) => note.system !== true && note.author);
+    const excludedUserIds = new Set(activityOptions.excludedUserIds ?? []);
+    const activityUsers: GitLabUserSummary[] = [];
+    const activityUserIds = new Set<number>();
+    for (const user of activityOptions.alwaysShowUsers ?? []) {
+      if (excludedUserIds.has(user.id) || activityUserIds.has(user.id)) continue;
+      activityUsers.push(user);
+      activityUserIds.add(user.id);
+    }
+    if (activityOptions.discoverAuthors) {
+      const discoveredUsers = new Map<number, GitLabUserSummary>();
+      for (const note of nonSystemNotes) {
+        const author = note.author;
+        if (!author || excludedUserIds.has(author.id) || activityUserIds.has(author.id)) continue;
+        discoveredUsers.set(author.id, toUser(author));
+      }
+      activityUsers.push(
+        ...[...discoveredUsers.values()].sort(
+          (left, right) =>
+            (left.name ?? left.username).localeCompare(right.name ?? right.username) ||
+            left.username.localeCompare(right.username) ||
+            left.id - right.id,
+        ),
+      );
+    }
     return {
       resolvableCount: resolvable.length,
       unresolvedCount: resolvable.filter((note) => note.resolved !== true).length,
       activity: activityUsers.map((user) => {
-        const authoredNotes = notes.filter(
-          (note) => note.system !== true && note.author?.id === user.id,
-        );
+        const authoredNotes = nonSystemNotes.filter((note) => note.author?.id === user.id);
         return {
           user,
           noteCount: authoredNotes.length,

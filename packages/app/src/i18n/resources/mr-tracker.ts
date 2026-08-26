@@ -82,9 +82,10 @@ export const mrTrackerSettingsTranslations = {
   monitoringTitle: "Merge requests to monitor",
   authors: "Additional authors",
   authorsHint: "Comma-separated exact GitLab usernames.",
-  activityUsers: "Activity badges for my MRs",
-  activityUsersHint: "Show activity from selected GitLab users on merge requests authored by you.",
-  addActivityUser: "Add GitLab user",
+  activityUsers: "Always-show activity badges",
+  activityUsersHint:
+    "Selected users show a badge even before they comment. Other commenters appear automatically after activity.",
+  addActivityUser: "Add always-show user",
   removeActivityUser: "Remove {{name}}",
   activityUserSearch: "Search GitLab users",
   activityUserSearchHint: "Type at least 2 characters",

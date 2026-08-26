@@ -93,12 +93,12 @@ describe("MRTrackerService", () => {
           error: null,
         };
       },
-      async discussions(_projectRef, _iid, activityUsers = []) {
+      async discussions(_projectRef, _iid, activityOptions = {}) {
         if (discussionsFail) throw new Error("temporary discussions failure");
         return {
           unresolvedCount: 0,
           resolvableCount: 0,
-          activity: activityUsers.map((user) => ({
+          activity: (activityOptions.alwaysShowUsers ?? []).map((user) => ({
             user,
             noteCount: 1,
             unresolvedCount: 0,
@@ -242,7 +242,7 @@ describe("MRTrackerService", () => {
     ).rejects.toThrow("not on the GitLab server configured in Paseito");
   });
 
-  it("tracks configured user activity only on owned merge requests", async () => {
+  it("discovers commenter activity only on owned merge requests", async () => {
     let data: MRTrackerStoreData = {
       settings: {
         ...DEFAULT_MR_TRACKER_SETTINGS,
@@ -258,7 +258,11 @@ describe("MRTrackerService", () => {
       ...mergeRequest(2),
       author: { id: 9, name: "Lin", username: "lin" },
     };
-    const discussionActivityUsers: number[][] = [];
+    const discussionActivityOptions: Array<{
+      alwaysShowUserIds: number[];
+      discoverAuthors: boolean;
+      excludedUserIds: number[];
+    }> = [];
     const client: GitLabTrackerClient = {
       async currentUser() {
         return owner;
@@ -294,12 +298,16 @@ describe("MRTrackerService", () => {
           error: null,
         };
       },
-      async discussions(_projectRef, _iid, activityUsers = []) {
-        discussionActivityUsers.push(activityUsers.map((user) => user.id));
+      async discussions(_projectRef, _iid, activityOptions = {}) {
+        discussionActivityOptions.push({
+          alwaysShowUserIds: (activityOptions.alwaysShowUsers ?? []).map((user) => user.id),
+          discoverAuthors: activityOptions.discoverAuthors === true,
+          excludedUserIds: [...(activityOptions.excludedUserIds ?? [])],
+        });
         return {
           unresolvedCount: 0,
           resolvableCount: 0,
-          activity: activityUsers.map((user) => ({
+          activity: (activityOptions.alwaysShowUsers ?? []).map((user) => ({
             user,
             noteCount: 1,
             unresolvedCount: 0,
@@ -332,7 +340,14 @@ describe("MRTrackerService", () => {
 
     const state = await service.refresh();
 
-    expect(discussionActivityUsers).toEqual([[greptile.id], []]);
+    expect(discussionActivityOptions).toEqual([
+      {
+        alwaysShowUserIds: [greptile.id],
+        discoverAuthors: true,
+        excludedUserIds: [owner.id],
+      },
+      { alwaysShowUserIds: [], discoverAuthors: false, excludedUserIds: [] },
+    ]);
     expect(state.mergeRequests.find((value) => value.iid === 1)?.discussions.activity).toEqual([
       { user: greptile, noteCount: 1, unresolvedCount: 0 },
     ]);
