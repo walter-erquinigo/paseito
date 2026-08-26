@@ -46,6 +46,80 @@ async function hideAmendCapability(page: Page): Promise<void> {
   });
 }
 
+async function showGitLabMergeRequest(page: Page): Promise<void> {
+  await page.routeWebSocket(daemonWsRoutePattern(), (browserSocket) => {
+    const serverSocket = browserSocket.connectToServer();
+    browserSocket.onMessage((message) => serverSocket.send(message));
+    serverSocket.onMessage((message) => {
+      if (typeof message !== "string") {
+        browserSocket.send(message);
+        return;
+      }
+      const envelope = JSON.parse(message) as {
+        message?: {
+          type?: string;
+          payload?: Record<string, unknown> & {
+            features?: Record<string, unknown>;
+            prStatus?: Record<string, unknown>;
+          };
+        };
+      };
+      const payload = envelope.message?.payload;
+      if (envelope.message?.type === "status" && payload?.status === "server_info") {
+        payload.features = { ...payload.features, changesForgeDiscussionsV1: true };
+      }
+      const gitLabStatus = {
+        forge: "gitlab",
+        projectPath: "example/repository",
+        number: 42,
+        url: "https://gitlab.example.com/example/repository/-/merge_requests/42",
+        title: "Toolbar layout fixture",
+        state: "open",
+        baseRefName: "main",
+        headRefName: "main",
+        isMerged: false,
+        isDraft: false,
+        mergeable: "MERGEABLE",
+        checks: [],
+        repoOwner: "example",
+        repoName: "repository",
+      };
+      if (envelope.message?.type === "checkout_pr_status_response" && payload) {
+        payload.status = gitLabStatus;
+        payload.forge = "gitlab";
+        payload.authState = "authenticated";
+        payload.githubFeaturesEnabled = true;
+        payload.error = null;
+      }
+      if (envelope.message?.type === "checkout_status_update" && payload?.prStatus) {
+        payload.prStatus = {
+          ...payload.prStatus,
+          status: gitLabStatus,
+          forge: "gitlab",
+          authState: "authenticated",
+          githubFeaturesEnabled: true,
+          error: null,
+        };
+      }
+      browserSocket.send(JSON.stringify(envelope));
+    });
+  });
+}
+
+async function expectControlsDoNotOverlap(controls: ReturnType<Page["locator"]>[]): Promise<void> {
+  const boxes = await Promise.all(controls.map((control) => control.boundingBox()));
+  for (const box of boxes) expect(box).not.toBeNull();
+  for (let left = 0; left < boxes.length; left += 1) {
+    for (let right = left + 1; right < boxes.length; right += 1) {
+      const a = boxes[left]!;
+      const b = boxes[right]!;
+      const overlaps =
+        a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
+      expect(overlaps, `controls ${left} and ${right} overlap`).toBe(false);
+    }
+  }
+}
+
 test("the branch badge amends changes independently of the selected comparison", async ({
   page,
 }) => {
@@ -63,6 +137,7 @@ test("the branch badge amends changes independently of the selected comparison",
     }
 
     await page.setViewportSize({ width: 1400, height: 900 });
+    await showGitLabMergeRequest(page);
     await page.goto(buildHostWorkspaceRoute(getServerId(), created.workspace.id));
     await waitForWorkspaceTabsVisible(page);
     await openChangesTreePanel(page);
@@ -80,6 +155,24 @@ test("the branch badge amends changes independently of the selected comparison",
     await openChangesPanel(page);
     await expect(badge).toHaveText("Uncommitted", { timeout: 30_000 });
     await expect(amend).toHaveText("Amend");
+
+    const tree = page.getByTestId("changes-tree-panel");
+    const branch = tree.getByTestId("changes-branch-switcher");
+    const comments = tree.getByTestId("changes-discussions-button");
+    const review = tree.getByTestId("changes-review-menu");
+    const pullRequest = tree.getByTestId("changes-open-pull-request");
+    const external = tree.getByTestId("changes-open-pull-request-external");
+    const diffMode = tree.getByTestId("changes-diff-status-trigger");
+    const base = tree.getByTestId("changes-base-selector");
+    const refresh = tree.getByTestId("changes-refresh");
+    const options = tree.getByTestId("changes-options-menu");
+    await expect(comments).toHaveText("0");
+    await expect(pullRequest).toContainText("!42");
+    await expect
+      .poll(async () => (await branch.boundingBox())?.width ?? 0)
+      .toBeGreaterThanOrEqual(40);
+    await expectControlsDoNotOverlap([branch, badge, amend, pullRequest, external]);
+    await expectControlsDoNotOverlap([diffMode, base, comments, review, refresh, options]);
 
     await comparison.click();
     await page.getByTestId("changes-diff-mode-committed").click();

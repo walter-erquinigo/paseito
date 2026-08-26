@@ -608,7 +608,7 @@ def deploy_host(
     remote_bundle = f"{stage}/{artifact.name}"
     copied = command(
         ["scp", "-q", "-o", "BatchMode=yes", str(artifact), f"{target}:{remote_bundle}"],
-        timeout=900,
+        timeout=3600,
     )
     if copied.returncode:
         raise DeploymentError("upload", "Linux daemon upload failed")

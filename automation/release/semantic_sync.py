@@ -768,7 +768,7 @@ def promote(
         remote_args,
         cwd=candidate,
         check=False,
-        timeout=900,
+        timeout=3600,
     )
     if remote_restart_approved:
         if remote.returncode:

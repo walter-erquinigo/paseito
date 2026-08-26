@@ -218,7 +218,7 @@ class RemoteDeploymentTests(unittest.TestCase):
 
     def test_vpn_upload_has_a_bounded_slow_link_allowance(self) -> None:
         source = Path(__file__).with_name("deploy_remote_daemons.py").read_text(encoding="utf-8")
-        self.assertIn("timeout=900", source)
+        self.assertIn("timeout=3600", source)
 
     def test_state_is_atomic_and_private(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

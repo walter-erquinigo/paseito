@@ -652,7 +652,9 @@ function ChangesHeader({
       />
       <ChangesComparisonToolbar
         compact={compact}
+        discussions={discussions}
         model={comparison}
+        reviews={reviews}
         sidebarSurface={sidebarSurface}
       />
     </View>
@@ -754,8 +756,12 @@ function ChangesRepositoryToolbar({
         />
       </ChangesToolbarLeading>
       <ChangesToolbarTrailing>
-        <ChangesDiscussionButton compact={compact} model={discussions} />
-        <ReviewBulkMenu model={reviews} />
+        {!sidebarSurface ? (
+          <>
+            <ChangesDiscussionButton compact={compact} model={discussions} />
+            <ReviewBulkMenu model={reviews} />
+          </>
+        ) : null}
         {model.pullRequest ? (
           <>
             <ChangesPullRequestLink model={model.pullRequest} />
@@ -970,11 +976,15 @@ function ChangesPullRequestExternalLink({
 
 function ChangesComparisonToolbar({
   compact,
+  discussions,
   model,
+  reviews,
   sidebarSurface,
 }: {
   compact: boolean;
+  discussions: ChangesDiscussionToolbarModel | null;
   model: ChangesComparisonToolbarModel;
+  reviews: ChangesReviewToolbarModel | null;
   sidebarSurface: boolean;
 }) {
   return (
@@ -1003,6 +1013,12 @@ function ChangesComparisonToolbar({
         ) : null}
       </ChangesToolbarLeading>
       <ChangesToolbarTrailing>
+        {sidebarSurface ? (
+          <>
+            <ChangesDiscussionButton compact model={discussions} />
+            <ReviewBulkMenu model={reviews} />
+          </>
+        ) : null}
         <ChangesToolbarActions mode={model.mode} compact={compact} />
       </ChangesToolbarTrailing>
     </ChangesToolbarRow>
@@ -2676,6 +2692,7 @@ const styles = StyleSheet.create((theme) => ({
   changesToolbarIdentity: {
     flex: 1,
     minWidth: 0,
+    overflow: "hidden",
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[1],
