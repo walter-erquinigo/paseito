@@ -137,6 +137,17 @@ function trackerState(): MRTrackerViewState {
               noteCount: 2,
               unresolvedCount: 1,
             },
+            {
+              user: {
+                id: 82,
+                name: "Lint bot",
+                username: "lint_bot",
+                webUrl: null,
+                avatarUrl: null,
+              },
+              noteCount: 0,
+              unresolvedCount: 0,
+            },
           ],
           error: null,
         },
