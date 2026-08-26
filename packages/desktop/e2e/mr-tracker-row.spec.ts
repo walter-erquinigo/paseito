@@ -32,6 +32,25 @@ async function getLastImportanceValue(page: Page): Promise<unknown> {
   });
 }
 
+async function getLastDesktopInvocationArgs(page: Page, command: string): Promise<unknown> {
+  return page.evaluate(
+    (targetCommand) =>
+      window.__capturedDesktopInvocations.findLast((entry) => entry.command === targetCommand)
+        ?.args,
+    command,
+  );
+}
+
+async function getDesktopInvocationCount(page: Page, command: string): Promise<number> {
+  return page.evaluate((targetCommand) => {
+    let count = 0;
+    for (const entry of window.__capturedDesktopInvocations) {
+      if (entry.command === targetCommand) count += 1;
+    }
+    return count;
+  }, command);
+}
+
 function trackerState(): MRTrackerViewState {
   const state: MRTrackerViewState = {
     status: "ready",
@@ -39,6 +58,29 @@ function trackerState(): MRTrackerViewState {
       gitLabBaseUrl: "https://gitlab.example.com",
       gitLabUsername: "ada",
       authors: [],
+      activityUsers: [
+        {
+          id: 80,
+          name: "Greptile",
+          username: "group_bot",
+          webUrl: null,
+          avatarUrl: null,
+        },
+        {
+          id: 81,
+          name: "Review bot",
+          username: "review_bot",
+          webUrl: null,
+          avatarUrl: null,
+        },
+        {
+          id: 82,
+          name: "Lint bot",
+          username: "lint_bot",
+          webUrl: null,
+          avatarUrl: null,
+        },
+      ],
       includeReviewerMergeRequests: true,
       tokenType: "private-token",
       refreshIntervalSeconds: 120,
@@ -83,7 +125,46 @@ function trackerState(): MRTrackerViewState {
           rulesLeft: 1,
           error: null,
         },
-        discussions: { unresolvedCount: 0, resolvableCount: 0, error: null },
+        discussions: {
+          unresolvedCount: 0,
+          resolvableCount: 0,
+          activity: [
+            {
+              user: {
+                id: 80,
+                name: "Greptile",
+                username: "group_bot",
+                webUrl: null,
+                avatarUrl: null,
+              },
+              noteCount: 1,
+              unresolvedCount: 0,
+            },
+            {
+              user: {
+                id: 81,
+                name: "Review bot",
+                username: "review_bot",
+                webUrl: null,
+                avatarUrl: null,
+              },
+              noteCount: 2,
+              unresolvedCount: 1,
+            },
+            {
+              user: {
+                id: 82,
+                name: "Lint bot",
+                username: "lint_bot",
+                webUrl: null,
+                avatarUrl: null,
+              },
+              noteCount: 0,
+              unresolvedCount: 0,
+            },
+          ],
+          error: null,
+        },
         mergeStatus: "can_be_merged",
         detailedMergeStatus: "mergeable",
         blockingDiscussionsResolved: true,
@@ -111,6 +192,8 @@ function trackerState(): MRTrackerViewState {
     webUrl: "https://gitlab.example.com/example/constellation/-/merge_requests/43",
     sourceBranch: "feature/remove-legacy-renderer",
     importance: "ignored",
+    isOwned: false,
+    isReviewer: true,
     isReady: false,
     needsAttention: false,
   });
@@ -118,6 +201,67 @@ function trackerState(): MRTrackerViewState {
 }
 
 test.describe("MR tracker row interactions", () => {
+  test("searches and selects an exact GitLab activity account", async ({ page, withWorkspace }) => {
+    const state = trackerState();
+    state.settings.activityUsers = [];
+    await installDesktopRuntime(page, {
+      serverId: getServerId(),
+      commandResponses: {
+        get_mr_tracker_state: state,
+        search_mr_tracker_users: [
+          {
+            id: 80,
+            name: "Greptile",
+            username: "group_bot",
+            webUrl: null,
+            avatarUrl: null,
+          },
+        ],
+        save_mr_tracker_settings: state,
+      },
+    });
+    const workspace = await withWorkspace({ prefix: "mr-tracker-settings-" });
+    await workspace.navigateTo();
+    await page.getByRole("button", { name: "MR tracker settings", exact: true }).click();
+    await expect(page.getByText("Activity badges for my MRs", { exact: true })).toBeVisible();
+
+    await page.getByRole("button", { name: "Add GitLab user", exact: true }).click();
+    await page.getByPlaceholder("Search GitLab users").fill("Greptile");
+    await expect(page.getByRole("button", { name: "Greptile", exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Greptile", exact: true }).click();
+    await page.keyboard.press("Escape");
+    await expect(page.getByText("@group_bot", { exact: true })).toBeVisible();
+
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    await expect
+      .poll(() => getLastDesktopInvocationArgs(page, "save_mr_tracker_settings"))
+      .toMatchObject({
+        activityUsers: [{ id: 80, username: "group_bot", name: "Greptile" }],
+      });
+  });
+
+  test("keeps GitLab activity search failures visible for retry", async ({
+    page,
+    withWorkspace,
+  }) => {
+    const state = trackerState();
+    state.settings.activityUsers = [];
+    await installDesktopRuntime(page, {
+      serverId: getServerId(),
+      commandResponses: { get_mr_tracker_state: state },
+      commandErrors: { search_mr_tracker_users: "GitLab user search unavailable." },
+    });
+    const workspace = await withWorkspace({ prefix: "mr-tracker-settings-error-" });
+    await workspace.navigateTo();
+    await page.getByRole("button", { name: "MR tracker settings", exact: true }).click();
+    await page.getByRole("button", { name: "Add GitLab user", exact: true }).click();
+    await page.getByPlaceholder("Search GitLab users").fill("Greptile");
+
+    await expect(page.getByText("GitLab user search unavailable.", { exact: true })).toBeVisible();
+    await page.getByPlaceholder("Search GitLab users").fill("Greptile bot");
+    await expect.poll(() => getDesktopInvocationCount(page, "search_mr_tracker_users")).toBe(2);
+  });
+
   test("filters Important MRs and isolates open, expand, and triage actions", async ({
     page,
     withWorkspace,
@@ -142,6 +286,9 @@ test.describe("MR tracker row interactions", () => {
     await expect(summary).toBeVisible();
     await expect(importance.first()).toBeVisible();
     await expect(page.getByText(IGNORED_MR_TITLE, { exact: true })).toBeVisible();
+    await expect(page.getByText("Greptile · All clear", { exact: true })).toHaveCount(1);
+    await expect(page.getByText("Review bot · Open", { exact: true })).toHaveCount(1);
+    await expect(page.getByText("Lint bot · No activity", { exact: true })).toHaveCount(1);
 
     await importantOnly.click();
     await expect(importantOnly).toHaveAttribute("aria-pressed", "true");

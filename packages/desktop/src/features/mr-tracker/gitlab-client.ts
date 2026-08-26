@@ -64,7 +64,12 @@ interface GitLabApiApprovals {
 }
 
 interface GitLabApiDiscussion {
-  notes?: Array<{ resolvable?: boolean | null; resolved?: boolean | null }> | null;
+  notes?: Array<{
+    author?: GitLabApiUser | null;
+    resolvable?: boolean | null;
+    resolved?: boolean | null;
+    system?: boolean | null;
+  }> | null;
 }
 
 function normalizeBaseUrl(value: string): URL {
@@ -128,6 +133,23 @@ export class GitLabReadOnlyClient {
     return match ? toUser(match) : null;
   }
 
+  async user(userId: number): Promise<GitLabUserSummary> {
+    return toUser(await this.get<GitLabApiUser>(`users/${encodeURIComponent(String(userId))}`));
+  }
+
+  async searchUsers(query: string): Promise<GitLabUserSummary[]> {
+    const trimmed = query.trim();
+    if (trimmed.length < 2) return [];
+    const values = await this.getAll<GitLabApiUser>("users", { search: trimmed, active: "true" });
+    return values
+      .map(toUser)
+      .sort(
+        (left, right) =>
+          (left.name ?? left.username).localeCompare(right.name ?? right.username) ||
+          left.username.localeCompare(right.username),
+      );
+  }
+
   async openMergeRequestsByAuthor(authorId: number): Promise<GitLabMergeRequest[]> {
     return await this.getAll("merge_requests", {
       state: "opened",
@@ -188,6 +210,7 @@ export class GitLabReadOnlyClient {
   async discussions(
     projectRef: string | number,
     iid: number,
+    activityUsers: readonly GitLabUserSummary[] = [],
   ): Promise<MergeRequestDiscussionSummary> {
     const values = await this.getAll<GitLabApiDiscussion>(
       `projects/${encodeURIComponent(String(projectRef))}/merge_requests/${iid}/discussions`,
@@ -197,6 +220,18 @@ export class GitLabReadOnlyClient {
     return {
       resolvableCount: resolvable.length,
       unresolvedCount: resolvable.filter((note) => note.resolved !== true).length,
+      activity: activityUsers.map((user) => {
+        const authoredNotes = notes.filter(
+          (note) => note.system !== true && note.author?.id === user.id,
+        );
+        return {
+          user,
+          noteCount: authoredNotes.length,
+          unresolvedCount: authoredNotes.filter(
+            (note) => note.resolvable === true && note.resolved !== true,
+          ).length,
+        };
+      }),
       error: null,
     };
   }

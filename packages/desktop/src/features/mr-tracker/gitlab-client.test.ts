@@ -50,4 +50,104 @@ describe("GitLabReadOnlyClient", () => {
     expect(await client.exactUser("octavia")).toMatchObject({ id: 2 });
     expect(fetchImpl).toHaveBeenCalledTimes(2);
   });
+
+  it("searches every user page and keeps colliding display names distinct", async () => {
+    const fetchImpl = vi.fn(async (input: URL | RequestInfo) => {
+      const url = new URL(String(input));
+      const page = url.searchParams.get("page");
+      expect(url.searchParams.get("search")).toBe("Greptile");
+      expect(url.searchParams.get("active")).toBe("true");
+      return new Response(
+        JSON.stringify(
+          page === "1"
+            ? [{ id: 70, username: "project_bot", name: "Greptile" }]
+            : [{ id: 80, username: "group_bot", name: "Greptile" }],
+        ),
+        {
+          status: 200,
+          headers: { "content-type": "application/json", "x-next-page": page === "1" ? "2" : "" },
+        },
+      );
+    });
+    const client = new GitLabReadOnlyClient({
+      baseUrl: "https://gitlab.example.com",
+      token: "secret",
+      tokenType: "private-token",
+      fetchImpl: fetchImpl as typeof fetch,
+    });
+
+    expect(await client.searchUsers("Greptile")).toEqual([
+      {
+        id: 80,
+        username: "group_bot",
+        name: "Greptile",
+        webUrl: null,
+        avatarUrl: null,
+      },
+      {
+        id: 70,
+        username: "project_bot",
+        name: "Greptile",
+        webUrl: null,
+        avatarUrl: null,
+      },
+    ]);
+  });
+
+  it("counts non-system activity and only unresolved resolvable notes", async () => {
+    const fetchImpl = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify([
+            {
+              notes: [
+                {
+                  author: { id: 80, username: "group_bot", name: "Greptile" },
+                  system: false,
+                  resolvable: false,
+                  resolved: null,
+                },
+              ],
+            },
+            {
+              notes: [
+                {
+                  author: { id: 80, username: "group_bot", name: "Greptile" },
+                  system: false,
+                  resolvable: true,
+                  resolved: false,
+                },
+                {
+                  author: { id: 80, username: "group_bot", name: "Greptile" },
+                  system: true,
+                  resolvable: false,
+                  resolved: null,
+                },
+              ],
+            },
+          ]),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+    );
+    const client = new GitLabReadOnlyClient({
+      baseUrl: "https://gitlab.example.com",
+      token: "secret",
+      tokenType: "private-token",
+      fetchImpl: fetchImpl as typeof fetch,
+    });
+    const greptile = {
+      id: 80,
+      username: "group_bot",
+      name: "Greptile",
+      webUrl: null,
+      avatarUrl: null,
+    };
+
+    expect(await client.discussions(10, 42, [greptile])).toEqual({
+      resolvableCount: 1,
+      unresolvedCount: 1,
+      activity: [{ user: greptile, noteCount: 2, unresolvedCount: 1 }],
+      error: null,
+    });
+  });
 });

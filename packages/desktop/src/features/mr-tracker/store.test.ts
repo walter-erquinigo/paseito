@@ -53,6 +53,34 @@ describe("MR tracker persistence", () => {
       "ignored",
       "ignored",
     ]);
+    expect(data.settings.activityUsers).toEqual([]);
+    expect(data.state.snapshots.map((snapshot) => snapshot.discussions.activity)).toEqual([[], []]);
+  });
+
+  it("persists selected activity accounts by stable GitLab identity", async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), "paseito-mr-tracker-"));
+    temporaryDirectories.push(directory);
+    const store = createMRTrackerStore(directory);
+    const greptile = {
+      id: 80,
+      username: "group_bot",
+      name: "Greptile",
+      webUrl: "https://gitlab.example.com/group_bot",
+      avatarUrl: null,
+    };
+
+    await store.save({
+      settings: {
+        ...DEFAULT_MR_TRACKER_SETTINGS,
+        gitLabBaseUrl: "https://gitlab.example.com",
+        activityUsers: [greptile],
+      },
+      state: { ...DEFAULT_MR_TRACKER_PERSISTED_STATE },
+    });
+
+    expect((await createMRTrackerStore(directory).load()).settings.activityUsers).toEqual([
+      greptile,
+    ]);
   });
 
   it("keeps the token out of JSON in an owner-only local file", async () => {

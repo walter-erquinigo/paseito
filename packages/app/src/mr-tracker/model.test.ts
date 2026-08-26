@@ -36,7 +36,7 @@ function snapshot(
       rulesLeft: null,
       error: null,
     },
-    discussions: { unresolvedCount: 0, resolvableCount: 0, error: null },
+    discussions: { unresolvedCount: 0, resolvableCount: 0, activity: [], error: null },
     mergeStatus: "can_be_merged",
     detailedMergeStatus: "mergeable",
     blockingDiscussionsResolved: true,

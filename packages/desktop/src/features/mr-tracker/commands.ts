@@ -15,6 +15,7 @@ export function createMRTrackerCommandHandlers({
   return {
     get_mr_tracker_state: () => service.getState(),
     refresh_mr_tracker: () => service.refresh(),
+    search_mr_tracker_users: (args) => service.searchUsers(args ?? {}),
     save_mr_tracker_settings: (args) => service.saveSettings(args ?? {}),
     clear_mr_tracker_token: () => service.clearToken(),
     add_tracked_mr: (args) => service.addTracked(requiredString(args, "prompt")),

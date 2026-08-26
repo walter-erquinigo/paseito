@@ -479,6 +479,7 @@
         "Keep every local triage label understandable through concise desktop hover and keyboard-focus explanations.",
         "Keep MR triage left-anchored while summary navigation, detail expansion, and importance controls remain independent interactions.",
         "Keep MR triage binary as Important or Ignore, normalize legacy local choices to Ignore, and provide an accessible Important-only filter beside search.",
+        "Keep configured GitLab activity badges scoped to owner-authored MRs and keyed by stable user identity instead of ambiguous display names.",
         "Keep the Chrome bridge token-free and origin-opt-in while repeated links reveal, expand, center and highlight the resolved MR."
       ],
       "permanent": false,
@@ -489,13 +490,14 @@
         "GitLab integration issues GET requests only; local tracking and importance never mutate GitLab.",
         "After token submission, desktop main never returns the stored GitLab token to renderer state; nonsecret state is stored separately, and the token remains in a separate owner-only local file without macOS Keychain.",
         "MR readiness and notifications use generic GitLab mergeability, overall pipeline, approvals and blocking-discussion facts; MR Tracker automations and product-specific integrations remain excluded.",
+        "Configured GitLab accounts show No activity, Open or All clear only on owner-authored MRs; non-system notes establish activity and only authored resolvable notes can remain open.",
         "The first complete refresh is notification-silent, partial refreshes preserve cached results without advancing transitions, and later complete refreshes notify only for new owned MRs, readiness, or a new failed pipeline.",
         "The locally loadable Chrome extension requests access per HTTPS GitLab origin, makes no GitLab API requests, opens a validated paseito:// MR link, and stores no credentials.",
         "MR links resolve through desktop main, locally track a missing open MR without mutating GitLab, choose My MRs or Others by resolved ownership, and make repeated focus visible."
       ],
       "contracts": [
         "npm test --workspace=@getpaseo/desktop -- --run src/features/mr-tracker/store.test.ts src/features/mr-tracker/gitlab-client.test.ts src/features/mr-tracker/service.test.ts",
-        "npm test --workspace=@getpaseo/app -- --run src/mr-tracker/model.test.ts src/mr-tracker/importance-control.test.tsx src/components/ui/tooltip.test.tsx",
+        "npm test --workspace=@getpaseo/app -- --run src/mr-tracker/model.test.ts src/mr-tracker/activity-state.test.ts src/mr-tracker/settings-form-model.test.ts src/mr-tracker/importance-control.test.tsx src/components/ui/tooltip.test.tsx",
         "npm run test:e2e:renderer --workspace=@getpaseo/desktop -- e2e/mr-tracker-row.spec.ts",
         "npx vitest run packages/protocol/src/mr-deep-link.test.ts packages/desktop/src/mr-navigation.test.ts --bail=1",
         "npm test --workspace=@getpaseo/chrome-extension"

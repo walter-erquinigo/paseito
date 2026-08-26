@@ -42,9 +42,11 @@ import {
 } from "@/components/ui/text-input";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { SearchField } from "@/components/ui/search-field";
+import { StatusBadge, type StatusBadgeVariant } from "@/components/ui/status-badge";
 import { openExternalUrl } from "@/utils/open-external-url";
 import { buildSettingsSectionRoute } from "@/utils/host-routes";
 import { buildMRStacks, filterMRsByImportance } from "./model";
+import { resolveMRActivityState, type MRActivitySummary } from "./activity-state";
 import { ImportanceControl } from "./importance-control";
 import { useMRTrackerState } from "./client";
 import type { MergeRequestSnapshot, MRImportance, MRTrackerTab } from "./types";
@@ -94,6 +96,21 @@ function approvalBadge(
     }),
     tone: "muted",
   };
+}
+
+function activityBadge(
+  activity: MRActivitySummary,
+  t: TFunction,
+): { text: string; variant: StatusBadgeVariant } {
+  const name = activity.user.name || activity.user.username;
+  const state = resolveMRActivityState(activity);
+  if (state === "open") {
+    return { text: t("mrTracker.badges.activityOpen", { name }), variant: "error" };
+  }
+  if (state === "all_clear") {
+    return { text: t("mrTracker.badges.activityAllClear", { name }), variant: "success" };
+  }
+  return { text: t("mrTracker.badges.activityNoActivity", { name }), variant: "muted" };
 }
 
 interface MRTrackerScreenProps {
@@ -241,6 +258,10 @@ export function MRTrackerScreen({ tab, focusId, focusRevision }: MRTrackerScreen
     () => buildMRStacks(visibleMergeRequests, tab, search),
     [search, tab, visibleMergeRequests],
   );
+  const activityUserIds = useMemo(
+    () => new Set(state?.settings.activityUsers.map((user) => user.id) ?? []),
+    [state?.settings.activityUsers],
+  );
 
   const run = useCallback(
     async (id: string, action: () => Promise<unknown>) => {
@@ -368,6 +389,7 @@ export function MRTrackerScreen({ tab, focusId, focusRevision }: MRTrackerScreen
                 onToggle={handleToggle}
                 onImportance={handleImportance}
                 onRemove={handleRemove}
+                activityUserIds={activityUserIds}
               />
             ))}
           </View>
@@ -481,6 +503,30 @@ function MRFocusHighlight({
   );
 }
 
+function MRActivityBadges({
+  value,
+  activityUserIds,
+}: {
+  value: MergeRequestSnapshot;
+  activityUserIds: ReadonlySet<number>;
+}) {
+  const { t } = useTranslation();
+  if (!value.isOwned) return null;
+  return value.discussions.activity
+    .filter((activity) => activityUserIds.has(activity.user.id))
+    .map((activity) => {
+      const badge = activityBadge(activity, t);
+      return (
+        <StatusBadge
+          key={activity.user.id}
+          label={badge.text}
+          variant={badge.variant}
+          testID={`mr-activity-${value.id}-${activity.user.id}`}
+        />
+      );
+    });
+}
+
 function MRRow({
   value,
   depth,
@@ -492,6 +538,7 @@ function MRRow({
   onToggle,
   onImportance,
   onRemove,
+  activityUserIds,
 }: {
   value: MergeRequestSnapshot;
   depth: number;
@@ -503,6 +550,7 @@ function MRRow({
   onToggle: (id: string) => void;
   onImportance: (id: string, value: MRImportance) => void;
   onRemove: (id: string) => void;
+  activityUserIds: ReadonlySet<number>;
 }) {
   const { t } = useTranslation();
   const rowStyle = useMemo(() => [styles.row, context && styles.contextRow], [context]);
@@ -627,6 +675,7 @@ function MRRow({
                   />
                 ) : null}
                 {approval ? <Badge text={approval.text} tone={approval.tone} /> : null}
+                <MRActivityBadges value={value} activityUserIds={activityUserIds} />
               </View>
             </View>
           </Pressable>
@@ -851,7 +900,7 @@ const styles = StyleSheet.create((theme) => ({
   list: {
     gap: theme.spacing[3],
     padding: theme.spacing[4],
-    paddingBottom: theme.spacing[12],
+    paddingBottom: theme.spacing[20],
   },
   updated: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.sm },
   stackCard: {

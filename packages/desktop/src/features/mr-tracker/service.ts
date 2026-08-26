@@ -29,6 +29,8 @@ export interface MRTrackerNavigationResolution {
 export interface GitLabTrackerClient {
   currentUser(): Promise<GitLabUserSummary>;
   exactUser(username: string): Promise<GitLabUserSummary | null>;
+  user(userId: number): Promise<GitLabUserSummary>;
+  searchUsers(query: string): Promise<GitLabUserSummary[]>;
   openMergeRequestsByAuthor(authorId: number): Promise<GitLabMergeRequest[]>;
   openMergeRequestsByReviewer(reviewerId: number): Promise<GitLabMergeRequest[]>;
   mergeRequest(projectRef: string | number, iid: number): Promise<GitLabMergeRequest>;
@@ -37,7 +39,11 @@ export interface GitLabTrackerClient {
     iid: number,
   ): Promise<MergeRequestPipelineSummary | null>;
   approvals(projectRef: string | number, iid: number): Promise<MergeRequestApprovalSummary>;
-  discussions(projectRef: string | number, iid: number): Promise<MergeRequestDiscussionSummary>;
+  discussions(
+    projectRef: string | number,
+    iid: number,
+    activityUsers?: readonly GitLabUserSummary[],
+  ): Promise<MergeRequestDiscussionSummary>;
 }
 
 export interface MRTrackerServiceOptions {
@@ -89,11 +95,55 @@ function normalizeNames(values: string[]): string[] {
   return result;
 }
 
+function normalizeActivityUsers(values: GitLabUserSummary[]): GitLabUserSummary[] {
+  const seen = new Set<number>();
+  return values.filter((value) => {
+    if (
+      !Number.isInteger(value.id) ||
+      value.id <= 0 ||
+      !value.username.trim() ||
+      seen.has(value.id)
+    ) {
+      return false;
+    }
+    seen.add(value.id);
+    return true;
+  });
+}
+
+function activityUsersFromInput(value: unknown): GitLabUserSummary[] {
+  if (!Array.isArray(value)) return [];
+  return normalizeActivityUsers(
+    value.flatMap((entry): GitLabUserSummary[] => {
+      if (typeof entry !== "object" || entry === null || Array.isArray(entry)) return [];
+      const user = entry as Record<string, unknown>;
+      if (
+        typeof user.id !== "number" ||
+        !Number.isInteger(user.id) ||
+        typeof user.username !== "string" ||
+        !user.username.trim()
+      ) {
+        return [];
+      }
+      return [
+        {
+          id: user.id,
+          username: user.username.trim(),
+          name: typeof user.name === "string" ? user.name : null,
+          webUrl: typeof user.webUrl === "string" ? user.webUrl : null,
+          avatarUrl: typeof user.avatarUrl === "string" ? user.avatarUrl : null,
+        },
+      ];
+    }),
+  );
+}
+
 function normalizeSettings(input: Partial<MRTrackerSettings>): MRTrackerSettings {
   return {
     gitLabBaseUrl: input.gitLabBaseUrl?.trim().replace(/\/+$/, "") ?? "",
     gitLabUsername: input.gitLabUsername?.trim() ?? "",
     authors: normalizeNames(input.authors ?? []),
+    activityUsers: normalizeActivityUsers(input.activityUsers ?? []),
     includeReviewerMergeRequests: input.includeReviewerMergeRequests !== false,
     tokenType: input.tokenType === "bearer" ? "bearer" : "private-token",
     refreshIntervalSeconds: 120,
@@ -111,7 +161,7 @@ function emptyApprovals(error: string): MergeRequestApprovalSummary {
 }
 
 function emptyDiscussions(error: string): MergeRequestDiscussionSummary {
-  return { unresolvedCount: null, resolvableCount: null, error };
+  return { unresolvedCount: null, resolvableCount: null, activity: [], error };
 }
 
 function pipelineFromMergeRequest(value: GitLabMergeRequest): MergeRequestPipelineSummary | null {
@@ -348,6 +398,7 @@ export class MRTrackerService {
       authors: Array.isArray(input.authors)
         ? input.authors.filter((value): value is string => typeof value === "string")
         : [],
+      activityUsers: activityUsersFromInput(input.activityUsers),
       includeReviewerMergeRequests: input.includeReviewerMergeRequests !== false,
       tokenType: input.tokenType === "bearer" ? "bearer" : "private-token",
     });
@@ -362,6 +413,9 @@ export class MRTrackerService {
     } else {
       proposed.gitLabUsername = actualUser.username;
     }
+    proposed.activityUsers = await Promise.all(
+      proposed.activityUsers.map((user) => client.user(user.id)),
+    );
     if (replacementToken) await this.options.tokenStore.set(replacementToken);
     this.settings = proposed;
     const persistedState = this.requirePersistedState();
@@ -369,6 +423,29 @@ export class MRTrackerService {
     this.setState({ ...this.state, settings: this.settings, hasToken: true, errors: [] });
     this.installTimer();
     return await this.refresh();
+  }
+
+  async searchUsers(input: Record<string, unknown>): Promise<GitLabUserSummary[]> {
+    await this.start();
+    const query = typeof input.query === "string" ? input.query.trim() : "";
+    if (query.length < 2) return [];
+    const proposed = normalizeSettings({
+      ...this.settings,
+      gitLabBaseUrl:
+        typeof input.gitLabBaseUrl === "string" ? input.gitLabBaseUrl : this.settings.gitLabBaseUrl,
+      tokenType:
+        input.tokenType === "bearer" || input.tokenType === "private-token"
+          ? input.tokenType
+          : this.settings.tokenType,
+    });
+    const replacementToken = typeof input.accessToken === "string" ? input.accessToken.trim() : "";
+    const connectionUnchanged =
+      proposed.gitLabBaseUrl === this.settings.gitLabBaseUrl &&
+      proposed.tokenType === this.settings.tokenType;
+    const token =
+      replacementToken || (connectionUnchanged ? await this.options.tokenStore.get() : null);
+    if (!token) throw new Error("Enter a GitLab access token before searching users.");
+    return await this.createClient(proposed, token).searchUsers(query);
   }
 
   async clearToken(): Promise<MRTrackerViewState> {
@@ -645,7 +722,11 @@ export class MRTrackerService {
     const [pipelineResult, approvalResult, discussionResult] = await Promise.allSettled([
       client.latestPipeline(value.project_id, value.iid),
       client.approvals(value.project_id, value.iid),
-      client.discussions(value.project_id, value.iid),
+      client.discussions(
+        value.project_id,
+        value.iid,
+        seed.sources.includes("me") ? this.settings.activityUsers : [],
+      ),
     ]);
     const pipeline = resolvePipeline(pipelineResult, value, previous, onPartialError);
     const approvals = resolveApprovals(approvalResult, previous, onPartialError);

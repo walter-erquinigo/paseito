@@ -56,6 +56,7 @@ export async function loadRealDaemonState(): Promise<RealDaemonState> {
 export interface DesktopRuntimeConfig {
   serverId: string;
   commandResponses?: Record<string, unknown>;
+  commandErrors?: Record<string, string>;
   updateAvailable?: boolean;
   latestVersion?: string;
   updateReadyToInstall?: boolean;
@@ -193,6 +194,11 @@ export async function installDesktopRuntime(
       return cfg.commandResponses?.[command] ?? null;
     }
 
+    function assertNoConfiguredCommandError(command: string): void {
+      const configuredError = cfg.commandErrors?.[command];
+      if (configuredError) throw new Error(configuredError);
+    }
+
     const desktopBridge: {
       platform: string;
       invoke: (command: string, args?: Record<string, unknown>) => Promise<unknown>;
@@ -212,6 +218,7 @@ export async function installDesktopRuntime(
       platform: "darwin",
       invoke: async (command: string, args?: Record<string, unknown>) => {
         window.__capturedDesktopInvocations.push({ command, args });
+        assertNoConfiguredCommandError(command);
         if (command === "check_app_update") {
           return cfg.updateAvailable
             ? {

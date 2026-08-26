@@ -10,6 +10,8 @@ import {
   type MRTrackerTokenType,
   type MergeRequestSnapshot,
   type TrackedMergeRequest,
+  type GitLabUserSummary,
+  type MergeRequestUserActivitySummary,
 } from "./types.js";
 
 interface PersistedDocument {
@@ -53,6 +55,36 @@ function stringArray(value: unknown): string[] {
     : [];
 }
 
+function coerceGitLabUser(value: unknown): GitLabUserSummary | null {
+  if (!isRecord(value)) return null;
+  if (
+    typeof value.id !== "number" ||
+    !Number.isInteger(value.id) ||
+    typeof value.username !== "string" ||
+    !value.username.trim()
+  ) {
+    return null;
+  }
+  return {
+    id: value.id,
+    username: value.username.trim(),
+    name: stringOrNull(value.name),
+    webUrl: stringOrNull(value.webUrl),
+    avatarUrl: stringOrNull(value.avatarUrl),
+  };
+}
+
+function coerceActivityUsers(value: unknown): GitLabUserSummary[] {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set<number>();
+  return value.flatMap((entry) => {
+    const user = coerceGitLabUser(entry);
+    if (!user || seen.has(user.id)) return [];
+    seen.add(user.id);
+    return [user];
+  });
+}
+
 function tokenType(value: unknown): MRTrackerTokenType {
   return value === "bearer" ? "bearer" : "private-token";
 }
@@ -67,6 +99,7 @@ function coerceSettings(value: unknown): MRTrackerSettings {
     gitLabBaseUrl: stringValue(record.gitLabBaseUrl),
     gitLabUsername: stringValue(record.gitLabUsername),
     authors: stringArray(record.authors),
+    activityUsers: coerceActivityUsers(record.activityUsers),
     includeReviewerMergeRequests:
       typeof record.includeReviewerMergeRequests === "boolean"
         ? record.includeReviewerMergeRequests
@@ -141,8 +174,34 @@ function coerceSnapshots(value: unknown): MergeRequestSnapshot[] {
       typeof entry.title === "string" &&
       typeof entry.webUrl === "string";
     if (!valid) return [];
+    const snapshot = entry as unknown as MergeRequestSnapshot;
+    const discussionRecord = isRecord(entry.discussions) ? entry.discussions : {};
+    const activity = Array.isArray(discussionRecord.activity)
+      ? discussionRecord.activity.flatMap((activityEntry): MergeRequestUserActivitySummary[] => {
+          if (!isRecord(activityEntry)) return [];
+          const user = coerceGitLabUser(activityEntry.user);
+          if (!user) return [];
+          const noteCount = activityEntry.noteCount;
+          const unresolvedCount = activityEntry.unresolvedCount;
+          if (
+            typeof noteCount !== "number" ||
+            !Number.isInteger(noteCount) ||
+            noteCount < 0 ||
+            typeof unresolvedCount !== "number" ||
+            !Number.isInteger(unresolvedCount) ||
+            unresolvedCount < 0
+          ) {
+            return [];
+          }
+          return [{ user, noteCount, unresolvedCount }];
+        })
+      : [];
     return [
-      { ...(entry as unknown as MergeRequestSnapshot), importance: importance(entry.importance) },
+      {
+        ...snapshot,
+        importance: importance(entry.importance),
+        discussions: { ...snapshot.discussions, activity },
+      },
     ];
   });
 }
@@ -163,7 +222,7 @@ function coerceState(value: unknown): MRTrackerPersistedState {
 
 function cloneDefaults(): MRTrackerStoreData {
   return {
-    settings: { ...DEFAULT_MR_TRACKER_SETTINGS, authors: [] },
+    settings: { ...DEFAULT_MR_TRACKER_SETTINGS, authors: [], activityUsers: [] },
     state: {
       ...DEFAULT_MR_TRACKER_PERSISTED_STATE,
       trackedItems: [],

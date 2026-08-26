@@ -4,12 +4,26 @@ import { useReplicaQuery } from "@/data/query";
 import { getIsElectron } from "@/constants/platform";
 import { getDesktopHost } from "@/desktop/host";
 import { invokeDesktopCommand } from "@/desktop/electron/invoke";
-import type { MRImportance, MRTrackerSettings, MRTrackerViewState } from "./types";
+import type {
+  GitLabUserSummary,
+  MRImportance,
+  MRTrackerSettings,
+  MRTrackerViewState,
+} from "./types";
 
 const QUERY_KEY = ["desktop-mr-tracker"] as const;
 
 export async function loadMRTrackerState(): Promise<MRTrackerViewState> {
   return await invokeDesktopCommand<MRTrackerViewState>("get_mr_tracker_state");
+}
+
+export async function searchMRTrackerUsers(input: {
+  query: string;
+  gitLabBaseUrl: string;
+  tokenType: MRTrackerSettings["tokenType"];
+  accessToken?: string;
+}): Promise<GitLabUserSummary[]> {
+  return await invokeDesktopCommand<GitLabUserSummary[]>("search_mr_tracker_users", input);
 }
 
 export function useMRTrackerState(): {

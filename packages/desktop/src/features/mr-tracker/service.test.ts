@@ -9,6 +9,13 @@ import {
 } from "./types.js";
 
 const owner = { id: 7, name: "Octavia", username: "octavia", webUrl: null, avatarUrl: null };
+const greptile = {
+  id: 80,
+  name: "Greptile",
+  username: "group_bot",
+  webUrl: null,
+  avatarUrl: null,
+};
 
 function mergeRequest(iid: number): GitLabMergeRequest {
   return {
@@ -36,11 +43,13 @@ describe("MRTrackerService", () => {
         ...DEFAULT_MR_TRACKER_SETTINGS,
         gitLabBaseUrl: "https://gitlab.example.com",
         gitLabUsername: "octavia",
+        activityUsers: [greptile],
       },
       state: structuredClone(DEFAULT_MR_TRACKER_PERSISTED_STATE),
     };
     const values = [mergeRequest(1)];
     let approvalsFail = false;
+    let discussionsFail = false;
     const pipelineStatus = new Map<number, { id: number; status: string }>([
       [1, { id: 101, status: "success" }],
     ]);
@@ -51,6 +60,13 @@ describe("MRTrackerService", () => {
       },
       async exactUser(username) {
         return username === owner.username ? owner : null;
+      },
+      async user(userId) {
+        if (userId === greptile.id) return greptile;
+        throw new Error("not found");
+      },
+      async searchUsers() {
+        return [greptile];
       },
       async openMergeRequestsByAuthor() {
         return values;
@@ -77,8 +93,18 @@ describe("MRTrackerService", () => {
           error: null,
         };
       },
-      async discussions() {
-        return { unresolvedCount: 0, resolvableCount: 0, error: null };
+      async discussions(_projectRef, _iid, activityUsers = []) {
+        if (discussionsFail) throw new Error("temporary discussions failure");
+        return {
+          unresolvedCount: 0,
+          resolvableCount: 0,
+          activity: activityUsers.map((user) => ({
+            user,
+            noteCount: 1,
+            unresolvedCount: 0,
+          })),
+          error: null,
+        };
       },
     };
     const service = new MRTrackerService({
@@ -110,11 +136,16 @@ describe("MRTrackerService", () => {
     expect(notifications).toEqual([]);
 
     approvalsFail = true;
+    discussionsFail = true;
     const partial = await service.refresh();
     expect(partial.status).toBe("error");
     expect(partial.mergeRequests[0]?.approvals.approvalsLeft).toBe(0);
+    expect(partial.mergeRequests[0]?.discussions.activity).toEqual([
+      { user: greptile, noteCount: 1, unresolvedCount: 0 },
+    ]);
     expect(notifications).toEqual([]);
     approvalsFail = false;
+    discussionsFail = false;
 
     values.push(mergeRequest(2));
     pipelineStatus.set(2, { id: 201, status: "success" });
@@ -147,6 +178,13 @@ describe("MRTrackerService", () => {
       async exactUser(username) {
         return username === owner.username ? owner : null;
       },
+      async user(userId) {
+        if (userId === greptile.id) return greptile;
+        throw new Error("not found");
+      },
+      async searchUsers() {
+        return [greptile];
+      },
       async openMergeRequestsByAuthor() {
         return [];
       },
@@ -169,7 +207,7 @@ describe("MRTrackerService", () => {
         };
       },
       async discussions() {
-        return { unresolvedCount: 0, resolvableCount: 0, error: null };
+        return { unresolvedCount: 0, resolvableCount: 0, activity: [], error: null };
       },
     };
     const service = new MRTrackerService({
@@ -202,5 +240,102 @@ describe("MRTrackerService", () => {
     await expect(
       service.resolveNavigation("https://other.example.com/group/project/-/merge_requests/17"),
     ).rejects.toThrow("not on the GitLab server configured in Paseito");
+  });
+
+  it("tracks configured user activity only on owned merge requests", async () => {
+    let data: MRTrackerStoreData = {
+      settings: {
+        ...DEFAULT_MR_TRACKER_SETTINGS,
+        gitLabBaseUrl: "https://gitlab.example.com",
+        gitLabUsername: owner.username,
+        activityUsers: [greptile],
+        includeReviewerMergeRequests: true,
+      },
+      state: structuredClone(DEFAULT_MR_TRACKER_PERSISTED_STATE),
+    };
+    const owned = mergeRequest(1);
+    const review = {
+      ...mergeRequest(2),
+      author: { id: 9, name: "Lin", username: "lin" },
+    };
+    const discussionActivityUsers: number[][] = [];
+    const client: GitLabTrackerClient = {
+      async currentUser() {
+        return owner;
+      },
+      async exactUser(username) {
+        return username === owner.username ? owner : null;
+      },
+      async user(userId) {
+        if (userId === greptile.id) return greptile;
+        throw new Error("not found");
+      },
+      async searchUsers() {
+        return [greptile];
+      },
+      async openMergeRequestsByAuthor() {
+        return [owned];
+      },
+      async openMergeRequestsByReviewer() {
+        return [review];
+      },
+      async mergeRequest(_projectRef, iid) {
+        return iid === owned.iid ? owned : review;
+      },
+      async latestPipeline() {
+        return { id: 1, status: "success", webUrl: null, updatedAt: null };
+      },
+      async approvals() {
+        return {
+          approvedBy: [],
+          approvalsRequired: 0,
+          approvalsLeft: 0,
+          rulesLeft: 0,
+          error: null,
+        };
+      },
+      async discussions(_projectRef, _iid, activityUsers = []) {
+        discussionActivityUsers.push(activityUsers.map((user) => user.id));
+        return {
+          unresolvedCount: 0,
+          resolvableCount: 0,
+          activity: activityUsers.map((user) => ({
+            user,
+            noteCount: 1,
+            unresolvedCount: 0,
+          })),
+          error: null,
+        };
+      },
+    };
+    const service = new MRTrackerService({
+      store: {
+        async load() {
+          return structuredClone(data);
+        },
+        async save(next) {
+          data = structuredClone(next);
+        },
+      },
+      tokenStore: {
+        async has() {
+          return true;
+        },
+        async get() {
+          return "secret";
+        },
+        async set() {},
+        async clear() {},
+      },
+      createClient: () => client,
+    });
+
+    const state = await service.refresh();
+
+    expect(discussionActivityUsers).toEqual([[greptile.id], []]);
+    expect(state.mergeRequests.find((value) => value.iid === 1)?.discussions.activity).toEqual([
+      { user: greptile, noteCount: 1, unresolvedCount: 0 },
+    ]);
+    expect(state.mergeRequests.find((value) => value.iid === 2)?.discussions.activity).toEqual([]);
   });
 });

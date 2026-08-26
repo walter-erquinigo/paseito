@@ -1,4 +1,5 @@
 import type { MergeRequestSnapshot, MRTrackerTab } from "./types";
+import { resolveMRActivityState } from "./activity-state";
 
 export interface MRStackEntry {
   mergeRequest: MergeRequestSnapshot;
@@ -35,6 +36,11 @@ function searchable(value: MergeRequestSnapshot): string {
     value.sourceBranch,
     value.targetBranch,
     value.importance,
+    ...value.discussions.activity.flatMap((activity) => [
+      activity.user.name,
+      activity.user.username,
+      resolveMRActivityState(activity).replaceAll("_", " "),
+    ]),
     ...value.labels,
   ]
     .filter(Boolean)

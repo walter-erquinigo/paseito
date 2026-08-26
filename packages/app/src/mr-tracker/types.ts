@@ -5,6 +5,7 @@ export interface MRTrackerSettings {
   gitLabBaseUrl: string;
   gitLabUsername: string;
   authors: string[];
+  activityUsers: GitLabUserSummary[];
   includeReviewerMergeRequests: boolean;
   tokenType: "private-token" | "bearer";
   refreshIntervalSeconds: 120;
@@ -53,6 +54,11 @@ export interface MergeRequestSnapshot {
   discussions: {
     unresolvedCount: number | null;
     resolvableCount: number | null;
+    activity: Array<{
+      user: GitLabUserSummary;
+      noteCount: number;
+      unresolvedCount: number;
+    }>;
     error: string | null;
   };
   mergeStatus: string | null;
