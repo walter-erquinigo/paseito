@@ -1,6 +1,6 @@
 {
   "upstreamRepository": "getpaseo/paseo",
-  "upstreamTag": "v0.5.2",
-  "upstreamCommit": "4092c2926500d51af6510bbe295591af0dfe52f7",
-  "paseitoVersion": "0.5.2-paseito.10"
+  "upstreamTag": "v0.6.1",
+  "upstreamCommit": "20d7efc46a316f5a274b9943a5c43b0322269825",
+  "paseitoVersion": "0.6.1-paseito.1"
 }
