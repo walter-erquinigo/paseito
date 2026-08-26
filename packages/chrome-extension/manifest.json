@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Open GitLab MRs in Paseito",
-  "version": "0.6.1.2",
+  "version": "0.6.1.3",
   "description": "Open the current GitLab merge request in Paseito's MR tracker.",
   "permissions": ["activeTab", "scripting", "storage"],
   "optional_host_permissions": ["https://*/*"],
