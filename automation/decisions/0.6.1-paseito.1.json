@@ -1,0 +1,471 @@
+{
+  "decision": {
+    "schemaVersion": 1,
+    "upstreamTag": "v0.6.1",
+    "upstreamCommit": "20d7efc46a316f5a274b9943a5c43b0322269825",
+    "inputCommit": "3c03559f112866b1b6409a33833c8f75bec8209b",
+    "blocked": false,
+    "blockers": [],
+    "verificationRecommendations": [],
+    "features": [
+      {
+        "id": "independent-desktop-identity",
+        "classification": "carry_forward",
+        "confidence": "certain",
+        "summary": "Paseito remains independently installable and keeps its distinct application, storage, daemon, CLI, updater, and protocol identities.",
+        "evidence": [
+          {
+            "kind": "file",
+            "reference": "packages/app/app.config.js",
+            "explanation": "The independent Paseito application identity remains configured after the v0.6.1 rebase."
+          }
+        ],
+        "contractChecks": [
+          {
+            "command": "npx vitest run packages/protocol/src/agent-deep-link.test.ts packages/desktop/src/agent-navigation.test.ts packages/cli/src/cli-surface.test.ts",
+            "result": "passed"
+          }
+        ],
+        "residualWork": []
+      },
+      {
+        "id": "changes-base-selector",
+        "classification": "adapt",
+        "confidence": "certain",
+        "summary": "The comparison-base selector and Stack-Parent status were placed in upstream's comparison toolbar without restoring the removed downstream file navigator.",
+        "evidence": [
+          {
+            "kind": "file",
+            "reference": "packages/app/src/git/diff-pane.tsx",
+            "explanation": "ChangesBaseSelectorPlacement now composes with the upstream two-row Changes header."
+          }
+        ],
+        "contractChecks": [
+          {
+            "command": "npx vitest run packages/app/src/git/changes-base-selection.test.ts packages/protocol/src/messages.checkout-commits.test.ts packages/server/src/utils/checkout-git.commits.test.ts packages/server/src/utils/checkout-git.stack-parent.test.ts",
+            "result": "passed"
+          }
+        ],
+        "residualWork": []
+      },
+      {
+        "id": "changes-uncommitted-branch-badge",
+        "classification": "adapt",
+        "confidence": "certain",
+        "summary": "The live Uncommitted badge is restored beside upstream's branch switcher and remains independent of the selected comparison mode.",
+        "evidence": [
+          {
+            "kind": "test",
+            "reference": "packages/app/e2e/browser/paseito-changes-uncommitted-branch-badge.spec.ts",
+            "explanation": "The browser contract covers clean, dirty, committed-comparison, and post-amend states."
+          }
+        ],
+        "contractChecks": [
+          {
+            "command": "npx playwright test --project=browser e2e/browser/paseito-changes-uncommitted-branch-badge.spec.ts",
+            "result": "passed"
+          }
+        ],
+        "residualWork": []
+      },
+      {
+        "id": "changes-amend-current-commit",
+        "classification": "adapt",
+        "confidence": "certain",
+        "summary": "Amend is rendered in upstream's repository toolbar, remains capability-gated, and reports an explicit host-upgrade error on older daemons.",
+        "evidence": [
+          {
+            "kind": "file",
+            "reference": "packages/app/src/git/diff-pane.tsx",
+            "explanation": "ChangesUncommittedActions restores the Amend control and checkoutCommitAmend capability gate."
+          }
+        ],
+        "contractChecks": [
+          {
+            "command": "npx vitest run packages/protocol/src/messages.checkout-commit-amend.test.ts packages/client/src/daemon-client.test.ts packages/app/src/git/actions-store.test.ts packages/server/src/utils/checkout-git.test.ts packages/server/src/server/session/checkout/checkout-session.test.ts --bail=1",
+            "result": "passed"
+          },
+          {
+            "command": "npx playwright test --project=browser e2e/browser/paseito-changes-uncommitted-branch-badge.spec.ts",
+            "result": "passed"
+          }
+        ],
+        "residualWork": []
+      },
+      {
+        "id": "changes-context-expansion",
+        "classification": "carry_forward",
+        "confidence": "certain",
+        "summary": "Bounded, revision-validated omitted-context expansion remains available to the upstream diff surface and review flows.",
+        "evidence": [
+          {
+            "kind": "file",
+            "reference": "packages/app/src/git/diff-context-expansion.ts",
+            "explanation": "The bounded context expansion model remains present."
+          }
+        ],
+        "contractChecks": [
+          {
+            "command": "npx vitest run packages/protocol/src/messages.checkout-diff-context.test.ts packages/server/src/utils/checkout-git.context.test.ts packages/app/src/git/diff-context-expansion.test.ts",
+            "result": "passed"
+          }
+        ],
+        "residualWork": []
+      },
+      {
+        "id": "review-suggestions-v1",
+        "classification": "adapt",
+        "confidence": "certain",
+        "summary": "Structured review comments and suggestions use upstream's single transient hover affordance while preserving stable editor actions and attachments.",
+        "evidence": [
+          {
+            "kind": "test",
+            "reference": "packages/app/e2e/browser/paseito-review-attachment-widget.spec.ts",
+            "explanation": "The browser contract creates review comments through the upstream hover gutter and verifies the sent attachment."
+          }
+        ],
+        "contractChecks": [
+          {
+            "command": "npx vitest run packages/app/src/review/store.test.ts packages/app/src/review/surface.test.tsx packages/app/src/attachments/review-attachment-items.test.ts packages/server/src/server/agent/prompt-attachments.test.ts",
+            "result": "passed"
+          },
+          {
+            "command": "npx playwright test --project=browser e2e/browser/paseito-review-attachment-widget.spec.ts",
+            "result": "passed"
+          }
+        ],
+        "residualWork": []
+      },
+      {
+        "id": "branch-file-review-state",
+        "classification": "adapt",
+        "confidence": "certain",
+        "summary": "File and line review state remains integrated with upstream's TreeRail and file headers, including persistent review dots and bulk progress controls.",
+        "evidence": [
+          {
+            "kind": "file",
+            "reference": "packages/app/e2e/browser/changes-pane.spec.ts",
+            "explanation": "The integrated browser contract covers selection, line review, file review, focus, and hover behavior."
+          }
+        ],
+        "contractChecks": [
+          {
+            "command": "npx vitest run packages/app/src/review/file-review.test.ts packages/app/src/review/line-review.test.ts packages/app/src/review/line-review-navigation.test.ts packages/app/src/git/file-review-expansion.test.ts packages/server/src/utils/checkout-git.context.test.ts packages/server/src/utils/checkout-git.test.ts",
+            "result": "passed"
+          }
+        ],
+        "residualWork": []
+      },
+      {
+        "id": "changes-gitlab-discussions",
+        "classification": "adapt",
+        "confidence": "certain",
+        "summary": "GitLab MR discussions are shown inline and in an adaptive inbox from upstream's Changes toolbar, with revision-aware placement, replies, refresh, and capability gating.",
+        "evidence": [
+          {
+            "kind": "commit",
+            "reference": "4196852d7",
+            "explanation": "The normalized feature commit implements daemon-owned GitLab discussions and their Changes UI."
+          },
+          {
+            "kind": "file",
+            "reference": "packages/app/src/git/changes-discussion-inbox.tsx",
+            "explanation": "The adaptive inbox provides open/all filtering, navigation, reply, and stale-anchor presentation."
+          }
+        ],
+        "contractChecks": [
+          {
+            "command": "npx vitest run packages/server/src/services/gitlab-service.test.ts packages/app/src/git/changes-discussions.test.ts --bail=1",
+            "result": "passed"
+          }
+        ],
+        "residualWork": []
+      },
+      {
+        "id": "changes-source-navigation",
+        "classification": "adapt",
+        "confidence": "certain",
+        "summary": "Changed-file search and shared LSP navigation remain revision-safe inside upstream's file-header and TreeRail structure.",
+        "evidence": [
+          {
+            "kind": "file",
+            "reference": "packages/app/src/git/changes-lsp-controller.ts",
+            "explanation": "The shared Changes LSP lifecycle and stale-revision suppression remain present."
+          }
+        ],
+        "contractChecks": [
+          {
+            "command": "npx vitest run packages/protocol/src/messages.checkout-diff-context.test.ts packages/server/src/utils/checkout-git.context.test.ts packages/app/src/git/changes-search.test.ts packages/app/src/git/changes-lsp-controller.test.ts packages/app/src/git/revisioned-source.test.ts packages/app/src/file-pane/editor/lsp-session-pool.test.ts --bail=1",
+            "result": "passed"
+          },
+          {
+            "command": "npm run test:browser --workspace=@getpaseo/app -- src/git/changes-lsp-target.browser.test.ts --bail=1",
+            "result": "passed"
+          }
+        ],
+        "residualWork": []
+      },
+      {
+        "id": "lens-shared-editor-lsp",
+        "classification": "carry_forward",
+        "confidence": "certain",
+        "summary": "Editor Lens sharing and daemon-owned clangd fallback remain intact with version rejection, replay, retry, and safe-save behavior.",
+        "evidence": [
+          {
+            "kind": "file",
+            "reference": "packages/app/src/file-pane/editor/lsp-session-pool.ts",
+            "explanation": "Pooled LSP session ownership and late-lease replay remain implemented."
+          }
+        ],
+        "contractChecks": [
+          {
+            "command": "npx vitest run packages/app/src/file-pane/editor/lsp-session.test.ts packages/app/src/file-pane/editor/lsp-session-pool.test.ts packages/app/src/file-pane/editor/model.test.ts packages/client/src/daemon-client.test.ts packages/protocol/src/messages.workspace-lsp.test.ts packages/server/src/server/session/lsp/clangd-client.test.ts packages/server/src/server/session/lsp/workspace-lsp-session.test.ts",
+            "result": "passed"
+          }
+        ],
+        "residualWork": []
+      },
+      {
+        "id": "markdown-preview-source-links",
+        "classification": "adapt",
+        "confidence": "certain",
+        "summary": "Markdown source links reuse visible standalone Changes tabs, ignore hidden retained Explorer Changes views, and otherwise open a reusable source pane to the left of the preview.",
+        "evidence": [
+          {
+            "kind": "test",
+            "reference": "packages/app/e2e/browser/paseito-markdown-preview-file-links.spec.ts",
+            "explanation": "Both the Changes-reuse and left-source-pane browser scenarios pass after adapting to upstream Explorer retention."
+          }
+        ],
+        "contractChecks": [
+          {
+            "command": "npx vitest run packages/app/src/assistant-file-links/parse.test.ts packages/app/src/file-pane/markdown-file-links.test.ts packages/app/src/workspace/file-open/index.test.ts packages/app/src/workspace/markdown-changes-navigation.test.ts packages/app/src/screens/workspace/workspace-pane-state.test.ts packages/app/src/workspace-tabs/identity.test.ts --bail=1",
+            "result": "passed"
+          },
+          {
+            "command": "npx playwright test --project=browser e2e/browser/paseito-markdown-preview-file-links.spec.ts",
+            "result": "passed"
+          }
+        ],
+        "residualWork": []
+      },
+      {
+        "id": "local-semantic-maintenance",
+        "classification": "adapt",
+        "confidence": "certain",
+        "summary": "The v0.6.1 reconciliation keeps fail-closed history, provenance, installer, migration, reporting, and remote-deployment safeguards while removing the superseded downstream navigator.",
+        "evidence": [
+          {
+            "kind": "command",
+            "reference": "python3 automation/release/history_normalization.py check-history --root . --upstream 20d7efc46a316f5a274b9943a5c43b0322269825",
+            "explanation": "The normalized history check passed on the rebased candidate."
+          }
+        ],
+        "contractChecks": [
+          {
+            "command": "python3 -m unittest discover -s automation/release -p 'test_*.py'",
+            "result": "passed"
+          },
+          {
+            "command": "python3 -m unittest discover -s automation/remote -p 'test_*.py'",
+            "result": "passed"
+          }
+        ],
+        "residualWork": []
+      },
+      {
+        "id": "agent-message-delivery-control",
+        "classification": "carry_forward",
+        "confidence": "certain",
+        "summary": "Durable queueing and explicit interrupt/steer behavior remain preserved without stale send-behavior values.",
+        "evidence": [
+          {
+            "kind": "file",
+            "reference": "packages/app/src/composer/queue-store.ts",
+            "explanation": "Durable queue ownership remains separate from active-run delivery behavior."
+          }
+        ],
+        "contractChecks": [
+          {
+            "command": "npx vitest run packages/protocol/src/messages.active-run-behavior.test.ts packages/client/src/daemon-client.test.ts packages/server/src/server/agent/agent-manager.test.ts packages/server/src/server/agent/providers/codex-app-server-agent.test.ts packages/server/src/server/agent/providers/claude/agent.test.ts packages/app/src/composer/actions.test.ts packages/app/src/composer/queue-store.test.ts packages/app/src/hooks/use-settings/storage.test.ts",
+            "result": "passed"
+          }
+        ],
+        "residualWork": []
+      },
+      {
+        "id": "workspace-file-search-navigation",
+        "classification": "adapt",
+        "confidence": "certain",
+        "summary": "Command-center file search moves the canonical Changes tab into an upstream side pane and keeps exhaustive-search capability errors scoped to older hosts.",
+        "evidence": [
+          {
+            "kind": "test",
+            "reference": "packages/app/e2e/browser/command-center-file-search.spec.ts",
+            "explanation": "The browser contract verifies Changed-file routing, pane persistence, missing-file errors, and older-host gating."
+          }
+        ],
+        "contractChecks": [
+          {
+            "command": "npx vitest run packages/server/src/utils/directory-suggestions.test.ts packages/app/src/workspace/markdown-changes-navigation.test.ts packages/app/src/workspace-tabs/identity.test.ts packages/app/src/stores/workspace-layout-store.test.ts --bail=1",
+            "result": "passed"
+          },
+          {
+            "command": "npx playwright test --project=browser e2e/browser/command-center-file-search.spec.ts --grep 'Command\\+Enter opens'",
+            "result": "passed"
+          }
+        ],
+        "residualWork": []
+      },
+      {
+        "id": "desktop-gitlab-mr-tracker",
+        "classification": "carry_forward",
+        "confidence": "certain",
+        "summary": "The local-only desktop GitLab MR tracker remains separate from the new Changes discussion integration and retains owner-only credential persistence.",
+        "evidence": [
+          {
+            "kind": "file",
+            "reference": "packages/desktop/src/features/mr-tracker/service.ts",
+            "explanation": "Desktop-owned MR tracking remains implemented independently from daemon-owned Changes discussions."
+          }
+        ],
+        "contractChecks": [
+          {
+            "command": "npm test --workspace=@getpaseo/desktop -- --run src/features/mr-tracker/store.test.ts src/features/mr-tracker/gitlab-client.test.ts src/features/mr-tracker/service.test.ts",
+            "result": "passed"
+          }
+        ],
+        "residualWork": []
+      }
+    ]
+  },
+  "review": {
+    "schemaVersion": 1,
+    "reviewedCommit": "3c03559f112866b1b6409a33833c8f75bec8209b",
+    "approved": true,
+    "blockers": [],
+    "featureFindings": [
+      {
+        "id": "independent-desktop-identity",
+        "agrees": true,
+        "explanation": "The independent application identity remains present and its focused contract passed.",
+        "evidenceChecked": ["packages/app/app.config.js", "focused identity tests"]
+      },
+      {
+        "id": "changes-base-selector",
+        "agrees": true,
+        "explanation": "The selector is preserved in upstream's comparison toolbar and the base-selection contract passed.",
+        "evidenceChecked": ["packages/app/src/git/diff-pane.tsx", "changes-base-selection tests"]
+      },
+      {
+        "id": "changes-uncommitted-branch-badge",
+        "agrees": true,
+        "explanation": "The badge remains live across comparison modes and passed its browser contract.",
+        "evidenceChecked": [
+          "paseito-changes-uncommitted-branch-badge.spec.ts",
+          "eight-scenario browser run"
+        ]
+      },
+      {
+        "id": "changes-amend-current-commit",
+        "agrees": true,
+        "explanation": "Amend is visible for dirty branches, capability-gated, and confirmed by unit and browser contracts.",
+        "evidenceChecked": [
+          "ChangesUncommittedActions",
+          "checkout amend tests",
+          "older-host browser scenario"
+        ]
+      },
+      {
+        "id": "changes-context-expansion",
+        "agrees": true,
+        "explanation": "Bounded context expansion remains revision-validated and its focused contract passed.",
+        "evidenceChecked": ["diff-context-expansion.ts", "protocol/server/app context tests"]
+      },
+      {
+        "id": "review-suggestions-v1",
+        "agrees": true,
+        "explanation": "Review editors and attachments were adapted to upstream's hover affordance and pass focused and browser checks.",
+        "evidenceChecked": ["review surface tests", "paseito-review-attachment-widget.spec.ts"]
+      },
+      {
+        "id": "branch-file-review-state",
+        "agrees": true,
+        "explanation": "Line/file review remains integrated with upstream TreeRail and file headers without a second navigator.",
+        "evidenceChecked": [
+          "changes-pane.spec.ts",
+          "file and line review tests",
+          "absence of downstream navigator files"
+        ]
+      },
+      {
+        "id": "changes-gitlab-discussions",
+        "agrees": true,
+        "explanation": "The daemon and client models preserve revision-aware GitLab discussions, confirmed replies, refresh, and capability gating.",
+        "evidenceChecked": [
+          "normalized commit 4196852d7",
+          "gitlab-service.test.ts",
+          "changes-discussions.test.ts"
+        ]
+      },
+      {
+        "id": "changes-source-navigation",
+        "agrees": true,
+        "explanation": "Changed-file search and shared LSP remain revision-safe and their focused contracts passed.",
+        "evidenceChecked": [
+          "changes-lsp-controller.ts",
+          "source-search/LSP tests",
+          "browser LSP test"
+        ]
+      },
+      {
+        "id": "lens-shared-editor-lsp",
+        "agrees": true,
+        "explanation": "Pooled Lens and daemon clangd behavior remains intact with passing editor, client, protocol, and server tests.",
+        "evidenceChecked": ["lsp-session-pool.ts", "focused LSP contract"]
+      },
+      {
+        "id": "markdown-preview-source-links",
+        "agrees": true,
+        "explanation": "Visible Changes reuse and hidden-Explorer fallthrough are both covered by passing unit and browser scenarios.",
+        "evidenceChecked": [
+          "workspace-pane-state test",
+          "markdown navigation tests",
+          "two Markdown browser scenarios"
+        ]
+      },
+      {
+        "id": "local-semantic-maintenance",
+        "agrees": true,
+        "explanation": "The candidate is based on v0.6.1, has normalized local history, and retains release and remote-deployment safeguards.",
+        "evidenceChecked": [
+          "history_normalization checks",
+          "release automation tests",
+          "remote automation tests"
+        ]
+      },
+      {
+        "id": "agent-message-delivery-control",
+        "agrees": true,
+        "explanation": "Queueing and active-run steering contracts remain unchanged and passed focused tests.",
+        "evidenceChecked": ["queue-store.ts", "active-run behavior contract"]
+      },
+      {
+        "id": "workspace-file-search-navigation",
+        "agrees": true,
+        "explanation": "Search navigation follows upstream dynamic panes and passes normal and older-host browser scenarios.",
+        "evidenceChecked": [
+          "workspace-file-search.ts",
+          "command-center-file-search.spec.ts",
+          "workspace layout tests"
+        ]
+      },
+      {
+        "id": "desktop-gitlab-mr-tracker",
+        "agrees": true,
+        "explanation": "The existing desktop MR tracker remains intact and separate from Changes discussions.",
+        "evidenceChecked": ["desktop MR tracker service", "desktop MR tracker tests"]
+      }
+    ]
+  }
+}
