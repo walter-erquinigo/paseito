@@ -1766,7 +1766,7 @@ export class VoiceAssistantWebSocketServer {
         reviewSuggestionsV1: true,
         // COMPAT(fileReviewV1): added in Paseito v0.2.5-paseito.8, remove after 2027-02-07.
         fileReviewV1: true,
-        // COMPAT(changesForgeDiscussionsV1): added in Paseito v0.5.2-paseito.9,
+        // COMPAT(changesForgeDiscussionsV1): added in Paseito v0.5.2-paseito.10,
         // remove after 2027-02-25.
         changesForgeDiscussionsV1: true,
         // COMPAT(providerRemoval): added in v0.1.105, drop the gate when floor >= v0.1.105.
