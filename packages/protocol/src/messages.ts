@@ -3602,7 +3602,7 @@ export const ServerInfoStatusPayloadSchema = z
         // COMPAT(fileReviewV1): added in Paseito v0.2.5-paseito.8,
         // remove gate after 2027-02-07.
         fileReviewV1: z.boolean().optional(),
-        // COMPAT(changesForgeDiscussionsV1): added in Paseito v0.5.2-paseito.9,
+        // COMPAT(changesForgeDiscussionsV1): added in Paseito v0.5.2-paseito.10,
         // remove the gate after 2027-02-25.
         changesForgeDiscussionsV1: z.boolean().optional(),
         // COMPAT(providerRemoval): added in v0.1.105, drop the gate when floor >= v0.1.105.
@@ -5155,7 +5155,7 @@ const CheckoutDiffSubscriptionPayloadSchema = z.object({
   cwd: z.string(),
   files: z.array(ParsedDiffFileSchema),
   error: CheckoutErrorSchema.nullable(),
-  // COMPAT(changesForgeDiscussionsV1): added in Paseito v0.5.2-paseito.9.
+  // COMPAT(changesForgeDiscussionsV1): added in Paseito v0.5.2-paseito.10.
   comparisonIdentity: z
     .discriminatedUnion("kind", [
       z.object({
@@ -5544,7 +5544,7 @@ const PullRequestTimelineCommentItemSchema = z.object({
       path: z.string(),
       line: z.number().optional(),
       startLine: z.number().optional(),
-      // COMPAT(changesForgeDiscussionsV1): added in Paseito v0.5.2-paseito.9,
+      // COMPAT(changesForgeDiscussionsV1): added in Paseito v0.5.2-paseito.10,
       // remove optional after 2027-02-25 once the daemon floor includes revision-safe anchors.
       side: z.enum(["old", "new"]).optional(),
       startSide: z.enum(["old", "new"]).optional(),
