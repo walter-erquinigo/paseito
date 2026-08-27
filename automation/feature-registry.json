@@ -220,7 +220,8 @@
       "preservationFixes": [
         "Keep GitLab discussion placement revision-aware and visibly mark every best-effort anchor.",
         "Keep replies daemon-owned, confirmation-backed and capability-gated on every remote host.",
-        "Keep inline GitLab threads in blank interstitial diff rows with a gutter-edge control that collapses presentation without mutating forge resolution."
+        "Keep inline GitLab threads in blank interstitial diff rows with a gutter-edge control that collapses presentation without mutating forge resolution, and invalidate cached row geometry whenever those states change.",
+        "Render GitLab discussion bodies through the shared Markdown and HTML-aware renderer instead of exposing source markup."
       ],
       "permanent": false,
       "intent": "Show the current branch's GitLab MR discussions inline in Changes and in an adaptive inbox, with confirmed replies.",
@@ -230,7 +231,8 @@
         "General, resolved, outdated and truncated discussion states remain discoverable from the MR comments inbox.",
         "Replies are posted through a namespaced daemon RPC using the host's glab authentication, appear only after GitLab confirms them and retain their draft after failure.",
         "Comments refresh every 60 seconds only while Changes is active, on focus or reconnect, and manually.",
-        "Inline thread cards begin after the line-number gutter, reserve their own vertical diff space and can be collapsed independently without opening the discussion inbox or changing GitLab state.",
+        "Inline thread cards begin after the line-number gutter, reserve their own vertical diff space even when discussions arrive after the diff model is cached, and can be collapsed independently without opening the discussion inbox or changing GitLab state.",
+        "Inline GitLab bodies render supported Markdown and linked badge images without exposing literal HTML markup.",
         "Older daemons show an explicit update-host state rather than attempting a degraded placement path."
       ],
       "contracts": [

@@ -119,6 +119,7 @@ function exactModelKey(input: Omit<BuildDiffDocumentModelInput, "reuseFrom">): s
   const collapsedFilePaths = [...input.collapsedFilePaths].sort();
   const reviewGeometry = input.reviewActions
     ? {
+        composerMode: input.reviewActions.composerMode,
         comments: [...input.reviewActions.commentsByTarget.entries()]
           .map(([target, comments]) => [target, comments.map((comment) => comment.id).sort()])
           .sort(([left], [right]) => String(left).localeCompare(String(right))),
@@ -128,6 +129,30 @@ function exactModelKey(input: Omit<BuildDiffDocumentModelInput, "reuseFrom">): s
               input.reviewActions.editor.commentId,
             ]
           : null,
+        suggestions: [...input.reviewActions.suggestionsByTarget.entries()]
+          .map(([target, suggestions]) => [
+            target,
+            suggestions.map((suggestion) => suggestion.id).sort(),
+          ])
+          .sort(([left], [right]) => String(left).localeCompare(String(right))),
+        suggestionEditor: input.reviewActions.suggestionEditor
+          ? [
+              input.reviewActions.suggestionEditor.targets.map((target) => target.key),
+              input.reviewActions.suggestionEditor.suggestionId,
+            ]
+          : null,
+        forgeThreads: [...(input.reviewActions.forgeThreadsByTarget?.entries() ?? [])]
+          .map(([target, threads]) => [
+            target,
+            threads
+              .map((thread) => [
+                thread.id,
+                thread.isResolved === true,
+                input.reviewActions?.collapsedForgeThreadIds?.has(thread.id) === true,
+              ])
+              .sort(([left], [right]) => String(left).localeCompare(String(right))),
+          ])
+          .sort(([left], [right]) => String(left).localeCompare(String(right))),
       }
     : null;
   return JSON.stringify([collapsedFilePaths, reviewGeometry]);

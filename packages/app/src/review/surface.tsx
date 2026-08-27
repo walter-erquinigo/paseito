@@ -15,6 +15,7 @@ import {
 } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { Button } from "@/components/ui/button";
+import { MarkdownRenderer } from "@/components/markdown/renderer";
 import {
   EditingTextInput as TextInput,
   type EditingTextInputHandle,
@@ -1093,9 +1094,9 @@ function ForgeDiscussionBlock({
             ) : null}
           </View>
           {!thread.isResolved ? (
-            <Text style={styles.forgeDiscussionCommentBody} numberOfLines={4}>
-              {first.body}
-            </Text>
+            <View style={styles.forgeDiscussionCommentClip}>
+              <MarkdownRenderer text={first.body} compact />
+            </View>
           ) : null}
         </Pressable>
       )}
@@ -1792,10 +1793,9 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.statusWarning,
     fontSize: theme.fontSize.sm,
   },
-  forgeDiscussionCommentBody: {
-    color: theme.colors.foreground,
-    fontSize: theme.fontSize.content,
-    lineHeight: 20,
+  forgeDiscussionCommentClip: {
+    maxHeight: 88,
+    overflow: "hidden",
   },
   suggestionBlock: {
     minHeight: INLINE_SUGGESTION_HEIGHT,

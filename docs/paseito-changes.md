@@ -49,8 +49,9 @@ authentication. A reply appears only after GitLab accepts it, and failed replies
 Inline discussions reserve an interstitial row below their source line: the code and line-number
 gutters remain blank for the thread's full height instead of continuing behind it. The control on
 the gutter divider collapses or restores one thread without changing its GitLab resolution state;
-resolved threads use the same compact presentation. Older hosts keep the control visible and
-require an update.
+resolved threads use the same compact presentation. Discussion bodies use the shared Markdown and
+HTML-aware renderer, including linked GitLab badge images, instead of exposing source markup.
+Older hosts keep the control visible and require an update.
 
 ## Suggested edits
 

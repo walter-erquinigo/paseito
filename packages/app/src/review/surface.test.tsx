@@ -59,6 +59,11 @@ vi.mock("@/workspace/focus", () => ({
   useWorkspaceFocusRestoration: () => workspaceFocus,
 }));
 
+vi.mock("@/components/markdown/renderer", () => ({
+  MarkdownRenderer: ({ text }: { text: string }) =>
+    React.createElement("span", { "data-testid": "markdown-renderer" }, text),
+}));
+
 vi.mock("react-native", async (importOriginal) => {
   const ReactModule = await import("react");
   const actual = await importOriginal<typeof import("react-native")>();
