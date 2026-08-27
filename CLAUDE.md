@@ -132,6 +132,54 @@ See [docs/development.md](docs/development.md) for full setup, build sync requir
   - **Every shim is tagged.** `// COMPAT(name): added in vX, remove after <date>` at the site that has to be deleted. `rg "COMPAT\("` is the cleanup backlog; untagged back-compat is permanent by accident.
   - **New RPCs use dotted namespaces with direction suffixes.** Follow [docs/rpc-namespacing.md](docs/rpc-namespacing.md): `domain.provider.operation.request` pairs with `domain.provider.operation.response`. Existing flat RPC names will migrate over time; don't add new ones.
 
+## GUI critique and repair prompts
+
+For GUI creation, repair, or refinement, use the prompts below as working instructions. Read
+[docs/design.md](docs/design.md) and [docs/qa.md](docs/qa.md) first. Review the actual rendered
+state at the target platform and viewport; source code intent is not visual evidence. These prompts
+adapt the observable **Before / After / Why** review structure from
+[Humbleteam's design-review](https://github.com/humbleteam/design-review), the screenshot-driven
+repair loop from [PixelJury](https://github.com/gchahal1982/pixeljury), and the combined designer and
+frontend-engineer role from
+[vltansky's design-review skill](https://github.com/vltansky/skills/blob/master/skills/design-review/SKILL.md).
+
+### Screenshot diagnosis prompt
+
+```text
+Act as a senior product designer and frontend engineer reviewing the actual rendered screenshot,
+not the implementation's intended appearance. Read the product design system first and identify
+the exact platform, viewport, theme, UI state, and running build version shown.
+
+Report at most five prioritized issues. For each issue:
+- Before: state one observable defect and name the affected bounds, alignment rails, gutters,
+  controls, or content.
+- After: prescribe one measurable change to position, spacing, sizing, overflow, hierarchy,
+  typography, or interaction state.
+- Why: connect the change to a project design rule or one named usability/accessibility principle.
+
+Prioritize clipped content, overlap, stale geometry, broken rendering, and inaccessible controls
+before aesthetic polish. Distinguish facts visible in the screenshot from implementation
+hypotheses. Check whether a stale installed bundle could explain the screenshot before changing
+source code. Do not use vague judgments such as "cleaner", "modern", or "better spacing" without
+pixel-level evidence.
+```
+
+### Implementation and verification prompt
+
+```text
+Implement the prioritized GUI corrections in the repository. Trace each visible defect through
+layout, cached geometry, asynchronous state, content parsing, and component styling to find its
+root cause. Preserve working behavior, accessibility, responsive states, and existing design
+tokens. Do not mask a model or state defect with arbitrary padding, fixed offsets, or overflow.
+
+Add focused regression coverage for every state or geometry transition that caused the defect.
+Render the same target state and viewport after the change, then compare the before and after
+screenshots using observable bounds. Reject the result if content, source rows, gutters, controls,
+or hit targets overlap; if reserved space does not match rendered content; if raw markup leaks into
+the UI; or if another supported viewport regresses. Verify the version and executable path of the
+app that produced the final screenshot before declaring the GUI fix complete.
+```
+
 ## Platform gating
 
 The app runs on iOS, Android, web (browser), and web (Electron desktop). Code is cross-platform by default. Gate only when you must. Import gates from `@/constants/platform`.
