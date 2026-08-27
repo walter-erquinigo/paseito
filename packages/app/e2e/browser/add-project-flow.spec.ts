@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { mkdtemp, rm, stat } from "node:fs/promises";
+import { execFileSync } from "node:child_process";
+import { mkdtemp, realpath, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test, expect } from "../support/fixtures";
@@ -34,6 +35,15 @@ const SECONDARY_HOST_LABEL = "Secondary Host";
 
 async function expectProjectDirectory(pathname: string): Promise<void> {
   await expect.poll(async () => (await stat(pathname)).isDirectory()).toBe(true);
+}
+
+async function pathIsMissing(pathname: string): Promise<boolean> {
+  try {
+    await stat(pathname);
+    return false;
+  } catch {
+    return true;
+  }
 }
 
 async function removeCreatedProject(
@@ -76,6 +86,7 @@ test.describe("Add Project command-center flow", () => {
     await expect(addProjectFlowMethod(page, "directory-search")).toBeVisible();
     await expect(addProjectFlowMethod(page, "github")).toContainText("Clone from GitHub");
     await expect(addProjectFlowMethod(page, "new-directory")).toContainText("New directory");
+    await expect(addProjectFlowMethod(page, "worktree")).toContainText("Create worktree");
     await expect(addProjectFlowInput(page)).toHaveCount(0);
     await expect(addProjectFlow(page).getByRole("textbox")).toHaveCount(0);
     await expect(page.getByTestId("add-project-flow-page-host")).toHaveCount(0);
@@ -238,6 +249,65 @@ test.describe("Add Project command-center flow", () => {
       projectPath: projectPickerFixture.projectPath,
     });
     await expectProjectHasNoWorkspaces(projectId);
+  });
+
+  test("creates a sibling worktree from a local Git project", async ({ page }) => {
+    const root = await mkdtemp(path.join(tmpdir(), "paseito-e2e-project-worktree-"));
+    const sourcePath = path.join(root, "source");
+    const targetPath = path.join(root, "source-worktree");
+    let projectId: string | null = null;
+    execFileSync("git", ["init", "--initial-branch=main", sourcePath]);
+    execFileSync("git", ["config", "user.email", "paseito@example.com"], { cwd: sourcePath });
+    execFileSync("git", ["config", "user.name", "Paseito E2E"], { cwd: sourcePath });
+    execFileSync("git", ["commit", "--allow-empty", "-m", "initial"], { cwd: sourcePath });
+
+    try {
+      await gotoAppShell(page);
+      await openAddProjectFlow(page);
+      await chooseAddProjectMethod(page, "worktree");
+      await expectAddProjectPage(page, "worktree-source");
+      await addProjectFlowInput(page).fill(sourcePath);
+      await page.keyboard.press("Enter");
+
+      await expectAddProjectPage(page, "worktree-location");
+      await expect(addProjectFlowInput(page)).toHaveValue(targetPath);
+      await page.keyboard.press("Enter");
+
+      projectId = await expectOpenedProject(page, "source-worktree");
+      await expectNewWorkspaceForAddedProject(page, {
+        serverId: getServerId(),
+        projectId,
+        projectName: "source-worktree",
+        projectPath: await realpath(targetPath),
+      });
+      await expectProjectDirectory(targetPath);
+
+      const projectRow = page
+        .getByTestId(/^sidebar-project-row-/u)
+        .filter({ hasText: "source-worktree" });
+      await projectRow.hover();
+      await page.getByTestId(/^sidebar-project-kebab-/u).click();
+      const confirmation = page.waitForEvent("dialog");
+      const removeSelection = page
+        .getByText("Remove project and worktree", { exact: true })
+        .click();
+      const dialog = await confirmation;
+      expect(dialog.message()).toContain("permanently delete its worktree from disk");
+      await dialog.accept();
+      await removeSelection;
+      await expect.poll(() => pathIsMissing(targetPath)).toBe(true);
+      projectId = null;
+    } finally {
+      if (projectId) {
+        const client = await connectSeedClient();
+        try {
+          await client.removeProjectWorktree(projectId).catch(() => undefined);
+        } finally {
+          await client.close();
+        }
+      }
+      await rm(root, { recursive: true, force: true });
+    }
   });
 
   test("a complete repository URL remains selectable without a GitHub search result", async ({

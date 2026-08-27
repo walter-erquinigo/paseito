@@ -572,6 +572,9 @@ export class WorkspaceDirectory {
         projectCustomIconRevision: project.customIconRevision ?? null,
         projectRootPath: project.rootPath,
         projectKind: project.kind,
+        managedWorktree: project.managedWorktree
+          ? { sourceKind: project.managedWorktree.sourceKind }
+          : null,
       }));
   }
 

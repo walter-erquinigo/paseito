@@ -40,6 +40,7 @@ export interface SeedDaemonClient {
     error: string | null;
   }>;
   removeProject(projectId: string): Promise<{ removedWorkspaceIds: string[] }>;
+  removeProjectWorktree(projectId: string): Promise<{ removedWorkspaceIds: string[] }>;
   renameProject(projectId: string, customName: string | null): Promise<void>;
   fetchWorkspaces(options?: { filter?: { projectId?: string } }): Promise<{
     entries: SeedWorkspaceDescriptor[];

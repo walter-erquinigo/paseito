@@ -6,7 +6,12 @@ export interface AddProjectHost {
   canCloneGithubRepositories: boolean;
   canSearchGithubRepositories: boolean;
   canCreateDirectory: boolean;
+  canManageProjectWorktrees: boolean;
 }
+
+export type ProjectWorktreeSourceChoice =
+  | { kind: "local"; path: string; displayName: string }
+  | { kind: "remote"; url: string; displayName: string };
 
 export interface GithubRepositoryChoice {
   id: string;
@@ -38,6 +43,13 @@ export type AddProjectPage =
       isSubmitting: boolean;
     } & SearchPageState)
   | ({ kind: "new-directory-parent"; hostId: string } & SearchPageState)
+  | ({ kind: "worktree-source"; hostId: string } & SearchPageState)
+  | ({
+      kind: "worktree-location";
+      hostId: string;
+      source: ProjectWorktreeSourceChoice;
+      isSubmitting: boolean;
+    } & SearchPageState)
   | {
       kind: "new-directory-name";
       hostId: string;
@@ -186,6 +198,30 @@ export function openNewDirectoryParentPage(
   hostId: string,
 ): AddProjectFlowState {
   return pushAddProjectPage(state, { ...searchPage("new-directory-parent"), hostId });
+}
+
+export function openWorktreeSourcePage(
+  state: AddProjectFlowState,
+  hostId: string,
+): AddProjectFlowState {
+  return pushAddProjectPage(state, { ...searchPage("worktree-source"), hostId });
+}
+
+export function openWorktreeLocationPage(
+  state: AddProjectFlowState,
+  hostId: string,
+  source: ProjectWorktreeSourceChoice,
+  targetPath: string,
+): AddProjectFlowState {
+  return pushAddProjectPage(state, {
+    kind: "worktree-location",
+    hostId,
+    source,
+    query: targetPath,
+    activeIndex: 0,
+    error: null,
+    isSubmitting: false,
+  });
 }
 
 export function openNewDirectoryNamePage(

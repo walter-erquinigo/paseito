@@ -7,14 +7,22 @@ export type AddProjectFlowPage =
   | "github-search"
   | "github-location"
   | "new-directory-parent"
-  | "new-directory-name";
+  | "new-directory-name"
+  | "worktree-source"
+  | "worktree-location";
 
-export type AddProjectMethod = "directory-search" | "browse" | "github" | "new-directory";
+export type AddProjectMethod =
+  | "directory-search"
+  | "browse"
+  | "github"
+  | "new-directory"
+  | "worktree";
 
 const METHOD_DESTINATIONS: Record<Exclude<AddProjectMethod, "browse">, AddProjectFlowPage> = {
   "directory-search": "directory-search",
   github: "github-search",
   "new-directory": "new-directory-parent",
+  worktree: "worktree-source",
 };
 
 export function addProjectFlow(page: Page): Locator {

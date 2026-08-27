@@ -1177,6 +1177,7 @@ export const ptBR: TranslationResources = {
         openFolder: "Open in file manager",
         openFolderFailed: "Couldn't open folder",
         remove: "Remover projeto",
+        removeWorktree: "Remover projeto e worktree",
         removing: "Removendo...",
       },
       confirmations: {
@@ -1184,6 +1185,10 @@ export const ptBR: TranslationResources = {
         removeMessage:
           'Remover "{{projectName}}" da barra lateral?\n\nOs arquivos no disco não serão alterados.',
         removeConfirm: "Remover",
+        removeWorktreeTitle: "Remover projeto e worktree?",
+        removeWorktreeMessage:
+          'Remover "{{projectName}}" e excluir permanentemente sua worktree do disco?',
+        removeWorktreeConfirm: "Remover e excluir",
         cancel: "Cancelar",
       },
       toasts: {
