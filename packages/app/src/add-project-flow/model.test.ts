@@ -19,7 +19,9 @@ import {
   addProjectMethodEmptyText,
   buildAddProjectMethods,
   buildCloneLocationOptions,
+  buildDefaultProjectWorktreePath,
   buildManualGithubRepositoryChoices,
+  buildRemoteWorktreeSourceChoice,
 } from "./options";
 
 const HOST: AddProjectHost = {
@@ -30,6 +32,7 @@ const HOST: AddProjectHost = {
   canCloneGithubRepositories: true,
   canSearchGithubRepositories: true,
   canCreateDirectory: true,
+  canManageProjectWorktrees: true,
 };
 
 describe("Add Project navigation", () => {
@@ -126,6 +129,7 @@ describe("Add Project options", () => {
         canCloneGithubRepositories: false,
         canSearchGithubRepositories: false,
         canCreateDirectory: false,
+        canManageProjectWorktrees: false,
       }),
     ).toEqual([
       {
@@ -143,6 +147,12 @@ describe("Add Project options", () => {
         id: "new-directory",
         label: "New directory",
         description: "Update this host to create directories",
+        disabled: true,
+      },
+      {
+        id: "worktree",
+        label: "Create worktree",
+        description: "Update this host to create managed worktrees",
         disabled: true,
       },
     ]);
@@ -204,5 +214,33 @@ describe("Add Project options", () => {
         disabled: false,
       },
     ]);
+  });
+
+  it("defaults local worktrees to a sibling and remote worktrees to a known project parent", () => {
+    expect(
+      buildDefaultProjectWorktreePath({
+        source: { kind: "local", path: "/code/paseito", displayName: "paseito" },
+        projectPaths: [],
+      }),
+    ).toBe("/code/paseito-worktree");
+    expect(
+      buildDefaultProjectWorktreePath({
+        source: {
+          kind: "remote",
+          url: "git@gitlab.example.com:team/compiler.git",
+          displayName: "compiler",
+        },
+        projectPaths: ["/code/paseito"],
+      }),
+    ).toBe("/code/compiler-worktree");
+  });
+
+  it("recognizes generic Git remotes without restricting them to GitHub", () => {
+    expect(buildRemoteWorktreeSourceChoice("git@gitlab.example.com:team/compiler.git")).toEqual({
+      kind: "remote",
+      url: "git@gitlab.example.com:team/compiler.git",
+      displayName: "compiler",
+    });
+    expect(buildRemoteWorktreeSourceChoice("compiler")).toBeNull();
   });
 });

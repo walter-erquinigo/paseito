@@ -11,6 +11,16 @@ import {
   type PersistedWorkspaceKind,
 } from "./workspace-registry-model.js";
 
+const ManagedProjectWorktreeSchema = z.object({
+  version: z.literal(1),
+  worktreePath: z.string().min(1),
+  sourceKind: z.enum(["local", "remote"]),
+  sourceRepoPath: z.string().min(1),
+  ownedSourceRepo: z.boolean(),
+  ownershipToken: z.string().min(1),
+  createdAt: z.string().min(1),
+});
+
 const PersistedProjectRecordSchema = z.object({
   projectId: z.string(),
   rootPath: z.string(),
@@ -33,6 +43,11 @@ const PersistedProjectRecordSchema = z.object({
   customIconRevision: z
     .string()
     .nullable()
+    .optional()
+    .transform((value) => value ?? null),
+  // Exact provenance for worktrees created through Add Project. The ownership
+  // token is paired with a marker in the worktree git dir before deletion is allowed.
+  managedWorktree: ManagedProjectWorktreeSchema.nullable()
     .optional()
     .transform((value) => value ?? null),
   createdAt: z.string(),
@@ -96,6 +111,7 @@ const PersistedWorkspaceRecordSchema = z.object({
 });
 
 export type PersistedProjectRecord = z.infer<typeof PersistedProjectRecordSchema>;
+export type ManagedProjectWorktree = z.infer<typeof ManagedProjectWorktreeSchema>;
 export type PersistedWorkspaceRecord = z.infer<typeof PersistedWorkspaceRecordSchema>;
 
 export interface WorkspaceMutation {
@@ -639,6 +655,7 @@ export function createPersistedProjectRecord(input: {
   customName?: string | null;
   projectKey?: string | null;
   customIconRevision?: string | null;
+  managedWorktree?: ManagedProjectWorktree | null;
   createdAt: string;
   updatedAt: string;
   archivedAt?: string | null;
@@ -648,6 +665,7 @@ export function createPersistedProjectRecord(input: {
     customName: input.customName ?? null,
     projectKey: input.projectKey ?? null,
     customIconRevision: input.customIconRevision ?? null,
+    managedWorktree: input.managedWorktree ?? null,
     archivedAt: input.archivedAt ?? null,
   });
 }

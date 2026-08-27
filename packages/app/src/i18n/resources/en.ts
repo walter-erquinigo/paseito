@@ -1205,6 +1205,7 @@ export const en = {
         openFolder: "Open in file manager",
         openFolderFailed: "Couldn't open folder",
         remove: "Remove project",
+        removeWorktree: "Remove project and worktree",
         removing: "Removing...",
       },
       confirmations: {
@@ -1212,6 +1213,10 @@ export const en = {
         removeMessage:
           'Remove "{{projectName}}" from the sidebar?\n\nFiles on disk will not be changed.',
         removeConfirm: "Remove",
+        removeWorktreeTitle: "Remove project and worktree?",
+        removeWorktreeMessage:
+          'Remove "{{projectName}}" and permanently delete its worktree from disk?',
+        removeWorktreeConfirm: "Remove and delete",
         cancel: "Cancel",
       },
       toasts: {

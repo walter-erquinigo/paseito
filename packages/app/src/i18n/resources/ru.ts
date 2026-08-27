@@ -1140,6 +1140,7 @@ export const ru: TranslationResources = {
         openFolder: "Открыть в файловом менеджере",
         openFolderFailed: "Не удалось открыть папку",
         remove: "Удалить проект",
+        removeWorktree: "Удалить проект и рабочее дерево",
         removing: "Удаление...",
       },
       confirmations: {
@@ -1147,6 +1148,10 @@ export const ru: TranslationResources = {
         removeMessage:
           "Удалить проект «{{projectName}}» с боковой панели?\n\nФайлы на диске не будут изменены.",
         removeConfirm: "Удалить",
+        removeWorktreeTitle: "Удалить проект и рабочее дерево?",
+        removeWorktreeMessage:
+          "Удалить «{{projectName}}» и навсегда удалить его рабочее дерево с диска?",
+        removeWorktreeConfirm: "Удалить",
         cancel: "Отмена",
       },
       toasts: {
