@@ -1158,6 +1158,7 @@ export const fr: TranslationResources = {
         openFolder: "Open in file manager",
         openFolderFailed: "Couldn't open folder",
         remove: "Supprimer le projet",
+        removeWorktree: "Supprimer le projet et l’arbre de travail",
         removing: "Suppression...",
       },
       confirmations: {
@@ -1165,6 +1166,10 @@ export const fr: TranslationResources = {
         removeMessage:
           "Supprimer «{{projectName}}» de la barre latérale?\n\nLes fichiers sur le disque ne seront pas modifiés.",
         removeConfirm: "Retirer",
+        removeWorktreeTitle: "Supprimer le projet et l’arbre de travail ?",
+        removeWorktreeMessage:
+          "Supprimer « {{projectName}} » et effacer définitivement son arbre de travail du disque ?",
+        removeWorktreeConfirm: "Supprimer et effacer",
         cancel: "Annuler",
       },
       toasts: {

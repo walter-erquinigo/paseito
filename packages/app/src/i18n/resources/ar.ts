@@ -1124,6 +1124,7 @@ export const ar: TranslationResources = {
         openFolder: "Open in file manager",
         openFolderFailed: "Couldn't open folder",
         remove: "إزالة المشروع",
+        removeWorktree: "إزالة المشروع وشجرة العمل",
         removing: "جارٍ الإزالة...",
       },
       confirmations: {
@@ -1131,6 +1132,10 @@ export const ar: TranslationResources = {
         removeMessage:
           'هل تريد إزالة "{{projectName}}" من الشريط الجانبي؟\n\n لن يتم تغيير الملفات الموجودة على القرص.',
         removeConfirm: "يزيل",
+        removeWorktreeTitle: "هل تريد إزالة المشروع وشجرة العمل؟",
+        removeWorktreeMessage:
+          'هل تريد إزالة "{{projectName}}" وحذف شجرة العمل الخاصة به نهائيًا من القرص؟',
+        removeWorktreeConfirm: "إزالة وحذف",
         cancel: "يلغي",
       },
       toasts: {

@@ -6,6 +6,7 @@ import {
   FolderOpen,
   FolderPlus,
   Github,
+  GitBranch,
   HardDrive,
   Plus,
   Search,
@@ -45,6 +46,8 @@ import {
   openGithubSearchPage,
   openNewDirectoryNamePage,
   openNewDirectoryParentPage,
+  openWorktreeLocationPage,
+  openWorktreeSourcePage,
   setAddProjectActiveIndex,
   setAddProjectPageInput,
   setNewDirectoryName,
@@ -53,6 +56,7 @@ import {
   type AddProjectHost,
   type AddProjectPage,
   type GithubRepositoryChoice,
+  type ProjectWorktreeSourceChoice,
 } from "@/add-project-flow/model";
 import {
   buildAddProjectMethods,
@@ -60,6 +64,8 @@ import {
   buildCloneLocationOptions,
   buildManualGithubRepositoryChoices,
   buildSuggestedParentDirectories,
+  buildDefaultProjectWorktreePath,
+  buildRemoteWorktreeSourceChoice,
   filterAddProjectHosts,
   joinDirectoryPath,
   pathBaseName,
@@ -91,6 +97,7 @@ import {
 import { useHostFeatureMap } from "@/runtime/host-features";
 import { useSessionStore } from "@/stores/session-store";
 import { useRecommendedProjectPaths } from "@/stores/session-store-hooks";
+import { useToast } from "@/contexts/toast-context";
 import type { AddProjectFlowRequest } from "@/stores/add-project-flow-store";
 import type { Theme } from "@/styles/theme";
 import { shortenPath } from "@/utils/shorten-path";
@@ -162,6 +169,7 @@ function FlowBackButton({ onPress }: { onPress: () => void }) {
 
 function methodIcon(method: AddProjectMethodId): FlowRowOption["icon"] {
   if (method === "github") return Github;
+  if (method === "worktree") return GitBranch;
   if (method === "browse") return FolderOpen;
   if (method === "new-directory") return FolderPlus;
   return Search;
@@ -175,6 +183,7 @@ function directoryOptionSubtitle(option: ProjectPickerOption, shortPath: string)
 
 function progressText(page: AddProjectPage): string {
   if (page.kind === "github-location") return "Cloning project...";
+  if (page.kind === "worktree-location") return "Creating and setting up worktree...";
   if (page.kind === "new-directory-name") return "Creating directory...";
   return "Adding project...";
 }
@@ -222,6 +231,10 @@ function pageTitle(page: AddProjectPage): string {
       return "Choose parent directory";
     case "new-directory-name":
       return "Name directory";
+    case "worktree-source":
+      return "Choose worktree source";
+    case "worktree-location":
+      return "Choose worktree destination";
   }
 }
 
@@ -240,6 +253,10 @@ function pagePlaceholder(page: AddProjectInputPage): string {
       return "Search parent directories or enter a path...";
     case "new-directory-name":
       return "Directory name";
+    case "worktree-source":
+      return "Search directories or enter a Git URL...";
+    case "worktree-location":
+      return "Worktree path";
   }
 }
 
@@ -327,6 +344,9 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
   const githubSearchByHost = useHostFeatureMap(hostIds, "workspaceGithubRepositorySearch");
   // COMPAT(projectCreateDirectory): added in v0.1.108, remove gate after 2027-01-15.
   const createDirectoryByHost = useHostFeatureMap(hostIds, "projectCreateDirectory");
+  // COMPAT(projectWorktreeManagement): added in Paseito v0.6.1-paseito.10,
+  // remove after 2027-08-26 once the daemon floor includes it.
+  const projectWorktreeManagementByHost = useHostFeatureMap(hostIds, "projectWorktreeManagement");
   const localServerId = useLocalDaemonServerId();
   const availableHosts = useMemo<AddProjectHost[]>(
     () =>
@@ -344,6 +364,7 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
             canCloneGithubRepositories: githubCloneByHost.get(host.serverId) === true,
             canSearchGithubRepositories: githubSearchByHost.get(host.serverId) === true,
             canCreateDirectory: createDirectoryByHost.get(host.serverId) === true,
+            canManageProjectWorktrees: projectWorktreeManagementByHost.get(host.serverId) === true,
           },
         ];
       }),
@@ -355,6 +376,7 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
       hosts,
       localServerId,
       projectAddByHost,
+      projectWorktreeManagementByHost,
       stableProjectIdentityByHost,
     ],
   );
@@ -372,6 +394,7 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
   const recommendedPaths = useRecommendedProjectPaths(hostId);
   const openProject = useOpenProject(hostId);
   const cloneGithubProject = useCloneGithubProject(hostId);
+  const toast = useToast();
   const upsertProject = useSessionStore((store) => store.upsertProject);
   const setHasHydratedWorkspaces = useSessionStore((store) => store.setHasHydratedWorkspaces);
   const inputRef = useRef<EditingTextInputHandle>(null);
@@ -402,7 +425,8 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
   const searchesDirectories =
     page.kind === "directory-search" ||
     page.kind === "github-location" ||
-    page.kind === "new-directory-parent";
+    page.kind === "new-directory-parent" ||
+    page.kind === "worktree-source";
   const directoryQuery = useFetchQuery({
     queryKey: ["add-project-flow-directories", hostId, debouncedQuery],
     queryFn: async () => {
@@ -519,8 +543,10 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
         void browse();
       } else if (method === "github") {
         setState((current) => openGithubSearchPage(current, hostId));
-      } else {
+      } else if (method === "new-directory") {
         setState((current) => openNewDirectoryParentPage(current, hostId));
+      } else {
+        setState((current) => openWorktreeSourcePage(current, hostId));
       }
     },
     [browse, hostId],
@@ -575,6 +601,58 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
       }
     },
     [cloneGithubProject, openNewWorkspaceForProject],
+  );
+  const createProjectWorktree = useCallback(
+    async (locationPage: Extract<AddProjectPage, { kind: "worktree-location" }>) => {
+      if (!client || submissionInFlightRef.current) return;
+      const targetPath = locationPage.query.trim();
+      if (!targetPath) {
+        setState((current) =>
+          setPageStatus(current, "worktree-location", { error: "Enter a worktree path" }),
+        );
+        return;
+      }
+      submissionInFlightRef.current = true;
+      setState((current) =>
+        setPageStatus(current, "worktree-location", { isSubmitting: true, error: null }),
+      );
+      try {
+        const source =
+          locationPage.source.kind === "local"
+            ? { kind: "local" as const, path: locationPage.source.path }
+            : { kind: "remote" as const, url: locationPage.source.url };
+        const payload = await client.createProjectWorktree({ source, targetPath });
+        if (payload.error || !payload.project) {
+          setState((current) =>
+            setPageStatus(current, "worktree-location", {
+              isSubmitting: false,
+              error: payload.error ?? "Unable to create worktree",
+            }),
+          );
+          return;
+        }
+        registerProjectDescriptor({
+          serverId: locationPage.hostId,
+          project: payload.project,
+          upsertProject,
+          setHasHydratedWorkspaces,
+        });
+        if (payload.setupStatus === "failed") {
+          toast.error(payload.setupError ?? "Worktree created, but Pi setup failed");
+        }
+        openNewWorkspaceForProject(locationPage.hostId, payload.project);
+      } catch (error) {
+        setState((current) =>
+          setPageStatus(current, "worktree-location", {
+            isSubmitting: false,
+            error: error instanceof Error ? error.message : "Unable to create worktree",
+          }),
+        );
+      } finally {
+        submissionInFlightRef.current = false;
+      }
+    },
+    [client, openNewWorkspaceForProject, setHasHydratedWorkspaces, toast, upsertProject],
   );
   const rows = useMemo<FlowRowOption[]>(() => {
     if (page.kind === "host") {
@@ -690,9 +768,70 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
           setState((current) => openNewDirectoryNamePage(current, page.hostId, option.path)),
       }));
     }
+    if (page.kind === "worktree-source") {
+      const remoteSource = buildRemoteWorktreeSourceChoice(page.query);
+      const sources: Array<{
+        id: string;
+        source: ProjectWorktreeSourceChoice;
+        title: string;
+        subtitle: string | null;
+        icon: FlowRowOption["icon"];
+      }> = remoteSource
+        ? [
+            {
+              id: `remote:${remoteSource.url}`,
+              source: remoteSource,
+              title: remoteSource.url,
+              subtitle: "Clone this remote and create a worktree",
+              icon: GitBranch,
+            },
+          ]
+        : [];
+      for (const option of pathOptions) {
+        const shortPath = shortenPath(option.path);
+        sources.push({
+          id: `local:${option.path}`,
+          source: { kind: "local", path: option.path, displayName: pathBaseName(option.path) },
+          title: shortPath,
+          subtitle: directoryOptionSubtitle(option, shortPath),
+          icon: Folder,
+        });
+      }
+      return sources.map((choice) => ({
+        id: choice.id,
+        title: choice.title,
+        subtitle: choice.subtitle,
+        icon: choice.icon,
+        testID: `add-project-flow-worktree-source-${encodeURIComponent(choice.id)}`,
+        select: () => {
+          const targetPath = buildDefaultProjectWorktreePath({
+            source: choice.source,
+            projectPaths: recommendedPaths,
+          });
+          setState((current) =>
+            openWorktreeLocationPage(current, page.hostId, choice.source, targetPath),
+          );
+        },
+      }));
+    }
+    if (page.kind === "worktree-location") {
+      const targetPath = page.query.trim();
+      if (!targetPath) return [];
+      return [
+        {
+          id: targetPath,
+          title: `Create at ${shortenPath(targetPath)}`,
+          subtitle: `From ${page.source.displayName}`,
+          icon: GitBranch,
+          testID: "add-project-flow-create-worktree",
+          select: () => void createProjectWorktree(page),
+        },
+      ];
+    }
     return [];
   }, [
     cloneRepository,
+    createProjectWorktree,
     directoryPaths,
     githubQuery.data,
     host,
