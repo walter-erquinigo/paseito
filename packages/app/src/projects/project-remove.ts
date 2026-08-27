@@ -5,6 +5,7 @@ import { selectHostFeature } from "@/runtime/host-features";
 interface ProjectRemoveHost {
   serverId: string;
   projectId: string;
+  managedWorktree?: boolean;
 }
 
 export interface ProjectRemoveProject {
@@ -14,6 +15,7 @@ export interface ProjectRemoveProject {
 export interface ProjectRemoveTarget {
   serverId: string;
   projectId: string;
+  removeWorktree: boolean;
 }
 
 export type ProjectRemoveReadiness =
@@ -25,23 +27,30 @@ export type ProjectRemoveOutcome =
   | { kind: "host_disconnected"; serverIds: string[] }
   | { kind: "failed"; serverIds: string[] };
 
-type ProjectRemoveClient = Pick<DaemonClient, "removeProject">;
+type ProjectRemoveClient = Pick<DaemonClient, "removeProject" | "removeProjectWorktree">;
 
 export function getProjectRemoveReadiness(input: {
   project: ProjectRemoveProject;
   supportsProjectRemove: (serverId: string) => boolean;
+  supportsProjectWorktreeManagement?: (serverId: string) => boolean;
 }): ProjectRemoveReadiness {
   const unsupportedServerIds: string[] = [];
   const targets: ProjectRemoveTarget[] = [];
+  const removeWorktree =
+    input.project.hosts.length > 0 && input.project.hosts.every((host) => host.managedWorktree);
 
   for (const host of input.project.hosts) {
-    if (!input.supportsProjectRemove(host.serverId)) {
+    const supported = removeWorktree
+      ? input.supportsProjectWorktreeManagement?.(host.serverId) === true
+      : input.supportsProjectRemove(host.serverId);
+    if (!supported) {
       unsupportedServerIds.push(host.serverId);
       continue;
     }
     targets.push({
       serverId: host.serverId,
       projectId: host.projectId,
+      removeWorktree,
     });
   }
 
@@ -59,6 +68,8 @@ export function getCurrentProjectRemoveReadiness(
   return getProjectRemoveReadiness({
     project,
     supportsProjectRemove: (serverId) => selectHostFeature(sessionState, serverId, "projectRemove"),
+    supportsProjectWorktreeManagement: (serverId) =>
+      selectHostFeature(sessionState, serverId, "projectWorktreeManagement"),
   });
 }
 
@@ -66,7 +77,12 @@ export async function removeProjectFromHosts(input: {
   targets: readonly ProjectRemoveTarget[];
   getClient: (serverId: string) => ProjectRemoveClient | null;
 }): Promise<ProjectRemoveOutcome> {
-  const clients: Array<{ serverId: string; projectId: string; client: ProjectRemoveClient }> = [];
+  const clients: Array<{
+    serverId: string;
+    projectId: string;
+    removeWorktree: boolean;
+    client: ProjectRemoveClient;
+  }> = [];
   const disconnectedServerIds: string[] = [];
 
   for (const target of input.targets) {
@@ -75,7 +91,12 @@ export async function removeProjectFromHosts(input: {
       disconnectedServerIds.push(target.serverId);
       continue;
     }
-    clients.push({ serverId: target.serverId, projectId: target.projectId, client });
+    clients.push({
+      serverId: target.serverId,
+      projectId: target.projectId,
+      removeWorktree: target.removeWorktree,
+      client,
+    });
   }
 
   if (disconnectedServerIds.length > 0) {
@@ -83,8 +104,12 @@ export async function removeProjectFromHosts(input: {
   }
 
   const results = await Promise.allSettled(
-    clients.map(async ({ client, projectId }) => {
-      await client.removeProject(projectId);
+    clients.map(async ({ client, projectId, removeWorktree }) => {
+      if (removeWorktree) {
+        await client.removeProjectWorktree(projectId);
+      } else {
+        await client.removeProject(projectId);
+      }
     }),
   );
   const failedServerIds: string[] = [];

@@ -207,6 +207,8 @@ export type WorktreeSource =
 export interface CreateWorktreeOptions {
   cwd: string;
   worktreeSlug: string;
+  /** Exact destination used by managed Add Project worktrees. Existing callers use Paseo roots. */
+  exactWorktreePath?: string;
   source: WorktreeSource;
   runSetup: boolean;
   paseoHome?: string;
@@ -1212,20 +1214,30 @@ export const createWorktree = async ({
   cwd,
   source,
   worktreeSlug,
+  exactWorktreePath,
   runSetup,
   paseoHome,
   worktreesRoot,
 }: CreateWorktreeOptions): Promise<WorktreeConfig> => {
   const sourcePlan = await resolveWorktreeSourcePlan({ cwd, source, desiredSlug: worktreeSlug });
-  let worktreePath = join(await getPaseoWorktreesRoot(cwd, paseoHome, worktreesRoot), worktreeSlug);
+  let worktreePath = exactWorktreePath
+    ? resolve(expandTilde(exactWorktreePath))
+    : join(await getPaseoWorktreesRoot(cwd, paseoHome, worktreesRoot), worktreeSlug);
   mkdirSync(dirname(worktreePath), { recursive: true });
 
-  // Also handle worktree path collision
+  if (exactWorktreePath && existsSync(worktreePath)) {
+    throw new Error(`Worktree path already exists: ${worktreePath}`);
+  }
+
+  // Managed exact paths must never silently change. Traditional Paseo worktrees
+  // retain suffix collision handling for backwards-compatible behavior.
   let finalWorktreePath = worktreePath;
-  let pathSuffix = 1;
-  while (existsSync(finalWorktreePath)) {
-    finalWorktreePath = `${worktreePath}-${pathSuffix}`;
-    pathSuffix++;
+  if (!exactWorktreePath) {
+    let pathSuffix = 1;
+    while (existsSync(finalWorktreePath)) {
+      finalWorktreePath = `${worktreePath}-${pathSuffix}`;
+      pathSuffix++;
+    }
   }
 
   // Primitive owner for `git worktree add`; callers route through createWorktreeCore.

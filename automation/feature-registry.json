@@ -477,6 +477,37 @@
       ]
     },
     {
+      "id": "managed-project-worktrees",
+      "commitSubject": "feat(projects): create managed project worktrees",
+      "preservationFixes": [
+        "Keep destructive removal fail-closed on private ownership provenance while preserving local source repositories and usable credential-redacted remotes."
+      ],
+      "permanent": false,
+      "intent": "Create and set up project worktrees from local or remote Git repositories directly through Add Project.",
+      "invariants": [
+        "Add Project accepts a local Git repository or generic remote Git URL, defaults local worktrees to an editable sibling path, and registers the exact created worktree as a project.",
+        "A root AGENTS.md from the source repository is executed only as worktree setup by a transient internal Pi session; setup failure leaves the created project available and visible with an error.",
+        "Only projects with matching registry provenance and a private Git-dir ownership token can expose and execute Remove project and worktree; ordinary and mixed-host project rows retain metadata-only removal.",
+        "Removing a managed worktree archives its active agents and workspaces, preserves user-supplied local source repositories, and deletes owned remote source clones only inside Paseito storage.",
+        "Remote-created worktrees retain a usable origin after HTTP credentials and URL parameters are stripped, and old hosts show the capability-gated update state."
+      ],
+      "contracts": [
+        "npx vitest run packages/protocol/src/messages.test.ts packages/client/src/daemon-client.test.ts packages/server/src/server/project-worktree-service.test.ts packages/app/src/add-project-flow/model.test.ts packages/app/src/projects/project-remove.test.ts --bail=1",
+        "npm run test:e2e --workspace=@getpaseo/app -- e2e/browser/add-project-flow.spec.ts --grep 'creates a sibling worktree'"
+      ],
+      "paths": [
+        "packages/protocol/src/messages.ts",
+        "packages/client/src/daemon-client.ts",
+        "packages/server/src/server/project-worktree-service.ts",
+        "packages/server/src/server/session.ts",
+        "packages/app/src/add-project-flow",
+        "packages/app/src/components/add-project-flow.tsx",
+        "packages/app/src/projects/project-remove.ts",
+        "packages/app/src/components/sidebar-workspace-list.tsx",
+        "docs/data-model.md"
+      ]
+    },
+    {
       "id": "desktop-gitlab-mr-tracker",
       "commitSubject": "feat(mrs): track GitLab merge requests in Paseito",
       "preservationFixes": [

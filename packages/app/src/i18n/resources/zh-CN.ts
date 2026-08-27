@@ -1104,12 +1104,16 @@ export const zhCN: TranslationResources = {
         openFolder: "Open in file manager",
         openFolderFailed: "Couldn't open folder",
         remove: "移除 project",
+        removeWorktree: "移除 project 和 worktree",
         removing: "正在移除...",
       },
       confirmations: {
         removeTitle: "移除 project？",
         removeMessage: "从侧边栏移除「{{projectName}}」？\n\n磁盘上的文件不会被更改。",
         removeConfirm: "移除",
+        removeWorktreeTitle: "移除 project 和 worktree？",
+        removeWorktreeMessage: "移除「{{projectName}}」并从磁盘永久删除其 worktree？",
+        removeWorktreeConfirm: "移除并删除",
         cancel: "取消",
       },
       toasts: {

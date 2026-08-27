@@ -3065,6 +3065,61 @@ test("creates and registers a project directory through the dotted RPC", async (
   });
 });
 
+test("creates a managed project worktree through the dotted RPC", async () => {
+  const logger = createMockLogger();
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "clsk_unit_test",
+    logger,
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+  const connectPromise = client.connect();
+  mock.triggerOpen();
+  await connectPromise;
+
+  const createPromise = client.createProjectWorktree(
+    {
+      source: { kind: "remote", url: "git@gitlab.example.com:team/compiler.git" },
+      targetPath: "/tmp/compiler-worktree",
+    },
+    "req-create-project-worktree",
+  );
+  expect(parseSentFrame(mock.sent[0])).toEqual({
+    type: "project.worktree.create.request",
+    source: { kind: "remote", url: "git@gitlab.example.com:team/compiler.git" },
+    targetPath: "/tmp/compiler-worktree",
+    requestId: "req-create-project-worktree",
+  });
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "project.worktree.create.response",
+      payload: {
+        requestId: "req-create-project-worktree",
+        project: {
+          projectId: "prj_worktree",
+          projectDisplayName: "compiler-worktree",
+          projectCustomName: null,
+          projectRootPath: "/tmp/compiler-worktree",
+          projectKind: "git",
+          managedWorktree: { sourceKind: "remote" },
+        },
+        worktreePath: "/tmp/compiler-worktree",
+        setupStatus: "completed",
+        setupError: null,
+        error: null,
+      },
+    }),
+  );
+
+  await expect(createPromise).resolves.toMatchObject({
+    worktreePath: "/tmp/compiler-worktree",
+    setupStatus: "completed",
+  });
+});
+
 test("sends first-agent prompt context with workspace.create.request", async () => {
   const logger = createMockLogger();
   const mock = createMockTransport();
@@ -3173,6 +3228,43 @@ test("sends project.remove.request", async () => {
   await expect(removePromise).resolves.toEqual({
     removedWorkspaceIds: ["ws-main"],
   });
+});
+
+test("sends project.worktree.remove.request", async () => {
+  const logger = createMockLogger();
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "clsk_unit_test",
+    logger,
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+  const connectPromise = client.connect();
+  mock.triggerOpen();
+  await connectPromise;
+
+  const removePromise = client.removeProjectWorktree("prj_worktree", "req-remove-worktree");
+  expect(parseSentFrame(mock.sent[0])).toEqual({
+    type: "project.worktree.remove.request",
+    requestId: "req-remove-worktree",
+    projectId: "prj_worktree",
+  });
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "project.worktree.remove.response",
+      payload: {
+        requestId: "req-remove-worktree",
+        projectId: "prj_worktree",
+        accepted: true,
+        removedWorkspaceIds: [],
+        error: null,
+      },
+    }),
+  );
+
+  await expect(removePromise).resolves.toEqual({ removedWorkspaceIds: [] });
 });
 
 test("sends worktree base-ref fields in create_paseo_worktree_request", async () => {
