@@ -316,6 +316,8 @@ instead of editing the list by hand.
   - Fix: Gate exhaustive search on daemon support, bypass redundant ignored-path enumeration, and reject truncated Git file corpora.
   - Fix: Route Command+Enter to the right Changes sidebar even when a full Changes tab exists.
   - Fix: Keep absolute host-path autocomplete outside the Git index and preserve editable absolute file tabs.
+- `managed-project-worktrees` — Create and set up project worktrees from local or remote Git repositories directly through Add Project.
+  - Fix: Keep destructive removal fail-closed on private ownership provenance while preserving local source repositories and usable credential-redacted remotes.
 - `desktop-gitlab-mr-tracker` — Track GitLab merge requests in a read-only desktop sidebar surface without porting MR Tracker automations or personal configuration.
   - Fix: Keep GitLab access tokens outside renderer-visible state and the repository, stored locally with owner-only permissions without Keychain, and preserve credentials across ordinary desktop upgrades.
   - Fix: Keep the unconfigured tracker free of dead controls and provide direct, security-explained setup actions.

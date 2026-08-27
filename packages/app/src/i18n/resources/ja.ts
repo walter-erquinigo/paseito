@@ -1125,6 +1125,7 @@ export const ja: TranslationResources = {
         openFolder: "Open in file manager",
         openFolderFailed: "Couldn't open folder",
         remove: "プロジェクトを削除",
+        removeWorktree: "プロジェクトとワークツリーを削除",
         removing: "削除中...",
       },
       confirmations: {
@@ -1132,6 +1133,10 @@ export const ja: TranslationResources = {
         removeMessage:
           '"{{projectName}}"をサイドバーから削除しますか？\n\nディスク上のファイルは変更されません。',
         removeConfirm: "削除",
+        removeWorktreeTitle: "プロジェクトとワークツリーを削除しますか？",
+        removeWorktreeMessage:
+          "「{{projectName}}」を削除し、そのワークツリーをディスクから完全に削除しますか？",
+        removeWorktreeConfirm: "削除する",
         cancel: "キャンセル",
       },
       toasts: {

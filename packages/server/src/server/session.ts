@@ -258,6 +258,11 @@ import {
   createProjectDirectory,
   ProjectDirectoryRequestError,
 } from "./project-directory-service.js";
+import {
+  createManagedProjectWorktree,
+  removeManagedProjectWorktree,
+  validateManagedProjectWorktreeRemoval,
+} from "./project-worktree-service.js";
 import { runGitCommand } from "../utils/run-git-command.js";
 import { CreateAgentLifecycleDispatch } from "./agent/create-agent-lifecycle-dispatch.js";
 import { resolveWorktreeSourceCwd } from "./workspace-source.js";
@@ -1935,7 +1940,7 @@ export class Session {
       this.dispatchCheckoutMessage(msg) ??
       this.dispatchWorkspaceRecoveryMessage(msg) ??
       this.dispatchWorkspaceLabelMessage(msg) ??
-      this.dispatchWorkspaceAndProjectMessage(msg) ??
+      this.dispatchWorkspaceDomainMessage(msg) ??
       this.dispatchWorkspaceFileMessage(msg, source) ??
       this.dispatchProviderMessage(msg) ??
       this.dispatchOrchestrationSkillsMessage(msg) ??
@@ -2453,6 +2458,21 @@ export class Session {
         return this.handleWorkspaceTitleSetRequest(msg.workspaceId, msg.title, msg.requestId);
       case "workspace.pin.set.request":
         return this.handleWorkspacePinSetRequest(msg.workspaceId, msg.pinned, msg.requestId);
+      default:
+        return undefined;
+    }
+  }
+
+  private dispatchWorkspaceDomainMessage(msg: SessionInboundMessage): Promise<void> | undefined {
+    return this.dispatchProjectWorktreeMessage(msg) ?? this.dispatchWorkspaceAndProjectMessage(msg);
+  }
+
+  private dispatchProjectWorktreeMessage(msg: SessionInboundMessage): Promise<void> | undefined {
+    switch (msg.type) {
+      case "project.worktree.create.request":
+        return this.handleProjectWorktreeCreateRequest(msg);
+      case "project.worktree.remove.request":
+        return this.handleProjectWorktreeRemoveRequest(msg);
       default:
         return undefined;
     }
@@ -3194,6 +3214,100 @@ export class Session {
           accepted: false,
           removedWorkspaceIds: [],
           error: getErrorMessageOr(error, "Failed to remove project"),
+        },
+      });
+    }
+  }
+
+  private async handleProjectWorktreeRemoveRequest(
+    request: Extract<SessionInboundMessage, { type: "project.worktree.remove.request" }>,
+  ): Promise<void> {
+    const { projectId, requestId } = request;
+    this.sessionLogger.info({ projectId, requestId }, "session: project.worktree.remove.request");
+
+    try {
+      const project = await this.projectRegistry.get(projectId);
+      if (!project?.managedWorktree) {
+        throw new Error("Project is not a Paseito-managed worktree");
+      }
+      // Fail closed before changing agents, terminals, or workspace records.
+      await validateManagedProjectWorktreeRemoval({ project, paseoHome: this.paseoHome });
+      const projectWorkspaces = (await this.workspaceRegistry.list()).filter(
+        (workspace) => workspace.projectId === project.projectId,
+      );
+      const activeWorkspaceIds = projectWorkspaces
+        .filter((workspace) => !workspace.archivedAt)
+        .map((workspace) => workspace.workspaceId);
+
+      if (activeWorkspaceIds.length > 0) {
+        this.markWorkspaceArchiving(activeWorkspaceIds, new Date().toISOString());
+        await this.emitWorkspaceUpdatesForWorkspaceIds(activeWorkspaceIds);
+      }
+
+      const removedWorkspaceIds: string[] = [];
+      try {
+        for (const workspaceId of activeWorkspaceIds) {
+          await archiveWorkspaceContents(
+            {
+              agentManager: this.agentManager,
+              agentStorage: this.agentStorage,
+              killTerminalsForWorkspace: (id) =>
+                this.terminalController.killTerminalsForWorkspace(id),
+              sessionLogger: this.sessionLogger,
+            },
+            workspaceId,
+          );
+          await this.archiveWorkspaceRecord(workspaceId);
+          removedWorkspaceIds.push(workspaceId);
+        }
+
+        await removeManagedProjectWorktree({ project, paseoHome: this.paseoHome });
+        await this.projectRegistry.remove(project.projectId);
+        await removeProjectCustomIcon({
+          paseoHome: this.paseoHome,
+          projectId: project.projectId,
+        }).catch((error) => {
+          this.sessionLogger.warn(
+            { err: error, projectId: project.projectId },
+            "Failed to clean up removed project icon",
+          );
+        });
+      } finally {
+        if (activeWorkspaceIds.length > 0) {
+          this.clearWorkspaceArchiving(activeWorkspaceIds);
+        }
+      }
+
+      const updateIds =
+        removedWorkspaceIds.length > 0
+          ? removedWorkspaceIds
+          : [projectWorkspaces[0]?.workspaceId ?? projectId];
+      await this.emitWorkspaceUpdatesForWorkspaceIds(updateIds, {
+        removedProjectId: projectId,
+      });
+      this.emit({
+        type: "project.worktree.remove.response",
+        payload: {
+          requestId,
+          projectId,
+          accepted: true,
+          removedWorkspaceIds,
+          error: null,
+        },
+      });
+    } catch (error) {
+      this.sessionLogger.error(
+        { err: error, projectId, requestId },
+        "session: project.worktree.remove.request error",
+      );
+      this.emit({
+        type: "project.worktree.remove.response",
+        payload: {
+          requestId,
+          projectId,
+          accepted: false,
+          removedWorkspaceIds: [],
+          error: getErrorMessageOr(error, "Failed to remove project worktree"),
         },
       });
     }
@@ -5079,6 +5193,9 @@ export class Session {
       projectIconRevision: icon.revision,
       projectRootPath: project.rootPath,
       projectKind: project.kind,
+      managedWorktree: project.managedWorktree
+        ? { sourceKind: project.managedWorktree.sourceKind }
+        : null,
     };
   }
 
@@ -6239,6 +6356,107 @@ export class Session {
           errorCode: requestError.code,
         },
       });
+    }
+  }
+
+  private async handleProjectWorktreeCreateRequest(
+    request: Extract<SessionInboundMessage, { type: "project.worktree.create.request" }>,
+  ): Promise<void> {
+    try {
+      const result = await createManagedProjectWorktree(
+        { source: request.source, targetPath: request.targetPath },
+        {
+          paseoHome: this.paseoHome,
+          projectRegistry: this.projectRegistry,
+          registerProject: (path) =>
+            this.workspaceProvisioning.findOrCreateProjectForDirectory(path),
+          resolveLocalRepoRoot: (path) => this.workspaceGitService.resolveRepoRoot(path),
+          resolveDefaultBranch: (repoRoot) =>
+            this.workspaceGitService.resolveDefaultBranch(repoRoot),
+          runSetupAgent: (input) => this.runProjectWorktreeSetupAgent(input),
+          logger: this.sessionLogger,
+        },
+      );
+      this.emit({
+        type: "project.worktree.create.response",
+        payload: {
+          requestId: request.requestId,
+          project: await this.buildProjectDescriptor(result.project),
+          worktreePath: result.worktreePath,
+          setupStatus: result.setup.status,
+          setupError: result.setup.error,
+          error: null,
+        },
+      });
+    } catch (error) {
+      this.sessionLogger.error(
+        { err: error, sourceKind: request.source.kind, targetPath: request.targetPath },
+        "Failed to create managed project worktree",
+      );
+      this.emit({
+        type: "project.worktree.create.response",
+        payload: {
+          requestId: request.requestId,
+          project: null,
+          worktreePath: null,
+          setupStatus: null,
+          setupError: null,
+          error: getErrorMessageOr(error, "Failed to create project worktree"),
+        },
+      });
+    }
+  }
+
+  private async runProjectWorktreeSetupAgent(input: {
+    cwd: string;
+    agentsInstructions: string;
+  }): Promise<void> {
+    if (!this.agentManager.getRegisteredProviderIds().includes("pi")) {
+      throw new Error("Pi is unavailable on this host");
+    }
+    const agent = await this.agentManager.createAgent(
+      {
+        provider: "pi",
+        cwd: input.cwd,
+        title: "Set up project worktree",
+        internal: true,
+        systemPrompt:
+          "You are an internal Paseito setup session. Prepare the current worktree only. " +
+          "Do not implement product features, commit, push, or delete the worktree.",
+      },
+      undefined,
+      {
+        workspaceId: undefined,
+        persistSession: false,
+        initialTitle: "Set up project worktree",
+        labels: { "paseito.internal-task": "project-worktree-setup" },
+      },
+    );
+    try {
+      const result = await this.agentManager.runAgent(
+        agent.id,
+        [
+          "The source repository contains the following root AGENTS.md instructions:",
+          "",
+          input.agentsInstructions,
+          "",
+          "Perform only the steps those instructions require to set up a newly created worktree.",
+          "Work autonomously and stop when setup is complete. If there are no setup steps, say so and stop.",
+        ].join("\n"),
+      );
+      if (result.canceled) {
+        throw new Error("Pi setup session was canceled");
+      }
+    } finally {
+      if (this.agentManager.getAgent(agent.id)) {
+        await this.agentManager.closeAgent(agent.id).catch((error) => {
+          this.sessionLogger.warn(
+            { err: error, agentId: agent.id },
+            "Failed to close Pi setup session",
+          );
+        });
+      }
+      await this.agentManager.deleteAgentState(agent.id).catch(() => undefined);
     }
   }
 

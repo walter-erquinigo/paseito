@@ -60,6 +60,7 @@ $PASEO_HOME/
 │   ├── workspace-labels.json            # Shared host-local label catalog
 │   ├── workspace-labels.transaction.json # Recoverable catalog/assignment compound commit
 │   └── icons/                           # Host-local custom project icon images
+├── project-worktree-sources/                # Private source clones for remote managed worktrees
 ├── runtime/
 │   └── managed-processes/
 │       └── {recordId}.json              # Helper processes owned by Paseo; reconciled on daemon bootstrap
@@ -404,6 +405,7 @@ Array of project records.
 | `displayName`        | `string`                    | Selected-root basename, stable across remote and Git changes                                                                               |
 | `customName`         | `string \| null`            | User-set override layered over `displayName`. Null means "use the derived name".                                                           |
 | `customIconRevision` | `string \| null`            | Identifies the host-local custom icon stored under `projects/icons/`. Null means the icon is discovered by scanning the project directory. |
+| `managedWorktree`    | `object \| null`            | Provenance for a worktree created through Add Project; absent legacy values normalize to null                                              |
 | `createdAt`          | `string` (ISO 8601)         |                                                                                                                                            |
 | `updatedAt`          | `string` (ISO 8601)         |                                                                                                                                            |
 | `archivedAt`         | `string \| null` (ISO 8601) | Soft-delete timestamp; required nullable                                                                                                   |
@@ -413,6 +415,15 @@ icon. The client fetches URL imports and sends their bytes through the upload RP
 receives or fetches the URL; it validates the uploaded bytes, stores them, and records a new
 `customIconRevision`. Going back to automatic deletes the stored image, as does removing the
 project.
+
+`managedWorktree` stores the exact worktree path, source kind, source repository path, whether
+Paseito owns the source clone, an opaque ownership token, and its creation time. The corresponding
+token and paths are also written to a marker inside the worktree's private Git directory. Project
+removal may delete a worktree only when the project root, persisted provenance, and marker all
+match. Paseito retains `origin` for remote-created worktrees, but strips HTTP credentials, query
+parameters, and fragments immediately after resolving the default branch. Source repositories
+supplied as local paths are never owned or deleted by Paseito. A remote source clone is deleted only
+after it is verified to be inside `$PASEO_HOME/project-worktree-sources`.
 
 Active exact roots are idempotent using lexical platform-equivalence semantics. Existing legacy
 remote-shaped and path-shaped IDs remain readable, including duplicate roots; reconciliation never
