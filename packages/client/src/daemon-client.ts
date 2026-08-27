@@ -80,6 +80,9 @@ import type {
   ProjectIconGetResponse,
   ProjectAddResponse,
   ProjectCreateDirectoryResponse,
+  ProjectWorktreeCreateResponse,
+  ProjectWorktreeRemoveResponse,
+  ProjectWorktreeSource,
   OpenProjectResponseMessage,
   WorkspaceGithubSearchRepositoriesResponse,
   ProjectGithubCloneProtocol,
@@ -196,6 +199,7 @@ const perfNow: () => number =
     : () => Date.now();
 
 const PROJECT_GITHUB_CLONE_TIMEOUT_MS = 5 * 60 * 1000;
+const PROJECT_WORKTREE_CREATE_TIMEOUT_MS = 30 * 60 * 1000;
 
 interface ImportAgentInputBase {
   cwd?: string;
@@ -904,6 +908,8 @@ export interface RenameTerminalInput {
 type OpenProjectPayload = OpenProjectResponseMessage["payload"];
 type ProjectAddPayload = ProjectAddResponse["payload"];
 export type ProjectCreateDirectoryPayload = ProjectCreateDirectoryResponse["payload"];
+export type ProjectWorktreeCreatePayload = ProjectWorktreeCreateResponse["payload"];
+export type ProjectWorktreeRemovePayload = ProjectWorktreeRemoveResponse["payload"];
 export type WorkspaceGithubSearchRepositoriesPayload =
   WorkspaceGithubSearchRepositoriesResponse["payload"];
 type ProjectGithubClonePayload = ProjectGithubCloneResponse["payload"];
@@ -2621,6 +2627,21 @@ export class DaemonClient {
     });
   }
 
+  async createProjectWorktree(
+    input: { source: ProjectWorktreeSource; targetPath: string },
+    requestId?: string,
+  ): Promise<ProjectWorktreeCreatePayload> {
+    return this.sendNamespacedCorrelatedSessionRequest<"project.worktree.create.response">({
+      requestId,
+      message: {
+        type: "project.worktree.create.request",
+        source: input.source,
+        targetPath: input.targetPath,
+      },
+      timeout: PROJECT_WORKTREE_CREATE_TIMEOUT_MS,
+    });
+  }
+
   async searchGithubRepositories(
     input: { query: string; limit?: number },
     requestId?: string,
@@ -3037,6 +3058,21 @@ export class DaemonClient {
     });
     if (!payload.accepted) {
       throw new Error(payload.error ?? "removeProject rejected");
+    }
+    return { removedWorkspaceIds: payload.removedWorkspaceIds };
+  }
+
+  async removeProjectWorktree(
+    projectId: string,
+    requestId?: string,
+  ): Promise<{ removedWorkspaceIds: string[] }> {
+    const payload =
+      await this.sendNamespacedCorrelatedSessionRequest<"project.worktree.remove.response">({
+        requestId,
+        message: { type: "project.worktree.remove.request", projectId },
+      });
+    if (!payload.accepted) {
+      throw new Error(payload.error ?? "removeProjectWorktree rejected");
     }
     return { removedWorkspaceIds: payload.removedWorkspaceIds };
   }

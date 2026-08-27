@@ -4,9 +4,14 @@ import {
   parseGitRemoteLocation,
 } from "@getpaseo/protocol/git-remote";
 import { shortenPath } from "@/utils/shorten-path";
-import type { AddProjectHost, GithubRepositoryChoice } from "./model";
+import type { AddProjectHost, GithubRepositoryChoice, ProjectWorktreeSourceChoice } from "./model";
 
-export type AddProjectMethodId = "directory-search" | "browse" | "github" | "new-directory";
+export type AddProjectMethodId =
+  | "directory-search"
+  | "browse"
+  | "github"
+  | "new-directory"
+  | "worktree";
 
 export interface AddProjectMethodOption {
   id: AddProjectMethodId;
@@ -61,6 +66,14 @@ export function buildAddProjectMethods(host: AddProjectHost): AddProjectMethodOp
       ? `Create an empty directory on ${host.label}`
       : "Update this host to create directories",
     disabled: !host.canCreateDirectory,
+  });
+  options.push({
+    id: "worktree",
+    label: "Create worktree",
+    description: host.canManageProjectWorktrees
+      ? "Create from a local project or remote Git URL"
+      : "Update this host to create managed worktrees",
+    disabled: !host.canManageProjectWorktrees,
   });
   return options;
 }
@@ -147,6 +160,34 @@ export function buildSuggestedParentDirectories(projectPaths: string[]): string[
     "~",
   ];
   return [...new Set(values)];
+}
+
+export function buildDefaultProjectWorktreePath(input: {
+  source: ProjectWorktreeSourceChoice;
+  projectPaths: string[];
+}): string {
+  if (input.source.kind === "local") {
+    const parent = parentDirectory(input.source.path) ?? "~";
+    const name = pathBaseName(input.source.path).replace(/\.git$/u, "") || "project";
+    return joinDirectoryPath(parent, `${name}-worktree`);
+  }
+  const location = parseGitRemoteLocation(input.source.url);
+  const name = (location ? pathBaseName(location.path) : "project").replace(/\.git$/u, "");
+  const parent = buildSuggestedParentDirectories(input.projectPaths)[0] ?? "~/Developer";
+  return joinDirectoryPath(parent, `${name || "project"}-worktree`);
+}
+
+export function buildRemoteWorktreeSourceChoice(
+  query: string,
+): Extract<ProjectWorktreeSourceChoice, { kind: "remote" }> | null {
+  const url = query.trim();
+  if (!isCompleteGitRemote(url)) return null;
+  const location = parseGitRemoteLocation(url);
+  return {
+    kind: "remote",
+    url,
+    displayName: location ? pathBaseName(location.path).replace(/\.git$/u, "") : url,
+  };
 }
 
 export function buildCloneLocationOptions(input: {

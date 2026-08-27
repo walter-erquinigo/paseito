@@ -76,6 +76,42 @@ describe("project icon revision compatibility", () => {
   });
 });
 
+describe("managed project worktree compatibility", () => {
+  test("keeps managed provenance optional while exposing only its safe source kind", () => {
+    const legacy = {
+      projectId: "project-1",
+      projectDisplayName: "Project",
+      projectRootPath: "/repo/project",
+      projectKind: "git" as const,
+    };
+    expect(WorkspaceProjectDescriptorPayloadSchema.parse(legacy)).toEqual(legacy);
+    expect(
+      WorkspaceProjectDescriptorPayloadSchema.parse({
+        ...legacy,
+        managedWorktree: { sourceKind: "remote" },
+      }),
+    ).toEqual({ ...legacy, managedWorktree: { sourceKind: "remote" } });
+  });
+
+  test("parses the namespaced create and remove requests", () => {
+    expect(
+      SessionInboundMessageSchema.parse({
+        type: "project.worktree.create.request",
+        source: { kind: "local", path: "/repo/project" },
+        targetPath: "/repo/project-worktree",
+        requestId: "request-create",
+      }),
+    ).toMatchObject({ type: "project.worktree.create.request" });
+    expect(
+      SessionInboundMessageSchema.parse({
+        type: "project.worktree.remove.request",
+        projectId: "project-1",
+        requestId: "request-remove",
+      }),
+    ).toMatchObject({ type: "project.worktree.remove.request" });
+  });
+});
+
 describe("workspace descriptor message compatibility", () => {
   test("old-shaped fetch_workspaces_response without project still parses", () => {
     const parsed = SessionOutboundMessageSchema.parse(
