@@ -2503,6 +2503,24 @@ export const ProjectCreateDirectoryRequestSchema = z.object({
   requestId: z.string(),
 });
 
+export const ProjectWorktreeSourceSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("local"), path: z.string().trim().min(1) }),
+  z.object({ kind: z.literal("remote"), url: z.string().trim().min(1) }),
+]);
+
+export const ProjectWorktreeCreateRequestSchema = z.object({
+  type: z.literal("project.worktree.create.request"),
+  source: ProjectWorktreeSourceSchema,
+  targetPath: z.string().trim().min(1),
+  requestId: z.string(),
+});
+
+export const ProjectWorktreeRemoveRequestSchema = z.object({
+  type: z.literal("project.worktree.remove.request"),
+  projectId: z.string().trim().min(1),
+  requestId: z.string(),
+});
+
 export const GithubRepositorySchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
@@ -3256,6 +3274,8 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   OpenProjectRequestSchema,
   ProjectAddRequestSchema,
   ProjectCreateDirectoryRequestSchema,
+  ProjectWorktreeCreateRequestSchema,
+  ProjectWorktreeRemoveRequestSchema,
   WorkspaceGithubSearchRepositoriesRequestSchema,
   ProjectGithubCloneRequestSchema,
   ArchiveWorkspaceRequestSchema,
@@ -3538,6 +3558,9 @@ export const ServerInfoStatusPayloadSchema = z
         projectRemove: z.boolean().optional(),
         // COMPAT(projectAdd): added in v0.1.97, drop the gate when floor >= v0.1.97.
         projectAdd: z.boolean().optional(),
+        // COMPAT(projectWorktreeManagement): added in Paseito v0.6.1-paseito.10,
+        // remove after 2027-08-26 once the daemon floor includes it.
+        projectWorktreeManagement: z.boolean().optional(),
         // COMPAT(worktreeRestore): added in v0.1.97, drop the gate when floor >= v0.1.97
         worktreeRestore: z.boolean().optional(),
         // COMPAT(workspaceRecovery): added in v0.1.105, remove after 2027-01-11 once daemon floor >= v0.1.105.
@@ -4102,6 +4125,14 @@ export const WorkspaceProjectDescriptorPayloadSchema = z.object({
   projectIconRevision: z.string().optional(),
   projectRootPath: z.string(),
   projectKind: z.enum(["git", "non_git", "directory"]),
+  // COMPAT(projectWorktreeManagement): added in Paseito v0.6.1-paseito.10,
+  // remove optional after 2027-08-26 once the daemon floor includes it.
+  managedWorktree: z
+    .object({
+      sourceKind: z.enum(["local", "remote"]),
+    })
+    .nullable()
+    .optional(),
   // COMPAT(directorySync): sequence of this latest directory projection.
   syncSeq: z.number().int().positive().optional(),
 });
@@ -4316,6 +4347,31 @@ export const ProjectCreateDirectoryResponseSchema = z.object({
     // Error codes are open-ended on the wire so older clients can still parse
     // responses after a newer daemon learns another failure reason.
     errorCode: z.string().nullable(),
+  }),
+});
+
+export const ProjectWorktreeSetupStatusSchema = z.enum(["not_needed", "completed", "failed"]);
+
+export const ProjectWorktreeCreateResponseSchema = z.object({
+  type: z.literal("project.worktree.create.response"),
+  payload: z.object({
+    requestId: z.string(),
+    project: WorkspaceProjectDescriptorPayloadSchema.nullable(),
+    worktreePath: z.string().nullable(),
+    setupStatus: ProjectWorktreeSetupStatusSchema.nullable(),
+    setupError: z.string().nullable(),
+    error: z.string().nullable(),
+  }),
+});
+
+export const ProjectWorktreeRemoveResponseSchema = z.object({
+  type: z.literal("project.worktree.remove.response"),
+  payload: z.object({
+    requestId: z.string(),
+    projectId: z.string(),
+    accepted: z.boolean(),
+    removedWorkspaceIds: z.array(z.string()).default([]),
+    error: z.string().nullable(),
   }),
 });
 
@@ -6571,6 +6627,8 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   FetchWorkspacesResponseMessageSchema,
   ProjectAddResponseSchema,
   ProjectCreateDirectoryResponseSchema,
+  ProjectWorktreeCreateResponseSchema,
+  ProjectWorktreeRemoveResponseSchema,
   OpenProjectResponseMessageSchema,
   WorkspaceGithubSearchRepositoriesResponseSchema,
   ProjectGithubCloneResponseSchema,
@@ -6767,6 +6825,9 @@ export type FetchRecentProviderSessionsResponseMessage = z.infer<
 export type FetchWorkspacesResponseMessage = z.infer<typeof FetchWorkspacesResponseMessageSchema>;
 export type ProjectAddResponse = z.infer<typeof ProjectAddResponseSchema>;
 export type ProjectCreateDirectoryResponse = z.infer<typeof ProjectCreateDirectoryResponseSchema>;
+export type ProjectWorktreeCreateResponse = z.infer<typeof ProjectWorktreeCreateResponseSchema>;
+export type ProjectWorktreeRemoveResponse = z.infer<typeof ProjectWorktreeRemoveResponseSchema>;
+export type ProjectWorktreeSetupStatus = z.infer<typeof ProjectWorktreeSetupStatusSchema>;
 export type ScriptStatusUpdateMessage = z.infer<typeof ScriptStatusUpdateMessageSchema>;
 export type OpenProjectResponseMessage = z.infer<typeof OpenProjectResponseMessageSchema>;
 export type WorkspaceGithubSearchRepositoriesResponse = z.infer<
@@ -7100,6 +7161,9 @@ export type OpenProjectRequest = z.infer<typeof OpenProjectRequestSchema>;
 export type ProjectAddRequest = z.infer<typeof ProjectAddRequestSchema>;
 export type ProjectCreateDirectoryRequest = z.infer<typeof ProjectCreateDirectoryRequestSchema>;
 export type ProjectCreateDirectoryErrorCode = z.infer<typeof ProjectCreateDirectoryErrorCodeSchema>;
+export type ProjectWorktreeSource = z.infer<typeof ProjectWorktreeSourceSchema>;
+export type ProjectWorktreeCreateRequest = z.infer<typeof ProjectWorktreeCreateRequestSchema>;
+export type ProjectWorktreeRemoveRequest = z.infer<typeof ProjectWorktreeRemoveRequestSchema>;
 export type WorkspaceGithubSearchRepositoriesRequest = z.infer<
   typeof WorkspaceGithubSearchRepositoriesRequestSchema
 >;

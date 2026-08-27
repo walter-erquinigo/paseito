@@ -1120,6 +1120,7 @@ export const ko: TranslationResources = {
         openFolder: "파일 관리자에서 열기",
         openFolderFailed: "폴더를 열 수 없습니다.",
         remove: "프로젝트 제거",
+        removeWorktree: "프로젝트 및 워크트리 제거",
         removing: "제거하는 중...",
       },
       confirmations: {
@@ -1127,6 +1128,10 @@ export const ko: TranslationResources = {
         removeMessage:
           '"{{projectName}}"을(를) 사이드바에서 제거할까요?\n\n디스크의 파일은 변경되지 않습니다.',
         removeConfirm: "제거",
+        removeWorktreeTitle: "프로젝트와 워크트리를 제거할까요?",
+        removeWorktreeMessage:
+          '"{{projectName}}"을(를) 제거하고 해당 워크트리를 디스크에서 영구 삭제할까요?',
+        removeWorktreeConfirm: "제거 및 삭제",
         cancel: "취소",
       },
       toasts: {

@@ -413,6 +413,7 @@ function ProjectRowTrailingActions({
   onBeginWorkspaceSetup,
   onRemoveProject,
   removeProjectStatus,
+  removesManagedWorktree,
 }: {
   projectViewKey: string;
   displayName: string;
@@ -425,6 +426,7 @@ function ProjectRowTrailingActions({
   onBeginWorkspaceSetup: () => void;
   onRemoveProject?: () => void;
   removeProjectStatus: "idle" | "pending" | "success";
+  removesManagedWorktree: boolean;
 }) {
   const actionsVisible = isHovered || platformIsNative || isMobileBreakpoint;
   return (
@@ -449,6 +451,7 @@ function ProjectRowTrailingActions({
             projectPath={projectPath}
             onRemoveProject={onRemoveProject}
             removeProjectStatus={removeProjectStatus}
+            removesManagedWorktree={removesManagedWorktree}
           />
         </View>
       ) : null}
@@ -477,12 +480,14 @@ function ProjectKebabMenu({
   projectPath,
   onRemoveProject,
   removeProjectStatus,
+  removesManagedWorktree,
 }: {
   projectViewKey: string;
   settingsTarget: { serverId: string; projectId: string } | null;
   projectPath: string;
   onRemoveProject: () => void;
   removeProjectStatus: "idle" | "pending" | "success";
+  removesManagedWorktree: boolean;
 }) {
   const { t } = useTranslation();
   return (
@@ -504,6 +509,7 @@ function ProjectKebabMenu({
           projectPath={projectPath}
           onRemoveProject={onRemoveProject}
           removeProjectStatus={removeProjectStatus}
+          removesManagedWorktree={removesManagedWorktree}
         />
       </DropdownMenuContent>
     </DropdownMenu>
@@ -532,6 +538,7 @@ function ProjectMenuItems({
   projectPath,
   onRemoveProject,
   removeProjectStatus,
+  removesManagedWorktree,
 }: {
   surface: ProjectMenuSurface;
   projectViewKey: string;
@@ -539,6 +546,7 @@ function ProjectMenuItems({
   projectPath: string;
   onRemoveProject: () => void;
   removeProjectStatus: "idle" | "pending" | "success";
+  removesManagedWorktree: boolean;
 }) {
   const { t } = useTranslation();
   const toast = useToast();
@@ -593,7 +601,11 @@ function ProjectMenuItems({
         pendingLabel={t("sidebar.project.actions.removing")}
         onSelect={onRemoveProject}
       >
-        {t("sidebar.project.actions.remove")}
+        {t(
+          removesManagedWorktree
+            ? "sidebar.project.actions.removeWorktree"
+            : "sidebar.project.actions.remove",
+        )}
       </ProjectMenuItem>
     </>
   );
@@ -873,6 +885,8 @@ function ProjectHeaderRow({
   const localDaemonServerId = useLocalDaemonServerId();
   const projectPath = resolveSidebarProjectLocalPath(project, localDaemonServerId);
   const settingsTarget = project.hosts[0] ?? null;
+  const removesManagedWorktree =
+    project.hosts.length > 0 && project.hosts.every((host) => host.managedWorktree === true);
   const handleBeginWorkspaceSetup = useCallback(() => {
     if (!worktreeTarget) {
       return;
@@ -969,6 +983,7 @@ function ProjectHeaderRow({
         onBeginWorkspaceSetup={handleBeginWorkspaceSetup}
         onRemoveProject={onRemoveProject}
         removeProjectStatus={removeProjectStatus}
+        removesManagedWorktree={removesManagedWorktree}
       />
       {showShortcutBadge && shortcutNumber !== null ? (
         <View style={styles.projectShortcutBadgeOverlay} pointerEvents="none">
@@ -1038,6 +1053,7 @@ function ProjectHeaderRow({
           projectPath={projectPath}
           onRemoveProject={onRemoveProject}
           removeProjectStatus={removeProjectStatus}
+          removesManagedWorktree={removesManagedWorktree}
         />
       </ContextMenuContent>
     </ContextMenu>
@@ -1713,6 +1729,8 @@ function ProjectBlock({
   const toast = useToast();
   const { t } = useTranslation();
   const [isRemovingProject, setIsRemovingProject] = useState(false);
+  const removesManagedWorktree =
+    project.hosts.length > 0 && project.hosts.every((host) => host.managedWorktree === true);
 
   const handleRemoveProject = useCallback(() => {
     if (isRemovingProject) {
@@ -1721,9 +1739,22 @@ function ProjectBlock({
 
     void (async () => {
       const confirmed = await confirmDialog({
-        title: t("sidebar.project.confirmations.removeTitle"),
-        message: t("sidebar.project.confirmations.removeMessage", { projectName: displayName }),
-        confirmLabel: t("sidebar.project.confirmations.removeConfirm"),
+        title: t(
+          removesManagedWorktree
+            ? "sidebar.project.confirmations.removeWorktreeTitle"
+            : "sidebar.project.confirmations.removeTitle",
+        ),
+        message: t(
+          removesManagedWorktree
+            ? "sidebar.project.confirmations.removeWorktreeMessage"
+            : "sidebar.project.confirmations.removeMessage",
+          { projectName: displayName },
+        ),
+        confirmLabel: t(
+          removesManagedWorktree
+            ? "sidebar.project.confirmations.removeWorktreeConfirm"
+            : "sidebar.project.confirmations.removeConfirm",
+        ),
         cancelLabel: t("sidebar.project.confirmations.cancel"),
         destructive: true,
       });
@@ -1764,7 +1795,7 @@ function ProjectBlock({
           setIsRemovingProject(false);
         });
     })();
-  }, [isRemovingProject, displayName, t, toast, project.hosts]);
+  }, [isRemovingProject, displayName, t, toast, project.hosts, removesManagedWorktree]);
 
   const handleToggleCollapsed = useCallback(() => {
     onToggleCollapsed(project.viewKey);

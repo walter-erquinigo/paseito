@@ -1147,6 +1147,7 @@ export const es: TranslationResources = {
         openFolder: "Open in file manager",
         openFolderFailed: "Couldn't open folder",
         remove: "Eliminar proyecto",
+        removeWorktree: "Eliminar proyecto y árbol de trabajo",
         removing: "Eliminando...",
       },
       confirmations: {
@@ -1154,6 +1155,10 @@ export const es: TranslationResources = {
         removeMessage:
           '¿Quitar "{{projectName}}" de la barra lateral?\n\nLos archivos en el disco no se cambiarán.',
         removeConfirm: "Eliminar",
+        removeWorktreeTitle: "¿Eliminar proyecto y árbol de trabajo?",
+        removeWorktreeMessage:
+          '¿Eliminar "{{projectName}}" y borrar permanentemente su árbol de trabajo del disco?',
+        removeWorktreeConfirm: "Eliminar y borrar",
         cancel: "Cancelar",
       },
       toasts: {
