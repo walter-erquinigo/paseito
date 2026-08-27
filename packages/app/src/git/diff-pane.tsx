@@ -2052,6 +2052,9 @@ export function ChangesSurface({
   );
   const [discussionInboxOpen, setDiscussionInboxOpen] = useState(false);
   const [focusedDiscussionId, setFocusedDiscussionId] = useState<string | null>(null);
+  const [collapsedForgeThreadIds, setCollapsedForgeThreadIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
   const handleOpenDiscussions = useCallback(() => {
     setFocusedDiscussionId(null);
     setDiscussionInboxOpen(true);
@@ -2065,14 +2068,31 @@ export function ChangesSurface({
     setFocusedDiscussionId(null);
   }, []);
   const handleShowAllDiscussions = useCallback(() => setFocusedDiscussionId(null), []);
+  const handleToggleForgeDiscussion = useCallback((threadId: string) => {
+    setCollapsedForgeThreadIds((current) => {
+      const next = new Set(current);
+      if (next.has(threadId)) next.delete(threadId);
+      else next.add(threadId);
+      return next;
+    });
+  }, []);
+  useEffect(() => setCollapsedForgeThreadIds(new Set()), [discussions.mrUrl]);
   const expandDiscussionLine = contextExpansion.expandLine;
   const reviewActions = useMemo(
     () => ({
       ...localReviewActions,
       forgeThreadsByTarget,
+      collapsedForgeThreadIds,
       onOpenForgeThread: handleOpenForgeDiscussion,
+      onToggleForgeThread: handleToggleForgeDiscussion,
     }),
-    [forgeThreadsByTarget, handleOpenForgeDiscussion, localReviewActions],
+    [
+      collapsedForgeThreadIds,
+      forgeThreadsByTarget,
+      handleOpenForgeDiscussion,
+      handleToggleForgeDiscussion,
+      localReviewActions,
+    ],
   );
   useEffect(() => {
     for (const item of discussions.items) {

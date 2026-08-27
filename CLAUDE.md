@@ -238,6 +238,7 @@ instead of editing the list by hand.
 - `changes-gitlab-discussions` — Show the current branch's GitLab MR discussions inline in Changes and in an adaptive inbox, with confirmed replies.
   - Fix: Keep GitLab discussion placement revision-aware and visibly mark every best-effort anchor.
   - Fix: Keep replies daemon-owned, confirmation-backed and capability-gated on every remote host.
+  - Fix: Keep inline GitLab threads in blank interstitial diff rows with a gutter-edge control that collapses presentation without mutating forge resolution.
 - `changes-source-navigation` — Search complete current-side changed files and use shared language intelligence directly from Changes.
   - Fix: Share revision-safe LSP sessions with the editor and suppress stale buffers.
   - Fix: Anchor LSP positions to current-side source text and pause Changes intelligence while the workspace is dirty.

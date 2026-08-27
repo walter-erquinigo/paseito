@@ -7,8 +7,9 @@ export const INLINE_REVIEW_COMMENT_HEIGHT = 74;
 export const INLINE_REVIEW_EDITOR_HEIGHT = 168;
 export const INLINE_SUGGESTION_EDITOR_HEIGHT = 316;
 export const INLINE_SUGGESTION_HEIGHT = 112;
-export const INLINE_FORGE_DISCUSSION_HEIGHT = 74;
-export const INLINE_RESOLVED_FORGE_DISCUSSION_HEIGHT = 38;
+export const INLINE_FORGE_DISCUSSION_HEIGHT = 152;
+export const INLINE_RESOLVED_FORGE_DISCUSSION_HEIGHT = 54;
+export const INLINE_COLLAPSED_FORGE_DISCUSSION_HEIGHT = 46;
 const INLINE_REVIEW_GAP = 6;
 
 export interface InlineReviewEditorState {
@@ -35,7 +36,9 @@ export interface InlineReviewActions {
   selectedRangeTargetKeys: ReadonlySet<string>;
   suggestionRangeError: SuggestionRangeFailure | null;
   forgeThreadsByTarget?: ReadonlyMap<string, ChangesDiscussionThread[]>;
+  collapsedForgeThreadIds?: ReadonlySet<string>;
   onOpenForgeThread?: (threadId: string) => void;
+  onToggleForgeThread?: (threadId: string) => void;
   onStartComment(target: ReviewableDiffTarget): void;
   onEditComment(target: ReviewableDiffTarget, comment: ReviewDraftComment): void;
   onCancelEditor(): void;
@@ -83,6 +86,15 @@ function activeSuggestionEditorForTarget(
     : null;
 }
 
+function forgeDiscussionHeight(
+  thread: ChangesDiscussionThread,
+  collapsedThreadIds: ReadonlySet<string> | undefined,
+): number {
+  if (collapsedThreadIds?.has(thread.id)) return INLINE_COLLAPSED_FORGE_DISCUSSION_HEIGHT;
+  if (thread.isResolved) return INLINE_RESOLVED_FORGE_DISCUSSION_HEIGHT;
+  return INLINE_FORGE_DISCUSSION_HEIGHT;
+}
+
 export function getInlineReviewThreadState(input: {
   reviewTarget: ReviewableDiffTarget | null | undefined;
   reviewActions?: InlineReviewActions;
@@ -122,10 +134,7 @@ export function getInlineReviewThreadState(input: {
       visibleSuggestions * INLINE_SUGGESTION_HEIGHT +
       forgeThreads.reduce(
         (height, thread) =>
-          height +
-          (thread.isResolved
-            ? INLINE_RESOLVED_FORGE_DISCUSSION_HEIGHT
-            : INLINE_FORGE_DISCUSSION_HEIGHT),
+          height + forgeDiscussionHeight(thread, reviewActions.collapsedForgeThreadIds),
         0,
       ) +
       Number(Boolean(editor)) * INLINE_REVIEW_EDITOR_HEIGHT +

@@ -1148,6 +1148,7 @@ export function DiffSurface(props: DiffSurfaceProps) {
                         left={index * columnWidth}
                         width={columnWidth}
                         height={row.reviewHeight}
+                        gutterWidth={file.gutterWidth}
                         pinToViewport={!model.wrapLines}
                       />
                     ) : null,
@@ -1452,6 +1453,7 @@ function WebReviewThread({
   left,
   width,
   height,
+  gutterWidth,
   pinToViewport,
 }: {
   target: ReviewableDiffTarget;
@@ -1460,6 +1462,7 @@ function WebReviewThread({
   left: number;
   width: number;
   height: number;
+  gutterWidth: number;
   pinToViewport: boolean;
 }) {
   const style = useMemo<React.CSSProperties>(
@@ -1473,6 +1476,7 @@ function WebReviewThread({
         reviewActions={actions}
         height={height}
         viewportWidth={width}
+        gutterWidth={gutterWidth}
         pinToViewport={pinToViewport}
       />
     </div>

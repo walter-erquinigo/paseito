@@ -46,7 +46,11 @@ or missing positions remain in the inbox.
 
 The inbox polls while Changes is visible and supports replies through the connected host's `glab`
 authentication. A reply appears only after GitLab accepts it, and failed replies retain their text.
-Resolved threads stay collapsed inline. Older hosts keep the control visible and require an update.
+Inline discussions reserve an interstitial row below their source line: the code and line-number
+gutters remain blank for the thread's full height instead of continuing behind it. The control on
+the gutter divider collapses or restores one thread without changing its GitLab resolution state;
+resolved threads use the same compact presentation. Older hosts keep the control visible and
+require an update.
 
 ## Suggested edits
 
