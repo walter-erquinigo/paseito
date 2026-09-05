@@ -125,10 +125,30 @@ describe("Pi tool call mapper", () => {
     expect(resolveToolCallName(toolCall, result)).toBe("write");
   });
 
-  test("preserves unknown tool input and parsed output", () => {
+  test("maps completed Pi plans to the shared plan presentation", () => {
+    const toolCall = parseToolArgs("plan_mode_complete", {
+      plan: "\n# Proposed change\n\n- Update the mapper\n",
+    });
+    const result = parseToolResult({
+      content: [{ type: "text", text: "**Proposed Plan**\n\n# Proposed change" }],
+    });
+
+    expect(mapToolDetail(toolCall, result)).toEqual({
+      type: "plan",
+      text: "# Proposed change\n\n- Update the mapper",
+    });
+  });
+
+  test("preserves malformed Pi plan and unknown tool details", () => {
+    const malformedPlan = parseToolArgs("plan_mode_complete", { plan: "  " });
+    expect(mapToolDetail(malformedPlan, null)).toEqual({
+      type: "unknown",
+      input: { plan: "  " },
+      output: null,
+    });
+
     const toolCall = parseToolArgs("custom_tool", { value: 42 });
     const result = parseToolResult({ text: "custom result" });
-
     expect(mapToolDetail(toolCall, result)).toEqual({
       type: "unknown",
       input: { value: 42 },
