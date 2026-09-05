@@ -340,6 +340,13 @@ export function resolveToolCallName(toolCall: PiTrackedToolCall, result?: PiTool
 export function mapToolDetail(toolCall: PiTrackedToolCall, result?: PiToolResult): ToolCallDetail {
   const parsedResult = result ?? null;
 
+  if (toolCall.toolName === "plan_mode_complete" && isRecord(toolCall.args)) {
+    const plan = readNonEmptyString(toolCall.args.plan);
+    if (plan) {
+      return { type: "plan", text: plan };
+    }
+  }
+
   if (isTaskToolCall(toolCall)) {
     return mapTaskToolDetail(toolCall.args, parsedResult);
   }

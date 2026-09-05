@@ -604,6 +604,59 @@ describe("PiRpcAgentSession", () => {
     ]);
   });
 
+  test("publishes a completed Pi plan before its implementation question", async () => {
+    const { pi, session, events } = await createSession();
+    const fakeSession = pi.latestSession();
+    const plan = "# Proposed change\n\n- Update the Pi mapper";
+
+    await session.startTurn("plan this change");
+    fakeSession.emit({
+      type: "tool_execution_start",
+      toolCallId: "plan-1",
+      toolName: "plan_mode_complete",
+      args: { plan },
+    });
+    fakeSession.emit({
+      type: "tool_execution_end",
+      toolCallId: "plan-1",
+      toolName: "plan_mode_complete",
+      result: {
+        content: [{ type: "text", text: `**Proposed Plan**\n\n${plan}` }],
+        details: { version: 1, source: "plan_mode_complete", plan },
+      },
+      isError: false,
+    });
+    fakeSession.emit({
+      type: "extension_ui_request",
+      id: "plan-action",
+      method: "select",
+      title: "Proposed plan ready. What next?",
+      options: ["Implement here", "Stay in Plan mode"],
+    });
+
+    await events.nextPermissionRequest();
+
+    expect(events.timelineItems()).toEqual([
+      {
+        type: "tool_call",
+        callId: "plan-1",
+        name: "plan_mode_complete",
+        status: "running",
+        detail: { type: "plan", text: plan },
+        error: null,
+      },
+      {
+        type: "tool_call",
+        callId: "plan-1",
+        name: "plan_mode_complete",
+        status: "completed",
+        detail: { type: "plan", text: plan },
+        error: null,
+      },
+    ]);
+    expect(events.eventTypes()).toEqual(["timeline", "timeline", "permission_requested"]);
+  });
+
   test("streams Pi task calls as sub-agent cards with lifecycle status", async () => {
     const { pi, session, events } = await createSession();
     const fakeSession = pi.latestSession();
