@@ -279,6 +279,16 @@ export function parseToolArgs(toolName: string, rawArgs: unknown): PiTrackedTool
 export function mapToolDetail(toolCall: PiTrackedToolCall, result?: PiToolResult): ToolCallDetail {
   const parsedResult = result ?? null;
 
+  if (
+    toolCall.toolName === "plan_mode_complete" &&
+    typeof toolCall.args === "object" &&
+    toolCall.args !== null &&
+    !Array.isArray(toolCall.args)
+  ) {
+    const rawPlan = (toolCall.args as Record<string, unknown>).plan;
+    const plan = typeof rawPlan === "string" ? rawPlan.trim() : "";
+    if (plan) return { type: "plan", text: plan };
+  }
   switch (toolCall.kind) {
     case "bash": {
       const summary = resolveToolCallOutput(parsedResult);
