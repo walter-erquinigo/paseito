@@ -441,6 +441,28 @@
       ]
     },
     {
+      "id": "pi-plan-completion-presentation",
+      "commitSubject": "fix(pi): show completed plans before approval",
+      "preservationFixes": [
+        "Keep completed plan output ordered before Pi's implementation approval request and retain generic handling for malformed plans."
+      ],
+      "permanent": false,
+      "intent": "Show completed Pi plans through the shared plan presentation before asking whether to implement them.",
+      "invariants": [
+        "A successful Pi plan_mode_complete call with a non-empty plan argument emits the shared structured plan detail instead of generic tool output.",
+        "The completed plan reaches the timeline before Pi's following implementation approval request.",
+        "Missing or blank plan arguments retain the generic unknown-tool representation."
+      ],
+      "contracts": [
+        "npx vitest run packages/server/src/server/agent/providers/pi/tool-call-mapper.test.ts packages/server/src/server/agent/providers/pi/agent.test.ts --bail=1"
+      ],
+      "paths": [
+        "packages/server/src/server/agent/providers/pi/agent.test.ts",
+        "packages/server/src/server/agent/providers/pi/tool-call-mapper.test.ts",
+        "packages/server/src/server/agent/providers/pi/tool-call-mapper.ts"
+      ]
+    },
+    {
       "id": "workspace-file-search-navigation",
       "commitSubject": "feat(command-center): search every workspace file",
       "preservationFixes": [

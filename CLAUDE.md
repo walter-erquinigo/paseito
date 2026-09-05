@@ -316,6 +316,8 @@ instead of editing the list by hand.
   - Fix: Reject post-reconciliation candidates whose rebased history is not normalized before independent review or promotion.
 - `agent-message-delivery-control` — Let users queue durable follow-up messages or explicitly steer an active agent run without conflating the two actions.
   - Fix: Restore failed sends to their original queue position and preserve legacy replacement behavior.
+- `pi-plan-completion-presentation` — Show completed Pi plans through the shared plan presentation before asking whether to implement them.
+  - Fix: Keep completed plan output ordered before Pi's implementation approval request and retain generic handling for malformed plans.
 - `workspace-file-search-navigation` — Find every eligible workspace file from Command+P and open it either as source or in Changes.
   - Fix: Keep exhaustive project-file search fast and preserve alternate navigation into the active Changes comparison.
   - Fix: Gate exhaustive search on daemon support, bypass redundant ignored-path enumeration, and reject truncated Git file corpora.
