@@ -1,0 +1,414 @@
+{
+  "decision": {
+    "blocked": false,
+    "blockers": [],
+    "features": [
+      {
+        "classification": "carry_forward",
+        "confidence": "certain",
+        "contractChecks": [
+          {
+            "command": "npx vitest run packages/protocol/src/agent-deep-link.test.ts packages/desktop/src/agent-navigation.test.ts packages/cli/src/cli-surface.test.ts",
+            "result": "passed"
+          }
+        ],
+        "evidence": [
+          {
+            "explanation": "The focused identity contract passed on the normalized v0.4.0 candidate.",
+            "kind": "test",
+            "reference": "independent-desktop-identity registry contract"
+          }
+        ],
+        "id": "independent-desktop-identity",
+        "residualWork": [],
+        "summary": "Preserved Paseito's independent desktop, daemon, CLI, storage, protocol and visual identity on the v0.4.0 baseline."
+      },
+      {
+        "classification": "adapt",
+        "confidence": "certain",
+        "contractChecks": [
+          {
+            "command": "npx vitest run packages/app/src/git/changes-base-selection.test.ts packages/protocol/src/messages.checkout-commits.test.ts packages/server/src/utils/checkout-git.commits.test.ts",
+            "result": "passed"
+          }
+        ],
+        "evidence": [
+          {
+            "explanation": "The focused app, protocol and server comparison-base contract passed.",
+            "kind": "test",
+            "reference": "changes-base-selector registry contract"
+          }
+        ],
+        "id": "changes-base-selector",
+        "residualWork": [],
+        "summary": "Retained comparison-base selection and persistence while reconciling it with the v0.4.0 checkout infrastructure."
+      },
+      {
+        "classification": "carry_forward",
+        "confidence": "certain",
+        "contractChecks": [
+          {
+            "command": "npm run test:e2e --workspace=@getpaseo/app -- e2e/browser/paseito-changes-uncommitted-branch-badge.spec.ts",
+            "result": "passed"
+          }
+        ],
+        "evidence": [
+          {
+            "explanation": "The browser contract passed as part of the affected Playwright run.",
+            "kind": "test",
+            "reference": "paseito-changes-uncommitted-branch-badge.spec.ts"
+          }
+        ],
+        "id": "changes-uncommitted-branch-badge",
+        "residualWork": [],
+        "summary": "Preserved the live uncommitted branch badge in both Changes comparison modes."
+      },
+      {
+        "classification": "adapt",
+        "confidence": "certain",
+        "contractChecks": [
+          {
+            "command": "npx vitest run packages/protocol/src/messages.checkout-commit-amend.test.ts packages/client/src/daemon-client.test.ts packages/app/src/git/actions-store.test.ts packages/server/src/utils/checkout-git.test.ts packages/server/src/server/session/checkout/checkout-session.test.ts --bail=1",
+            "result": "passed"
+          }
+        ],
+        "evidence": [
+          {
+            "explanation": "The protocol-through-daemon amend contract passed in the focused unit run.",
+            "kind": "test",
+            "reference": "changes-amend-current-commit registry contract"
+          }
+        ],
+        "id": "changes-amend-current-commit",
+        "residualWork": [],
+        "summary": "Integrated the one-click amend action with capability gating, live status and release packaging."
+      },
+      {
+        "classification": "carry_forward",
+        "confidence": "certain",
+        "contractChecks": [
+          {
+            "command": "npx vitest run packages/protocol/src/messages.checkout-diff-context.test.ts packages/server/src/utils/checkout-git.context.test.ts packages/app/src/git/diff-context-expansion.test.ts",
+            "result": "passed"
+          }
+        ],
+        "evidence": [
+          {
+            "explanation": "The bounded revision-safe diff-context contract passed.",
+            "kind": "test",
+            "reference": "changes-context-expansion registry contract"
+          }
+        ],
+        "id": "changes-context-expansion",
+        "residualWork": [],
+        "summary": "Preserved bounded, revision-validated omitted-context expansion for review surfaces."
+      },
+      {
+        "classification": "adapt",
+        "confidence": "certain",
+        "contractChecks": [
+          {
+            "command": "npx vitest run packages/app/src/review/store.test.ts packages/app/src/review/surface.test.tsx packages/app/src/attachments/review-attachment-items.test.ts packages/server/src/server/agent/prompt-attachments.test.ts",
+            "result": "passed"
+          }
+        ],
+        "evidence": [
+          {
+            "explanation": "The structured review and attachment contract passed in the focused unit run.",
+            "kind": "test",
+            "reference": "review-suggestions-v1 registry contract"
+          }
+        ],
+        "id": "review-suggestions-v1",
+        "residualWork": [],
+        "summary": "Retained structured comments and code suggestions and their destination-agent attachment contract."
+      },
+      {
+        "classification": "adapt",
+        "confidence": "certain",
+        "contractChecks": [
+          {
+            "command": "npm run test:e2e --workspace=@getpaseo/app -- e2e/browser/changes-pane.spec.ts e2e/browser/branch-switcher.spec.ts",
+            "result": "passed"
+          }
+        ],
+        "evidence": [
+          {
+            "explanation": "The affected Changes and branch-switcher browser assertions passed, including the corrected independent inline/full-tab expansion behavior.",
+            "kind": "test",
+            "reference": "changes-pane.spec.ts and branch-switcher.spec.ts"
+          }
+        ],
+        "id": "branch-file-review-state",
+        "residualWork": [],
+        "summary": "Preserved branch-scoped file and line review state while keeping inline and full Changes navigation independent."
+      },
+      {
+        "classification": "adapt",
+        "confidence": "certain",
+        "contractChecks": [
+          {
+            "command": "npx vitest run packages/protocol/src/messages.checkout-diff-context.test.ts packages/server/src/utils/checkout-git.context.test.ts packages/app/src/git/changes-search.test.ts packages/app/src/git/changes-lsp-controller.test.ts packages/app/src/git/revisioned-source.test.ts packages/app/src/file-pane/editor/lsp-session-pool.test.ts --bail=1",
+            "result": "passed"
+          }
+        ],
+        "evidence": [
+          {
+            "explanation": "The revisioned source-search and shared-LSP unit and browser contracts passed.",
+            "kind": "test",
+            "reference": "changes-source-navigation registry contracts"
+          }
+        ],
+        "id": "changes-source-navigation",
+        "residualWork": [],
+        "summary": "Retained complete changed-source search and revision-safe language navigation directly in Changes."
+      },
+      {
+        "classification": "adapt",
+        "confidence": "certain",
+        "contractChecks": [
+          {
+            "command": "npm run test:e2e --workspace=@getpaseo/app -- e2e/browser/paseito-changes-file-tree-navigator.spec.ts",
+            "result": "passed"
+          }
+        ],
+        "evidence": [
+          {
+            "explanation": "The navigator browser contract passed in the affected Playwright run.",
+            "kind": "test",
+            "reference": "paseito-changes-file-tree-navigator.spec.ts"
+          }
+        ],
+        "id": "changes-file-tree-navigator",
+        "residualWork": [],
+        "summary": "Preserved the responsive file-tree navigator and independent retained-surface selection state."
+      },
+      {
+        "classification": "adapt",
+        "confidence": "certain",
+        "contractChecks": [
+          {
+            "command": "npx vitest run packages/server/src/server/session/lsp/clangd-client.local.e2e.test.ts --bail=1",
+            "result": "passed"
+          }
+        ],
+        "evidence": [
+          {
+            "explanation": "The real local clangd contract and the broader focused LSP contract passed.",
+            "kind": "test",
+            "reference": "lens-shared-editor-lsp registry contracts"
+          }
+        ],
+        "id": "lens-shared-editor-lsp",
+        "residualWork": [],
+        "summary": "Retained shared Lens/clangd editor intelligence with pooled sessions, deadlines and safe fallbacks."
+      },
+      {
+        "classification": "adapt",
+        "confidence": "certain",
+        "contractChecks": [
+          {
+            "command": "npm run test:e2e --workspace=@getpaseo/app -- e2e/browser/paseito-markdown-preview-file-links.spec.ts",
+            "result": "passed"
+          }
+        ],
+        "evidence": [
+          {
+            "explanation": "The Markdown source-link browser contract passed in the affected Playwright run.",
+            "kind": "test",
+            "reference": "paseito-markdown-preview-file-links.spec.ts"
+          }
+        ],
+        "id": "markdown-preview-source-links",
+        "residualWork": [],
+        "summary": "Preserved Markdown source-location routing into visible review surfaces or a reusable source split."
+      },
+      {
+        "classification": "adapt",
+        "confidence": "certain",
+        "contractChecks": [
+          {
+            "command": "npx vitest run packages/app/src/agent-stream/strategy-web.test.tsx --bail=1",
+            "result": "passed"
+          }
+        ],
+        "evidence": [
+          {
+            "explanation": "The retained-stream strategy contract passed in the focused unit run.",
+            "kind": "test",
+            "reference": "retained-chat-scroll-position registry contract"
+          }
+        ],
+        "id": "retained-chat-scroll-position",
+        "residualWork": [],
+        "summary": "Reconciled retained chat reading-position behavior with the current virtualized stream implementation."
+      },
+      {
+        "classification": "carry_forward",
+        "confidence": "certain",
+        "contractChecks": [
+          {
+            "command": "python3 -m unittest discover -s automation/release -p 'test_*.py' && python3 -m unittest discover -s automation/installer -p 'test_*.py' && python3 -m unittest discover -s automation/launchagents -p 'test_*.py' && python3 -m unittest discover -s automation/migration -p 'test_*.py' && python3 -m unittest discover -s automation/reporting -p 'test_*.py' && python3 -m unittest discover -s automation/remote -p 'test_*.py'",
+            "result": "passed"
+          }
+        ],
+        "evidence": [
+          {
+            "explanation": "All six automation contract suites passed independently.",
+            "kind": "test",
+            "reference": "release, installer, launchagent, migration, reporting and remote suites"
+          }
+        ],
+        "id": "local-semantic-maintenance",
+        "residualWork": [],
+        "summary": "Preserved fail-closed semantic maintenance and added schema-v3 desktop-installer validation for provenance-bound releases."
+      },
+      {
+        "classification": "adapt",
+        "confidence": "certain",
+        "contractChecks": [
+          {
+            "command": "npx vitest run packages/protocol/src/messages.active-run-behavior.test.ts packages/client/src/daemon-client.test.ts packages/server/src/server/agent/agent-manager.test.ts packages/server/src/server/agent/providers/codex-app-server-agent.test.ts packages/server/src/server/agent/providers/claude/agent.test.ts packages/app/src/composer/actions.test.ts packages/app/src/composer/queue-store.test.ts packages/app/src/hooks/use-settings/storage.test.ts",
+            "result": "passed"
+          }
+        ],
+        "evidence": [
+          {
+            "explanation": "The full queueing and active-run steering contract passed.",
+            "kind": "test",
+            "reference": "agent-message-delivery-control registry contract"
+          }
+        ],
+        "id": "agent-message-delivery-control",
+        "residualWork": [],
+        "summary": "Preserved durable queueing and explicit active-run steering with correct failure restoration and legacy behavior."
+      },
+      {
+        "classification": "adapt",
+        "confidence": "certain",
+        "contractChecks": [
+          {
+            "command": "npm run test:e2e --workspace=@getpaseo/app -- e2e/browser/command-center-file-search.spec.ts",
+            "result": "passed"
+          }
+        ],
+        "evidence": [
+          {
+            "explanation": "The complete workspace-file search browser contract passed in the affected Playwright run.",
+            "kind": "test",
+            "reference": "command-center-file-search.spec.ts"
+          }
+        ],
+        "id": "workspace-file-search-navigation",
+        "residualWork": [],
+        "summary": "Retained exhaustive workspace file search and explicit source or Changes navigation."
+      }
+    ],
+    "inputCommit": "efb3f68c52cd363d3a5584495683a78ed25f33cf",
+    "schemaVersion": 1,
+    "upstreamCommit": "b44bb63cf4ce089ab5750b9fc621ed52827b2820",
+    "upstreamTag": "v0.4.0",
+    "verificationRecommendations": []
+  },
+  "review": {
+    "approved": true,
+    "blockers": [],
+    "featureFindings": [
+      {
+        "agrees": true,
+        "evidenceChecked": ["identity registry contract", "normalized feature commit"],
+        "explanation": "The independent Paseito identity remains explicit and its focused contract passed.",
+        "id": "independent-desktop-identity"
+      },
+      {
+        "agrees": true,
+        "evidenceChecked": ["comparison-base registry contract", "normalized feature commit"],
+        "explanation": "The selected-base behavior remains capability-safe and passed its focused contract.",
+        "id": "changes-base-selector"
+      },
+      {
+        "agrees": true,
+        "evidenceChecked": ["uncommitted badge Playwright contract"],
+        "explanation": "The badge remains tied to live checkout dirtiness in both comparison modes.",
+        "id": "changes-uncommitted-branch-badge"
+      },
+      {
+        "agrees": true,
+        "evidenceChecked": ["amend protocol, client, app and server tests"],
+        "explanation": "The amend action preserves the current message and exposes capability-safe state through the full stack.",
+        "id": "changes-amend-current-commit"
+      },
+      {
+        "agrees": true,
+        "evidenceChecked": ["diff-context registry contract"],
+        "explanation": "Context expansion remains bounded, revision-validated and review-compatible.",
+        "id": "changes-context-expansion"
+      },
+      {
+        "agrees": true,
+        "evidenceChecked": ["review store, surface and attachment tests"],
+        "explanation": "Structured review data remains persisted and delivered only through the intended attachment path.",
+        "id": "review-suggestions-v1"
+      },
+      {
+        "agrees": true,
+        "evidenceChecked": [
+          "Changes and branch-switcher Playwright contracts",
+          "file and line review tests"
+        ],
+        "explanation": "Review state and keyboard behavior remain intact, and inline expansion no longer leaks into the full Changes tab.",
+        "id": "branch-file-review-state"
+      },
+      {
+        "agrees": true,
+        "evidenceChecked": ["source-search and LSP unit contracts", "browser LSP contracts"],
+        "explanation": "Search and LSP operations remain revision-safe and release leases when the workspace is dirty.",
+        "id": "changes-source-navigation"
+      },
+      {
+        "agrees": true,
+        "evidenceChecked": ["file-tree navigator unit and Playwright contracts"],
+        "explanation": "The navigator remains responsive and independent across retained Changes surfaces.",
+        "id": "changes-file-tree-navigator"
+      },
+      {
+        "agrees": true,
+        "evidenceChecked": ["shared LSP unit contract", "real local clangd test"],
+        "explanation": "Pooled Lens/clangd behavior retains bounded requests, replay and safe save fallback.",
+        "id": "lens-shared-editor-lsp"
+      },
+      {
+        "agrees": true,
+        "evidenceChecked": ["Markdown source-link unit and Playwright contracts"],
+        "explanation": "Source links route to an eligible review surface before opening a reusable source split.",
+        "id": "markdown-preview-source-links"
+      },
+      {
+        "agrees": true,
+        "evidenceChecked": ["retained stream strategy contract"],
+        "explanation": "Inactive chats freeze measurement work and restore the intended follow or reading state.",
+        "id": "retained-chat-scroll-position"
+      },
+      {
+        "agrees": true,
+        "evidenceChecked": ["six Python automation suites", "workflow and deployment code"],
+        "explanation": "The maintenance pipeline remains fail-closed, and the focused installer contract proves schema-v3 provenance is accepted only when daemon runtime digests agree.",
+        "id": "local-semantic-maintenance"
+      },
+      {
+        "agrees": true,
+        "evidenceChecked": ["queue and steer registry contract"],
+        "explanation": "Durable queueing and explicit steering remain distinct across client, daemon and provider behavior.",
+        "id": "agent-message-delivery-control"
+      },
+      {
+        "agrees": true,
+        "evidenceChecked": ["workspace file-search unit and Playwright contracts"],
+        "explanation": "Complete project-file search remains bounded and routes explicitly to source or the inline Changes surface.",
+        "id": "workspace-file-search-navigation"
+      }
+    ],
+    "reviewedCommit": "efb3f68c52cd363d3a5584495683a78ed25f33cf",
+    "schemaVersion": 1
+  }
+}
