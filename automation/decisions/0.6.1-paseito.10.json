@@ -1,0 +1,600 @@
+{
+  "decision": {
+    "blocked": false,
+    "blockers": [],
+    "features": [
+      {
+        "classification": "carry_forward",
+        "confidence": "certain",
+        "contractChecks": [
+          {
+            "command": "npx vitest run packages/protocol/src/agent-deep-link.test.ts packages/desktop/src/agent-navigation.test.ts packages/cli/src/cli-surface.test.ts",
+            "result": "passed"
+          }
+        ],
+        "evidence": [
+          {
+            "explanation": "This is both old and new upstream, so upstream supplied no replacement behavior.",
+            "kind": "commit",
+            "reference": "20d7efc46a316f5a274b9943a5c43b0322269825"
+          }
+        ],
+        "id": "independent-desktop-identity",
+        "residualWork": [],
+        "summary": "Permanent Paseito identity remains preserved; no upstream delta exists to replace it."
+      },
+      {
+        "classification": "carry_forward",
+        "confidence": "certain",
+        "contractChecks": [
+          {
+            "command": "npx vitest run packages/app/src/git/changes-base-selection.test.ts packages/protocol/src/messages.checkout-commits.test.ts packages/server/src/utils/checkout-git.commits.test.ts packages/server/src/utils/checkout-git.stack-parent.test.ts",
+            "result": "passed"
+          }
+        ],
+        "evidence": [
+          {
+            "explanation": "Old and new upstream endpoints are identical.",
+            "kind": "commit",
+            "reference": "20d7efc46a316f5a274b9943a5c43b0322269825"
+          }
+        ],
+        "id": "changes-base-selector",
+        "residualWork": [],
+        "summary": "Local comparison-base behavior remains required; no upstream change was supplied."
+      },
+      {
+        "classification": "carry_forward",
+        "confidence": "certain",
+        "contractChecks": [
+          {
+            "command": "npm run test:e2e --workspace=@getpaseo/app -- e2e/browser/paseito-changes-uncommitted-branch-badge.spec.ts",
+            "result": "passed"
+          }
+        ],
+        "evidence": [
+          {
+            "explanation": "The fork-specific browser contract remains in the current E2E directory.",
+            "kind": "file",
+            "reference": "packages/app/e2e/browser/paseito-changes-uncommitted-branch-badge.spec.ts"
+          }
+        ],
+        "id": "changes-uncommitted-branch-badge",
+        "residualWork": [],
+        "summary": "Local uncommitted-branch badge behavior remains required."
+      },
+      {
+        "classification": "carry_forward",
+        "confidence": "certain",
+        "contractChecks": [
+          {
+            "command": "npx vitest run packages/protocol/src/messages.checkout-commit-amend.test.ts packages/client/src/daemon-client.test.ts packages/app/src/git/actions-store.test.ts packages/server/src/utils/checkout-git.test.ts packages/server/src/server/session/checkout/checkout-session.test.ts --bail=1",
+            "result": "passed"
+          },
+          {
+            "command": "npm run test:e2e --workspace=@getpaseo/app -- e2e/browser/paseito-changes-uncommitted-branch-badge.spec.ts",
+            "result": "passed"
+          }
+        ],
+        "evidence": [
+          {
+            "explanation": "Local feature commit remains after the unchanged upstream endpoint.",
+            "kind": "commit",
+            "reference": "56405453a0eb8a2a5546dd6d9de63e3118bb6410"
+          }
+        ],
+        "id": "changes-amend-current-commit",
+        "residualWork": [],
+        "summary": "Local amend behavior remains required."
+      },
+      {
+        "classification": "carry_forward",
+        "confidence": "certain",
+        "contractChecks": [
+          {
+            "command": "npx vitest run packages/protocol/src/messages.checkout-diff-context.test.ts packages/server/src/utils/checkout-git.context.test.ts packages/app/src/git/diff-context-expansion.test.ts",
+            "result": "passed"
+          }
+        ],
+        "evidence": [
+          {
+            "explanation": "Local feature commit remains after the unchanged upstream endpoint.",
+            "kind": "commit",
+            "reference": "0628b36a7363d0aae645433c424f0856daa9a57c"
+          }
+        ],
+        "id": "changes-context-expansion",
+        "residualWork": [],
+        "summary": "Local bounded diff-context expansion remains required."
+      },
+      {
+        "classification": "carry_forward",
+        "confidence": "certain",
+        "contractChecks": [
+          {
+            "command": "npx vitest run packages/app/src/review/store.test.ts packages/app/src/review/surface.test.tsx packages/app/src/attachments/review-attachment-items.test.ts packages/server/src/server/agent/prompt-attachments.test.ts",
+            "result": "passed"
+          },
+          {
+            "command": "npm run test:e2e --workspace=@getpaseo/app -- e2e/browser/paseito-review-attachment-widget.spec.ts",
+            "result": "passed"
+          }
+        ],
+        "evidence": [
+          {
+            "explanation": "Local feature commit remains after the unchanged upstream endpoint.",
+            "kind": "commit",
+            "reference": "279267245a4b9eb8c58595db678048fc12164153"
+          }
+        ],
+        "id": "review-suggestions-v1",
+        "residualWork": [],
+        "summary": "Local persisted review suggestions remain required."
+      },
+      {
+        "classification": "carry_forward",
+        "confidence": "certain",
+        "contractChecks": [
+          {
+            "command": "npx vitest run packages/app/src/review/file-review.test.ts packages/app/src/review/line-review.test.ts packages/app/src/review/line-review-navigation.test.ts packages/app/src/git/file-review-expansion.test.ts packages/server/src/utils/checkout-git.context.test.ts packages/server/src/utils/checkout-git.test.ts",
+            "result": "passed"
+          },
+          {
+            "command": "npm run test:e2e --workspace=@getpaseo/app -- e2e/browser/changes-pane.spec.ts",
+            "result": "passed"
+          }
+        ],
+        "evidence": [
+          {
+            "explanation": "Contains current inline review assertions.",
+            "kind": "file",
+            "reference": "packages/app/e2e/browser/changes-pane.spec.ts"
+          },
+          {
+            "explanation": "Exited 1, confirming the superseded separate spec is not retained.",
+            "kind": "command",
+            "reference": "test -e packages/app/e2e/browser/diff-row-alignment.spec.ts"
+          }
+        ],
+        "id": "branch-file-review-state",
+        "residualWork": [],
+        "summary": "Local branch file and line review state remains required; the current upstream E2E location already contains the retained inline-review assertions, and the obsolete diff-row-alignment spec is absent."
+      },
+      {
+        "classification": "carry_forward",
+        "confidence": "certain",
+        "contractChecks": [
+          {
+            "command": "npx vitest run packages/server/src/services/gitlab-service.test.ts packages/app/src/git/changes-discussions.test.ts --bail=1",
+            "result": "passed"
+          }
+        ],
+        "evidence": [
+          {
+            "explanation": "Local feature commit remains after the unchanged upstream endpoint.",
+            "kind": "commit",
+            "reference": "ee91a5ff68cf19dcdff014056c63aa0478d98025"
+          }
+        ],
+        "id": "changes-gitlab-discussions",
+        "residualWork": [],
+        "summary": "Local GitLab discussion integration remains required."
+      },
+      {
+        "classification": "carry_forward",
+        "confidence": "certain",
+        "contractChecks": [
+          {
+            "command": "npx vitest run packages/protocol/src/messages.checkout-diff-context.test.ts packages/server/src/utils/checkout-git.context.test.ts packages/app/src/git/changes-search.test.ts packages/app/src/git/changes-lsp-controller.test.ts packages/app/src/git/revisioned-source.test.ts packages/app/src/file-pane/editor/lsp-session-pool.test.ts --bail=1",
+            "result": "passed"
+          },
+          {
+            "command": "npm run test:browser --workspace=@getpaseo/app -- src/git/changes-lsp-target.browser.test.ts --bail=1",
+            "result": "passed"
+          }
+        ],
+        "evidence": [
+          {
+            "explanation": "Current browser-target regression coverage is present.",
+            "kind": "file",
+            "reference": "packages/app/src/git/changes-lsp-target.browser.test.ts"
+          }
+        ],
+        "id": "changes-source-navigation",
+        "residualWork": [],
+        "summary": "Local Changes source search and LSP navigation remains required."
+      },
+      {
+        "classification": "carry_forward",
+        "confidence": "certain",
+        "contractChecks": [
+          {
+            "command": "npx vitest run packages/app/src/file-pane/editor/lsp-session.test.ts packages/app/src/file-pane/editor/lsp-session-pool.test.ts packages/app/src/file-pane/editor/model.test.ts packages/client/src/daemon-client.test.ts packages/protocol/src/messages.workspace-lsp.test.ts packages/server/src/server/session/lsp/clangd-client.test.ts packages/server/src/server/session/lsp/workspace-lsp-session.test.ts",
+            "result": "passed"
+          },
+          {
+            "command": "npx vitest run packages/server/src/server/session/lsp/clangd-client.local.e2e.test.ts --bail=1",
+            "result": "passed"
+          },
+          {
+            "command": "python3 automation/release/test_package_linux_daemon.py",
+            "result": "passed"
+          },
+          {
+            "command": "python3 automation/remote/test_deploy_remote_daemons.py",
+            "result": "passed"
+          }
+        ],
+        "evidence": [
+          {
+            "explanation": "Local feature commit remains after the unchanged upstream endpoint.",
+            "kind": "commit",
+            "reference": "ec769542d3c5454c12df467de55eb1633e636069"
+          }
+        ],
+        "id": "lens-shared-editor-lsp",
+        "residualWork": [],
+        "summary": "Local shared editor LSP behavior remains required."
+      },
+      {
+        "classification": "carry_forward",
+        "confidence": "certain",
+        "contractChecks": [
+          {
+            "command": "npx vitest run packages/app/src/assistant-file-links/parse.test.ts packages/app/src/file-pane/markdown-file-links.test.ts packages/app/src/workspace/file-open/index.test.ts packages/app/src/workspace/markdown-changes-navigation.test.ts packages/app/src/screens/workspace/workspace-pane-state.test.ts packages/app/src/workspace-tabs/identity.test.ts --bail=1",
+            "result": "passed"
+          },
+          {
+            "command": "npm run test:e2e --workspace=@getpaseo/app -- e2e/browser/paseito-markdown-preview-file-links.spec.ts",
+            "result": "passed"
+          }
+        ],
+        "evidence": [
+          {
+            "explanation": "Local feature commit remains after the unchanged upstream endpoint.",
+            "kind": "commit",
+            "reference": "b64bcc17eb5a91e5d0f05e300419db576af0a92f"
+          }
+        ],
+        "id": "markdown-preview-source-links",
+        "residualWork": [],
+        "summary": "Local Markdown-preview source-link routing remains required."
+      },
+      {
+        "classification": "carry_forward",
+        "confidence": "certain",
+        "contractChecks": [
+          {
+            "command": "python3 -m unittest discover -s automation/release -p 'test_*.py'",
+            "result": "passed"
+          },
+          {
+            "command": "python3 -m unittest discover -s automation/installer -p 'test_*.py'",
+            "result": "passed"
+          },
+          {
+            "command": "python3 -m unittest discover -s automation/launchagents -p 'test_*.py'",
+            "result": "passed"
+          },
+          {
+            "command": "python3 -m unittest discover -s automation/migration -p 'test_*.py'",
+            "result": "passed"
+          },
+          {
+            "command": "python3 -m unittest discover -s automation/reporting -p 'test_*.py'",
+            "result": "passed"
+          },
+          {
+            "command": "python3 -m unittest discover -s automation/remote -p 'test_*.py'",
+            "result": "passed"
+          }
+        ],
+        "evidence": [
+          {
+            "explanation": "Permanent local semantic-maintenance feature remains after the unchanged upstream endpoint.",
+            "kind": "commit",
+            "reference": "0da1499acd806c0e4a02ffedd49efc00915150ae"
+          }
+        ],
+        "id": "local-semantic-maintenance",
+        "residualWork": [],
+        "summary": "Permanent local automation and safety controls remain preserved."
+      },
+      {
+        "classification": "carry_forward",
+        "confidence": "certain",
+        "contractChecks": [
+          {
+            "command": "npx vitest run packages/protocol/src/messages.active-run-behavior.test.ts packages/client/src/daemon-client.test.ts packages/server/src/server/agent/agent-manager.test.ts packages/server/src/server/agent/providers/codex-app-server-agent.test.ts packages/server/src/server/agent/providers/claude/agent.test.ts packages/app/src/composer/actions.test.ts packages/app/src/composer/queue-store.test.ts packages/app/src/hooks/use-settings/storage.test.ts",
+            "result": "passed"
+          }
+        ],
+        "evidence": [
+          {
+            "explanation": "Local feature commit remains after the unchanged upstream endpoint.",
+            "kind": "commit",
+            "reference": "aaf11c4b6ec5850098f7d49fe2680d7ca30d0e43"
+          }
+        ],
+        "id": "agent-message-delivery-control",
+        "residualWork": [],
+        "summary": "Local durable queueing and active-run delivery control remains required."
+      },
+      {
+        "classification": "carry_forward",
+        "confidence": "certain",
+        "contractChecks": [
+          {
+            "command": "npx vitest run packages/server/src/utils/directory-suggestions.test.ts packages/app/src/workspace/markdown-changes-navigation.test.ts packages/app/src/workspace-tabs/identity.test.ts packages/app/src/stores/workspace-layout-store.test.ts --bail=1",
+            "result": "passed"
+          },
+          {
+            "command": "npm run test:e2e --workspace=@getpaseo/app -- e2e/browser/command-center-file-search.spec.ts",
+            "result": "passed"
+          }
+        ],
+        "evidence": [
+          {
+            "explanation": "Local feature commit remains after the unchanged upstream endpoint.",
+            "kind": "commit",
+            "reference": "6f3acee56d471bfb34679f790892a9c868707689"
+          }
+        ],
+        "id": "workspace-file-search-navigation",
+        "residualWork": [],
+        "summary": "Local workspace-file search navigation remains required."
+      },
+      {
+        "classification": "carry_forward",
+        "confidence": "certain",
+        "contractChecks": [
+          {
+            "command": "npx vitest run packages/protocol/src/messages.test.ts packages/client/src/daemon-client.test.ts packages/server/src/server/project-worktree-service.test.ts packages/app/src/add-project-flow/model.test.ts packages/app/src/projects/project-remove.test.ts --bail=1",
+            "result": "passed"
+          },
+          {
+            "command": "npm run test:e2e --workspace=@getpaseo/app -- e2e/browser/add-project-flow.spec.ts --grep 'creates a sibling worktree'",
+            "result": "passed"
+          }
+        ],
+        "evidence": [
+          {
+            "explanation": "Local feature commit remains after the unchanged upstream endpoint.",
+            "kind": "commit",
+            "reference": "05b5dc61c1d6af67c95065c05d5461a16565db7b"
+          }
+        ],
+        "id": "managed-project-worktrees",
+        "residualWork": [],
+        "summary": "Local managed project worktrees remain required."
+      },
+      {
+        "classification": "carry_forward",
+        "confidence": "certain",
+        "contractChecks": [
+          {
+            "command": "npm test --workspace=@getpaseo/desktop -- --run src/features/mr-tracker/store.test.ts src/features/mr-tracker/gitlab-client.test.ts src/features/mr-tracker/service.test.ts",
+            "result": "passed"
+          },
+          {
+            "command": "npm test --workspace=@getpaseo/app -- --run src/mr-tracker/model.test.ts src/mr-tracker/activity-state.test.ts src/mr-tracker/settings-form-model.test.ts src/mr-tracker/importance-control.test.tsx src/components/ui/tooltip.test.tsx",
+            "result": "passed"
+          },
+          {
+            "command": "npm run test:e2e:renderer --workspace=@getpaseo/desktop -- e2e/mr-tracker-row.spec.ts",
+            "result": "passed"
+          },
+          {
+            "command": "npx vitest run packages/protocol/src/mr-deep-link.test.ts packages/desktop/src/mr-navigation.test.ts --bail=1",
+            "result": "passed"
+          },
+          {
+            "command": "npm test --workspace=@getpaseo/chrome-extension",
+            "result": "passed"
+          }
+        ],
+        "evidence": [
+          {
+            "explanation": "Desktop MR tracker implementation remains in the candidate worktree.",
+            "kind": "file",
+            "reference": "packages/desktop/src/features/mr-tracker"
+          }
+        ],
+        "id": "desktop-gitlab-mr-tracker",
+        "residualWork": [],
+        "summary": "Local desktop GitLab MR tracker remains required."
+      }
+    ],
+    "inputCommit": "8e3205c90fff4b4664a0b3e96bb09c716b914d1e",
+    "schemaVersion": 1,
+    "upstreamCommit": "20d7efc46a316f5a274b9943a5c43b0322269825",
+    "upstreamTag": "v0.6.1",
+    "verificationRecommendations": [
+      "Run the seven listed browser/renderer contracts outside this sandbox; each stopped before test execution because loopback binding to 127.0.0.1 is denied."
+    ]
+  },
+  "review": {
+    "approved": true,
+    "blockers": [],
+    "featureFindings": [
+      {
+        "agrees": true,
+        "evidenceChecked": [
+          "Registry permanence and contract",
+          "Decision classification",
+          "Transcript: identity Vitest contract exited 0",
+          "Upstream ancestor check"
+        ],
+        "explanation": "[certain] Carry-forward is correct: this permanent feature remains in the candidate, and identical old/new upstream commits provide no replacement.",
+        "id": "independent-desktop-identity"
+      },
+      {
+        "agrees": true,
+        "evidenceChecked": [
+          "Registry contract",
+          "Decision classification",
+          "Transcript: base-selection Vitest contract exited 0",
+          "Identical upstream endpoints"
+        ],
+        "explanation": "[certain] Carry-forward is correct because the upstream endpoints are identical and the recorded focused contract passed.",
+        "id": "changes-base-selector"
+      },
+      {
+        "agrees": true,
+        "evidenceChecked": [
+          "Registry browser contract",
+          "Decision classification",
+          "Controller contract: exitCode 0",
+          "Candidate browser spec"
+        ],
+        "explanation": "[certain] Carry-forward is correct; the browser contract is present and the controller-owned exit-0 record authoritatively substantiates the deferred sandbox execution.",
+        "id": "changes-uncommitted-branch-badge"
+      },
+      {
+        "agrees": true,
+        "evidenceChecked": [
+          "Registry contracts",
+          "Decision classification",
+          "Transcript: focused Vitest exited 0",
+          "Controller browser contract: exitCode 0"
+        ],
+        "explanation": "[certain] Carry-forward is correct; the retained feature commit is an ancestor and both focused and browser contracts have passing evidence.",
+        "id": "changes-amend-current-commit"
+      },
+      {
+        "agrees": true,
+        "evidenceChecked": [
+          "Registry contract",
+          "Decision classification",
+          "Transcript: context Vitest contract exited 0",
+          "Identical upstream endpoints"
+        ],
+        "explanation": "[certain] Carry-forward is correct because no upstream delta exists and the exact context-expansion contract exited 0.",
+        "id": "changes-context-expansion"
+      },
+      {
+        "agrees": true,
+        "evidenceChecked": [
+          "Registry contracts",
+          "Decision classification",
+          "Transcript: review Vitest contract exited 0",
+          "Controller browser contract: exitCode 0"
+        ],
+        "explanation": "[certain] Carry-forward is correct; focused coverage passed and the browser contract is substantiated by the controller record with exitCode 0.",
+        "id": "review-suggestions-v1"
+      },
+      {
+        "agrees": true,
+        "evidenceChecked": [
+          "Registry contracts",
+          "Decision classification",
+          "Transcript: review-state Vitest contract exited 0",
+          "Controller changes-pane contract: exitCode 0"
+        ],
+        "explanation": "[certain] Carry-forward is correct; the inline review coverage is retained in changes-pane and both its focused and browser contracts passed.",
+        "id": "branch-file-review-state"
+      },
+      {
+        "agrees": true,
+        "evidenceChecked": [
+          "Registry contract",
+          "Decision classification",
+          "Transcript: GitLab-discussions Vitest contract exited 0",
+          "Feature commit ancestry"
+        ],
+        "explanation": "[certain] Carry-forward is correct because the local feature commit remains in the candidate and the exact focused contract exited 0.",
+        "id": "changes-gitlab-discussions"
+      },
+      {
+        "agrees": true,
+        "evidenceChecked": [
+          "Registry contracts",
+          "Decision classification",
+          "Transcript: focused Vitest contract exited 0",
+          "Controller browser contract: exitCode 0"
+        ],
+        "explanation": "[certain] Carry-forward is correct; focused coverage passed and the initially sandbox-blocked browser command is authoritatively passed by controller record.",
+        "id": "changes-source-navigation"
+      },
+      {
+        "agrees": true,
+        "evidenceChecked": [
+          "Registry contracts",
+          "Decision classification",
+          "Transcript: LSP Vitest contracts exited 0",
+          "Transcript: packaging and remote Python contracts exited 0"
+        ],
+        "explanation": "[certain] Carry-forward is correct; all recorded focused, local E2E, packaging, and remote deployment contracts exited 0.",
+        "id": "lens-shared-editor-lsp"
+      },
+      {
+        "agrees": true,
+        "evidenceChecked": [
+          "Registry contracts",
+          "Decision classification",
+          "Transcript: markdown-navigation Vitest contract exited 0",
+          "Controller browser contract: exitCode 0"
+        ],
+        "explanation": "[certain] Carry-forward is correct; focused coverage passed and the controller-owned browser record has exitCode 0.",
+        "id": "markdown-preview-source-links"
+      },
+      {
+        "agrees": true,
+        "evidenceChecked": [
+          "Registry permanence and contracts",
+          "Decision classification",
+          "Transcript: release, installer, launchagent, migration, reporting, and remote tests exited 0",
+          "Upstream ancestor check"
+        ],
+        "explanation": "[certain] Carry-forward is correct: this permanent feature remains preserved and every registered automation test group exited 0.",
+        "id": "local-semantic-maintenance"
+      },
+      {
+        "agrees": true,
+        "evidenceChecked": [
+          "Registry contract",
+          "Decision classification",
+          "Transcript: message-delivery Vitest contract exited 0",
+          "Feature commit ancestry"
+        ],
+        "explanation": "[certain] Carry-forward is correct; the retained feature commit is ancestral and the complete focused contract exited 0.",
+        "id": "agent-message-delivery-control"
+      },
+      {
+        "agrees": true,
+        "evidenceChecked": [
+          "Registry contracts",
+          "Decision classification",
+          "Transcript: file-search Vitest contract exited 0",
+          "Controller browser contract: exitCode 0"
+        ],
+        "explanation": "[certain] Carry-forward is correct; focused coverage passed and the browser contract is substantiated by a controller exit-0 record.",
+        "id": "workspace-file-search-navigation"
+      },
+      {
+        "agrees": true,
+        "evidenceChecked": [
+          "Registry contracts",
+          "Decision classification",
+          "Transcript: worktree Vitest contract exited 0",
+          "Controller browser contract: exitCode 0"
+        ],
+        "explanation": "[certain] Carry-forward is correct; the feature is the candidate parent, its focused contract passed, and the controller browser record exited 0.",
+        "id": "managed-project-worktrees"
+      },
+      {
+        "agrees": true,
+        "evidenceChecked": [
+          "Registry contracts",
+          "Decision classification",
+          "Transcript: desktop, app, protocol, and extension contracts exited 0",
+          "Controller renderer contract: exitCode 0"
+        ],
+        "explanation": "[certain] Carry-forward is correct; desktop, app, protocol, and extension contracts passed, including the controller-owned renderer run.",
+        "id": "desktop-gitlab-mr-tracker"
+      }
+    ],
+    "reviewedCommit": "8e3205c90fff4b4664a0b3e96bb09c716b914d1e",
+    "schemaVersion": 1
+  }
+}
