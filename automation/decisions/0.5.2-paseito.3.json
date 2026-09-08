@@ -1,0 +1,649 @@
+{
+  "decision": {
+    "blocked": false,
+    "blockers": [],
+    "features": [
+      {
+        "classification": "carry_forward",
+        "confidence": "certain",
+        "contractChecks": [
+          {
+            "command": "npx vitest run packages/protocol/src/agent-deep-link.test.ts packages/desktop/src/agent-navigation.test.ts packages/cli/src/cli-surface.test.ts",
+            "result": "passed"
+          }
+        ],
+        "evidence": [
+          {
+            "explanation": "The specified old and new upstream commits are identical.",
+            "kind": "command",
+            "reference": "git diff --stat 4092c2926500d51af6510bbe295591af0dfe52f7..4092c2926500d51af6510bbe295591af0dfe52f7"
+          },
+          {
+            "explanation": "Contains the preserved application identity configuration.",
+            "kind": "file",
+            "reference": "packages/app/app.config.js"
+          }
+        ],
+        "id": "independent-desktop-identity",
+        "residualWork": [],
+        "summary": "Permanent Paseito identity behavior remains required; upstream has no delta to replace it."
+      },
+      {
+        "classification": "carry_forward",
+        "confidence": "certain",
+        "contractChecks": [
+          {
+            "command": "npx vitest run packages/app/src/git/changes-base-selection.test.ts packages/protocol/src/messages.checkout-commits.test.ts packages/server/src/utils/checkout-git.commits.test.ts packages/server/src/utils/checkout-git.stack-parent.test.ts",
+            "result": "passed"
+          }
+        ],
+        "evidence": [
+          {
+            "explanation": "Implements persisted repository-and-branch-scoped base selection.",
+            "kind": "file",
+            "reference": "packages/app/src/git/changes-base-selection.ts"
+          },
+          {
+            "explanation": "Passed with checkout commit and Stack-Parent coverage.",
+            "kind": "test",
+            "reference": "packages/app/src/git/changes-base-selection.test.ts"
+          }
+        ],
+        "id": "changes-base-selector",
+        "residualWork": [],
+        "summary": "The local comparison-base behavior remains intact; no upstream change overlaps it."
+      },
+      {
+        "classification": "carry_forward",
+        "confidence": "certain",
+        "contractChecks": [
+          {
+            "command": "npm run test:e2e --workspace=@getpaseo/app -- e2e/browser/paseito-changes-uncommitted-branch-badge.spec.ts",
+            "result": "passed"
+          }
+        ],
+        "evidence": [
+          {
+            "explanation": "Dedicated Paseito browser contract remains present.",
+            "kind": "file",
+            "reference": "packages/app/e2e/browser/paseito-changes-uncommitted-branch-badge.spec.ts"
+          },
+          {
+            "explanation": "The upstream range is empty.",
+            "kind": "command",
+            "reference": "git diff --stat old-upstream..new-upstream"
+          }
+        ],
+        "id": "changes-uncommitted-branch-badge",
+        "residualWork": [],
+        "summary": "The local live uncommitted badge remains preserved; upstream did not change from the prior baseline."
+      },
+      {
+        "classification": "carry_forward",
+        "confidence": "certain",
+        "contractChecks": [
+          {
+            "command": "npx vitest run packages/protocol/src/messages.checkout-commit-amend.test.ts packages/client/src/daemon-client.test.ts packages/app/src/git/actions-store.test.ts packages/server/src/utils/checkout-git.test.ts packages/server/src/server/session/checkout/checkout-session.test.ts --bail=1",
+            "result": "passed"
+          },
+          {
+            "command": "npm run test:e2e --workspace=@getpaseo/app -- e2e/browser/paseito-changes-uncommitted-branch-badge.spec.ts",
+            "result": "passed"
+          }
+        ],
+        "evidence": [
+          {
+            "explanation": "The checkout-session amend behavior is covered by the passing focused contract.",
+            "kind": "file",
+            "reference": "packages/server/src/server/session/checkout/checkout-session.test.ts"
+          },
+          {
+            "explanation": "Protocol, client, app, checkout utility, and checkout-session tests passed.",
+            "kind": "test",
+            "reference": "packages/protocol/src/messages.checkout-commit-amend.test.ts"
+          }
+        ],
+        "id": "changes-amend-current-commit",
+        "residualWork": [],
+        "summary": "The local amend-current-commit capability and UI behavior remain preserved."
+      },
+      {
+        "classification": "carry_forward",
+        "confidence": "certain",
+        "contractChecks": [
+          {
+            "command": "npx vitest run packages/protocol/src/messages.checkout-diff-context.test.ts packages/server/src/utils/checkout-git.context.test.ts packages/app/src/git/diff-context-expansion.test.ts",
+            "result": "passed"
+          }
+        ],
+        "evidence": [
+          {
+            "explanation": "Contains the client expansion model.",
+            "kind": "file",
+            "reference": "packages/app/src/git/diff-context-expansion.ts"
+          },
+          {
+            "explanation": "Focused protocol, daemon, and app tests passed.",
+            "kind": "test",
+            "reference": "packages/server/src/utils/checkout-git.context.test.ts"
+          }
+        ],
+        "id": "changes-context-expansion",
+        "residualWork": [],
+        "summary": "Revision-validated bounded diff-context expansion remains local behavior."
+      },
+      {
+        "classification": "carry_forward",
+        "confidence": "certain",
+        "contractChecks": [
+          {
+            "command": "npx vitest run packages/app/src/review/store.test.ts packages/app/src/review/surface.test.tsx packages/app/src/attachments/review-attachment-items.test.ts packages/server/src/server/agent/prompt-attachments.test.ts",
+            "result": "passed"
+          },
+          {
+            "command": "npm run test:e2e --workspace=@getpaseo/app -- e2e/browser/paseito-review-attachment-widget.spec.ts",
+            "result": "passed"
+          }
+        ],
+        "evidence": [
+          {
+            "explanation": "Covers review drafting and surface behavior.",
+            "kind": "file",
+            "reference": "packages/app/src/review/surface.test.tsx"
+          },
+          {
+            "explanation": "Focused review and attachment contract passed.",
+            "kind": "test",
+            "reference": "packages/app/src/attachments/review-attachment-items.test.ts"
+          }
+        ],
+        "id": "review-suggestions-v1",
+        "residualWork": [],
+        "summary": "Structured review comments, suggestions, and review attachments remain preserved."
+      },
+      {
+        "classification": "carry_forward",
+        "confidence": "certain",
+        "contractChecks": [
+          {
+            "command": "npx vitest run packages/app/src/review/file-review.test.ts packages/app/src/review/line-review.test.ts packages/app/src/review/line-review-navigation.test.ts packages/app/src/git/file-review-expansion.test.ts packages/server/src/utils/checkout-git.context.test.ts packages/server/src/utils/checkout-git.test.ts",
+            "result": "passed"
+          },
+          {
+            "command": "npm run test:e2e --workspace=@getpaseo/app -- e2e/browser/changes-pane.spec.ts",
+            "result": "passed"
+          }
+        ],
+        "evidence": [
+          {
+            "explanation": "Contains line-review gutter, selection, file-review, keyboard, and focus assertions.",
+            "kind": "file",
+            "reference": "packages/app/e2e/browser/changes-pane.spec.ts"
+          },
+          {
+            "explanation": "Confirmed the superseded standalone host-layout assertion spec is absent.",
+            "kind": "command",
+            "reference": "test ! -e packages/app/e2e/browser/diff-row-alignment.spec.ts"
+          },
+          {
+            "explanation": "Focused line/file review and checkout tests passed.",
+            "kind": "test",
+            "reference": "packages/app/src/review/line-review.test.ts"
+          }
+        ],
+        "id": "branch-file-review-state",
+        "residualWork": [],
+        "summary": "Line and file review state remains preserved, with Paseito assertions integrated into upstream `changes-pane.spec.ts`; no superseded separate diff-row spec exists."
+      },
+      {
+        "classification": "carry_forward",
+        "confidence": "certain",
+        "contractChecks": [
+          {
+            "command": "npx vitest run packages/protocol/src/messages.checkout-diff-context.test.ts packages/server/src/utils/checkout-git.context.test.ts packages/app/src/git/changes-search.test.ts packages/app/src/git/changes-lsp-controller.test.ts packages/app/src/git/revisioned-source.test.ts packages/app/src/file-pane/editor/lsp-session-pool.test.ts --bail=1",
+            "result": "passed"
+          },
+          {
+            "command": "npm run test:browser --workspace=@getpaseo/app -- src/git/changes-lsp-target.browser.test.ts --bail=1",
+            "result": "passed"
+          },
+          {
+            "command": "npm run test:e2e --workspace=@getpaseo/app -- e2e/browser/changes-pane.spec.ts --grep 'Changes LSP'",
+            "result": "passed"
+          }
+        ],
+        "evidence": [
+          {
+            "explanation": "Contains Changes-specific LSP lifecycle behavior.",
+            "kind": "file",
+            "reference": "packages/app/src/git/changes-lsp-controller.ts"
+          },
+          {
+            "explanation": "Focused source-search and LSP controller contract passed.",
+            "kind": "test",
+            "reference": "packages/app/src/git/changes-search.test.ts"
+          }
+        ],
+        "id": "changes-source-navigation",
+        "residualWork": [],
+        "summary": "Changed-source search and revision-safe shared LSP behavior remain preserved."
+      },
+      {
+        "classification": "carry_forward",
+        "confidence": "certain",
+        "contractChecks": [
+          {
+            "command": "npx vitest run packages/app/src/git/changes-file-tree-navigation.test.ts --bail=1",
+            "result": "passed"
+          },
+          {
+            "command": "npm run test:e2e --workspace=@getpaseo/app -- e2e/browser/paseito-changes-file-tree-navigator.spec.ts",
+            "result": "passed"
+          }
+        ],
+        "evidence": [
+          {
+            "explanation": "Implements the retained Changes navigator.",
+            "kind": "file",
+            "reference": "packages/app/src/git/changes-file-tree-navigator.tsx"
+          },
+          {
+            "explanation": "Focused navigation tests passed.",
+            "kind": "test",
+            "reference": "packages/app/src/git/changes-file-tree-navigation.test.ts"
+          }
+        ],
+        "id": "changes-file-tree-navigator",
+        "residualWork": [],
+        "summary": "The pane-local desktop Changes file navigator remains preserved."
+      },
+      {
+        "classification": "carry_forward",
+        "confidence": "certain",
+        "contractChecks": [
+          {
+            "command": "npx vitest run packages/app/src/file-pane/editor/lsp-session.test.ts packages/app/src/file-pane/editor/lsp-session-pool.test.ts packages/app/src/file-pane/editor/model.test.ts packages/client/src/daemon-client.test.ts packages/protocol/src/messages.workspace-lsp.test.ts packages/server/src/server/session/lsp/clangd-client.test.ts packages/server/src/server/session/lsp/workspace-lsp-session.test.ts",
+            "result": "passed"
+          },
+          {
+            "command": "npx vitest run packages/server/src/server/session/lsp/clangd-client.local.e2e.test.ts --bail=1",
+            "result": "passed"
+          },
+          {
+            "command": "python3 automation/release/test_package_linux_daemon.py",
+            "result": "passed"
+          },
+          {
+            "command": "python3 automation/remote/test_deploy_remote_daemons.py",
+            "result": "passed"
+          }
+        ],
+        "evidence": [
+          {
+            "explanation": "Contains pooled editor LSP session behavior.",
+            "kind": "file",
+            "reference": "packages/app/src/file-pane/editor/lsp-session-pool.ts"
+          },
+          {
+            "explanation": "Local clangd E2E contract passed.",
+            "kind": "test",
+            "reference": "packages/server/src/server/session/lsp/clangd-client.local.e2e.test.ts"
+          }
+        ],
+        "id": "lens-shared-editor-lsp",
+        "residualWork": [],
+        "summary": "Lens sharing and daemon-owned clangd fallback behavior remain preserved."
+      },
+      {
+        "classification": "carry_forward",
+        "confidence": "certain",
+        "contractChecks": [
+          {
+            "command": "npx vitest run packages/app/src/assistant-file-links/parse.test.ts packages/app/src/file-pane/markdown-file-links.test.ts packages/app/src/workspace/file-open/index.test.ts packages/app/src/workspace/markdown-changes-navigation.test.ts packages/app/src/screens/workspace/workspace-pane-state.test.ts packages/app/src/workspace-tabs/identity.test.ts --bail=1",
+            "result": "passed"
+          },
+          {
+            "command": "npm run test:e2e --workspace=@getpaseo/app -- e2e/browser/paseito-markdown-preview-file-links.spec.ts",
+            "result": "passed"
+          }
+        ],
+        "evidence": [
+          {
+            "explanation": "Contains preview source-link routing.",
+            "kind": "file",
+            "reference": "packages/app/src/file-pane/markdown-file-links.ts"
+          },
+          {
+            "explanation": "Focused source-link and pane-routing tests passed.",
+            "kind": "test",
+            "reference": "packages/app/src/workspace/markdown-changes-navigation.test.ts"
+          }
+        ],
+        "id": "markdown-preview-source-links",
+        "residualWork": [],
+        "summary": "Markdown source-link routing into Changes or left-side source panes remains preserved."
+      },
+      {
+        "classification": "carry_forward",
+        "confidence": "certain",
+        "contractChecks": [
+          {
+            "command": "python3 -m unittest discover -s automation/release -p 'test_*.py'",
+            "result": "passed"
+          },
+          {
+            "command": "python3 -m unittest discover -s automation/installer -p 'test_*.py'",
+            "result": "passed"
+          },
+          {
+            "command": "python3 -m unittest discover -s automation/launchagents -p 'test_*.py'",
+            "result": "passed"
+          },
+          {
+            "command": "python3 -m unittest discover -s automation/migration -p 'test_*.py'",
+            "result": "passed"
+          },
+          {
+            "command": "python3 -m unittest discover -s automation/reporting -p 'test_*.py'",
+            "result": "passed"
+          },
+          {
+            "command": "python3 -m unittest discover -s automation/remote -p 'test_*.py'",
+            "result": "passed"
+          }
+        ],
+        "evidence": [
+          {
+            "explanation": "Marks this feature permanent and defines its contracts.",
+            "kind": "file",
+            "reference": "automation/feature-registry.json"
+          },
+          {
+            "explanation": "The complete release automation contract passed.",
+            "kind": "test",
+            "reference": "automation/release/test_semantic_sync.py"
+          }
+        ],
+        "id": "local-semantic-maintenance",
+        "residualWork": [],
+        "summary": "Permanent local reconciliation, release, migration, reporting, and deployment safeguards remain required."
+      },
+      {
+        "classification": "carry_forward",
+        "confidence": "certain",
+        "contractChecks": [
+          {
+            "command": "npx vitest run packages/protocol/src/messages.active-run-behavior.test.ts packages/client/src/daemon-client.test.ts packages/server/src/server/agent/agent-manager.test.ts packages/server/src/server/agent/providers/codex-app-server-agent.test.ts packages/server/src/server/agent/providers/claude/agent.test.ts packages/app/src/composer/actions.test.ts packages/app/src/composer/queue-store.test.ts packages/app/src/hooks/use-settings/storage.test.ts",
+            "result": "passed"
+          }
+        ],
+        "evidence": [
+          {
+            "explanation": "Defines the retained compatibility input as `replace | steer` and active behavior as `interrupt | steer`.",
+            "kind": "file",
+            "reference": "packages/protocol/src/messages.ts"
+          },
+          {
+            "explanation": "Focused protocol, daemon, client, composer, queue, and storage contract passed.",
+            "kind": "test",
+            "reference": "packages/app/src/composer/queue-store.test.ts"
+          }
+        ],
+        "id": "agent-message-delivery-control",
+        "residualWork": [],
+        "summary": "Durable queueing and explicit active-run steering remain preserved without stale send-behavior values."
+      },
+      {
+        "classification": "carry_forward",
+        "confidence": "certain",
+        "contractChecks": [
+          {
+            "command": "npx vitest run packages/server/src/utils/directory-suggestions.test.ts packages/app/src/workspace/markdown-changes-navigation.test.ts packages/app/src/git/changes-file-tree-navigation.test.ts packages/app/src/workspace-tabs/identity.test.ts packages/app/src/stores/workspace-layout-store.test.ts --bail=1",
+            "result": "passed"
+          },
+          {
+            "command": "npm run test:e2e --workspace=@getpaseo/app -- e2e/browser/command-center-file-search.spec.ts",
+            "result": "passed"
+          }
+        ],
+        "evidence": [
+          {
+            "explanation": "Contains workspace-file search handling.",
+            "kind": "file",
+            "reference": "packages/app/src/command-center/workspace-file-search.ts"
+          },
+          {
+            "explanation": "Focused search-navigation contract passed.",
+            "kind": "test",
+            "reference": "packages/server/src/utils/directory-suggestions.test.ts"
+          }
+        ],
+        "id": "workspace-file-search-navigation",
+        "residualWork": [],
+        "summary": "Exhaustive workspace search and Changes navigation remain preserved."
+      },
+      {
+        "classification": "carry_forward",
+        "confidence": "certain",
+        "contractChecks": [
+          {
+            "command": "npm test --workspace=@getpaseo/desktop -- --run src/features/mr-tracker/store.test.ts src/features/mr-tracker/gitlab-client.test.ts src/features/mr-tracker/service.test.ts",
+            "result": "passed"
+          },
+          {
+            "command": "npm test --workspace=@getpaseo/app -- --run src/mr-tracker/model.test.ts src/mr-tracker/importance-control.test.tsx src/components/ui/tooltip.test.tsx",
+            "result": "passed"
+          },
+          {
+            "command": "npm run test:e2e:renderer --workspace=@getpaseo/desktop -- e2e/mr-tracker-row.spec.ts",
+            "result": "passed"
+          }
+        ],
+        "evidence": [
+          {
+            "explanation": "Covers desktop-owned tracker service behavior.",
+            "kind": "file",
+            "reference": "packages/desktop/src/features/mr-tracker/service.test.ts"
+          },
+          {
+            "explanation": "Desktop and app-focused tracker contracts passed.",
+            "kind": "test",
+            "reference": "packages/app/src/mr-tracker/importance-control.test.tsx"
+          }
+        ],
+        "id": "desktop-gitlab-mr-tracker",
+        "residualWork": [],
+        "summary": "The permanent local-only GitLab MR tracker remains preserved."
+      }
+    ],
+    "inputCommit": "e068a79b6a484cbd312e697af469ca3260c70012",
+    "schemaVersion": 1,
+    "upstreamCommit": "4092c2926500d51af6510bbe295591af0dfe52f7",
+    "upstreamTag": "v0.5.2",
+    "verificationRecommendations": [
+      "Run each recorded browser/E2E contract outside the workspace-write sandbox; all failed before execution on `listen EPERM: operation not permitted 127.0.0.1`."
+    ]
+  },
+  "review": {
+    "approved": true,
+    "blockers": [],
+    "featureFindings": [
+      {
+        "agrees": true,
+        "evidenceChecked": [
+          "registry permanent flag and invariants",
+          "empty 4092c292..4092c292 upstream range",
+          "packages/app/app.config.js, packages/desktop, packages/cli, NOTICE-PASEITO.md",
+          "evidence transcript item_19 exit 0"
+        ],
+        "explanation": "[certain] Correctly carry_forward: it is permanent, the upstream range is empty, identity sources remain, and the recorded focused contract passed.",
+        "id": "independent-desktop-identity"
+      },
+      {
+        "agrees": true,
+        "evidenceChecked": [
+          "registry invariants and contract",
+          "packages/app/src/git/changes-base-selection.ts",
+          "evidence transcript item_20 exit 0"
+        ],
+        "explanation": "[certain] Correctly carry_forward: the upstream range is empty; base-selection implementation and its complete recorded contract remain present.",
+        "id": "changes-base-selector"
+      },
+      {
+        "agrees": true,
+        "evidenceChecked": [
+          "empty upstream range",
+          "packages/app/src/git/diff-pane.tsx",
+          "controller_contract exitCode 0 for paseito-changes-uncommitted-branch-badge.spec.ts"
+        ],
+        "explanation": "[certain] Correctly carry_forward: the dedicated implementation/spec remains and the controller-authoritative browser contract passed.",
+        "id": "changes-uncommitted-branch-badge"
+      },
+      {
+        "agrees": true,
+        "evidenceChecked": [
+          "registry invariants",
+          "packages/protocol/src/messages.ts",
+          "packages/client/src/daemon-client.ts",
+          "packages/server/src/server/session/checkout/checkout-session.ts",
+          "evidence transcript items_21 and_58 exit 0",
+          "controller_contract exitCode 0 for badge/amend browser spec"
+        ],
+        "explanation": "[certain] Correctly carry_forward: amend protocol, client, UI, and daemon paths remain; focused and controller browser contracts passed.",
+        "id": "changes-amend-current-commit"
+      },
+      {
+        "agrees": true,
+        "evidenceChecked": [
+          "registry invariants",
+          "packages/app/src/git/diff-context-expansion.ts",
+          "packages/server/src/utils/checkout-git.ts",
+          "evidence transcript item_22 exit 0"
+        ],
+        "explanation": "[certain] Correctly carry_forward: bounded context-expansion implementation remains and the recorded protocol/daemon/app contract passed.",
+        "id": "changes-context-expansion"
+      },
+      {
+        "agrees": true,
+        "evidenceChecked": [
+          "registry invariants",
+          "packages/app/src/review/surface.test.tsx",
+          "packages/app/src/attachments/review-attachment-items.test.ts",
+          "evidence transcript item_23 exit 0",
+          "controller_contract exitCode 0 for paseito-review-attachment-widget.spec.ts"
+        ],
+        "explanation": "[certain] Correctly carry_forward: review surface and attachment behavior remain; focused and controller browser contracts passed.",
+        "id": "review-suggestions-v1"
+      },
+      {
+        "agrees": true,
+        "evidenceChecked": [
+          "registry invariants",
+          "packages/app/src/review/file-review.ts",
+          "packages/app/src/review/line-review-navigation.ts",
+          "evidence transcript items_24 and_59 exit 0",
+          "controller_contract exitCode 0 for changes-pane.spec.ts"
+        ],
+        "explanation": "[certain] Correctly carry_forward: local line/file review sources remain; the integrated changes-pane browser contract and focused tests passed.",
+        "id": "branch-file-review-state"
+      },
+      {
+        "agrees": true,
+        "evidenceChecked": [
+          "registry invariants",
+          "packages/app/src/git/changes-search.ts",
+          "packages/app/src/git/changes-lsp-controller.ts",
+          "evidence transcript item_25 exit 0",
+          "controller_contract exitCode 0 for changes-lsp-target.browser.test.ts",
+          "controller_contract exitCode 0 for Changes LSP browser spec"
+        ],
+        "explanation": "[certain] Correctly carry_forward: Changes search and shared LSP sources remain; all three recorded contracts passed, including the controller browser checks.",
+        "id": "changes-source-navigation"
+      },
+      {
+        "agrees": true,
+        "evidenceChecked": [
+          "registry invariants",
+          "packages/app/src/git/changes-file-tree-navigator.tsx",
+          "evidence transcript item_26 exit 0",
+          "controller_contract exitCode 0 for paseito-changes-file-tree-navigator.spec.ts"
+        ],
+        "explanation": "[certain] Correctly carry_forward: navigator implementation remains and its focused plus controller browser contracts passed.",
+        "id": "changes-file-tree-navigator"
+      },
+      {
+        "agrees": true,
+        "evidenceChecked": [
+          "registry invariants",
+          "packages/app/src/file-pane/editor/lsp-session-pool.ts",
+          "packages/server/src/server/session/lsp",
+          "evidence transcript items_27, _28, _39, and _40 exit 0"
+        ],
+        "explanation": "[certain] Correctly carry_forward: pooled editor LSP and daemon fallback sources remain; all recorded focused, local-E2E, packaging, and deployment contracts passed.",
+        "id": "lens-shared-editor-lsp"
+      },
+      {
+        "agrees": true,
+        "evidenceChecked": [
+          "registry invariants",
+          "packages/app/src/file-pane/markdown-file-links.ts",
+          "packages/app/src/workspace/markdown-changes-navigation.ts",
+          "evidence transcript item_41 exit 0",
+          "controller_contract exitCode 0 for paseito-markdown-preview-file-links.spec.ts"
+        ],
+        "explanation": "[certain] Correctly carry_forward: preview source-link routing remains and focused plus controller browser contracts passed.",
+        "id": "markdown-preview-source-links"
+      },
+      {
+        "agrees": true,
+        "evidenceChecked": [
+          "registry permanent flag and invariants",
+          "evidence transcript items_42 through _47 exit 0",
+          "validate_decisions.py completed successfully",
+          "git merge-base --is-ancestor returned 0",
+          "git diff inputCommit..reviewedCommit returned 0"
+        ],
+        "explanation": "[certain] Correctly carry_forward: it is permanent; all six recorded automation contract groups passed. Whole-candidate integrity also holds: decision schema validates, inputCommit equals reviewedCommit, and upstream is an ancestor.",
+        "id": "local-semantic-maintenance"
+      },
+      {
+        "agrees": true,
+        "evidenceChecked": [
+          "registry invariants",
+          "packages/protocol/src/messages.ts activeRunBehavior compatibility field",
+          "packages/app/src/composer",
+          "packages/server/src/server/agent",
+          "evidence transcript item_48 exit 0"
+        ],
+        "explanation": "[certain] Correctly carry_forward: active-run compatibility protocol and queue/agent implementation remain; the recorded focused contract passed.",
+        "id": "agent-message-delivery-control"
+      },
+      {
+        "agrees": true,
+        "evidenceChecked": [
+          "registry invariants",
+          "packages/app/src/command-center/workspace-file-search.ts",
+          "packages/server/src/utils/directory-suggestions.ts",
+          "evidence transcript item_49 exit 0",
+          "controller_contract exitCode 0 for command-center-file-search.spec.ts"
+        ],
+        "explanation": "[certain] Correctly carry_forward: workspace-search and Changes routing sources remain; focused and controller browser contracts passed.",
+        "id": "workspace-file-search-navigation"
+      },
+      {
+        "agrees": true,
+        "evidenceChecked": [
+          "registry invariants",
+          "packages/desktop/src/features/mr-tracker/service.ts",
+          "packages/app/src/mr-tracker",
+          "evidence transcript items_50 and _51 exit 0",
+          "controller_contract exitCode 0 for mr-tracker-row.spec.ts"
+        ],
+        "explanation": "[certain] Correctly carry_forward: desktop-owned read-only MR tracker sources remain; desktop/app focused and controller renderer contracts passed.",
+        "id": "desktop-gitlab-mr-tracker"
+      }
+    ],
+    "reviewedCommit": "e068a79b6a484cbd312e697af469ca3260c70012",
+    "schemaVersion": 1
+  }
+}

@@ -1,0 +1,714 @@
+{
+  "decision": {
+    "blocked": false,
+    "blockers": [],
+    "features": [
+      {
+        "classification": "carry_forward",
+        "confidence": "certain",
+        "contractChecks": [
+          {
+            "command": "npx vitest run packages/protocol/src/agent-deep-link.test.ts packages/desktop/src/agent-navigation.test.ts packages/desktop/src/features/auto-updater.test.ts packages/cli/src/cli-surface.test.ts --bail=1",
+            "result": "passed"
+          }
+        ],
+        "evidence": [
+          {
+            "kind": "commit",
+            "reference": "80b9b7750f",
+            "explanation": "Normalized local commit for independent-desktop-identity is reachable from the reviewed candidate."
+          },
+          {
+            "kind": "command",
+            "reference": "git diff 9400a49..b8e24677",
+            "explanation": "Path and intent audit found no independent upstream implementation requiring adaptation or retirement for independent-desktop-identity."
+          }
+        ],
+        "id": "independent-desktop-identity",
+        "residualWork": [],
+        "summary": "Carry forward the registered independent-desktop-identity behavior and preservation fixes on upstream v0.8.0."
+      },
+      {
+        "classification": "adapt",
+        "confidence": "certain",
+        "contractChecks": [
+          {
+            "command": "npx vitest run packages/app/src/git/changes-base-selection.test.ts packages/protocol/src/messages.checkout-commits.test.ts packages/server/src/utils/checkout-git.commits.test.ts packages/server/src/utils/checkout-git.stack-parent.test.ts --bail=1",
+            "result": "passed"
+          }
+        ],
+        "evidence": [
+          {
+            "kind": "commit",
+            "reference": "3972bb6220",
+            "explanation": "Normalized local commit for changes-base-selector is reachable from the reviewed candidate."
+          },
+          {
+            "kind": "commit",
+            "reference": "49784fac1",
+            "explanation": "Upstream v0.8.0 introduced packages/app/src/git/working-diff-comparison and centralized dirty-boundary selection expiry; Paseito now extends that owner with its ahead-branch committed default."
+          }
+        ],
+        "id": "changes-base-selector",
+        "residualWork": [],
+        "summary": "Adapt upstream's centralized working-diff comparison state while retaining Paseito's comparison-base selection, ahead-branch committed default, Stack-Parent behavior, branch ordering, and capability gate."
+      },
+      {
+        "classification": "carry_forward",
+        "confidence": "certain",
+        "contractChecks": [
+          {
+            "command": "npm run test:e2e --workspace=@getpaseo/app -- e2e/browser/paseito-changes-uncommitted-branch-badge.spec.ts",
+            "result": "passed"
+          }
+        ],
+        "evidence": [
+          {
+            "kind": "commit",
+            "reference": "c7c30add3a",
+            "explanation": "Normalized local commit for changes-uncommitted-branch-badge is reachable from the reviewed candidate."
+          },
+          {
+            "kind": "command",
+            "reference": "git diff 9400a49..b8e24677",
+            "explanation": "Path and intent audit found no independent upstream implementation requiring adaptation or retirement for changes-uncommitted-branch-badge."
+          }
+        ],
+        "id": "changes-uncommitted-branch-badge",
+        "residualWork": [],
+        "summary": "Carry forward the registered changes-uncommitted-branch-badge behavior and preservation fixes on upstream v0.8.0."
+      },
+      {
+        "classification": "carry_forward",
+        "confidence": "certain",
+        "contractChecks": [
+          {
+            "command": "npx vitest run packages/protocol/src/messages.checkout-commit-amend.test.ts packages/client/src/daemon-client.test.ts packages/app/src/git/actions-store.test.ts packages/server/src/utils/checkout-git.test.ts packages/server/src/server/session/checkout/checkout-session.test.ts --bail=1",
+            "result": "passed"
+          },
+          {
+            "command": "npm run test:e2e --workspace=@getpaseo/app -- e2e/browser/paseito-changes-uncommitted-branch-badge.spec.ts",
+            "result": "passed"
+          }
+        ],
+        "evidence": [
+          {
+            "kind": "commit",
+            "reference": "2aabe8530b",
+            "explanation": "Normalized local commit for changes-amend-current-commit is reachable from the reviewed candidate."
+          },
+          {
+            "kind": "command",
+            "reference": "git diff 9400a49..b8e24677",
+            "explanation": "Path and intent audit found no independent upstream implementation requiring adaptation or retirement for changes-amend-current-commit."
+          }
+        ],
+        "id": "changes-amend-current-commit",
+        "residualWork": [],
+        "summary": "Carry forward the registered changes-amend-current-commit behavior and preservation fixes on upstream v0.8.0."
+      },
+      {
+        "classification": "carry_forward",
+        "confidence": "certain",
+        "contractChecks": [
+          {
+            "command": "npx vitest run packages/protocol/src/messages.checkout-diff-context.test.ts packages/server/src/utils/checkout-git.context.test.ts packages/app/src/git/diff-context-expansion.test.ts --bail=1",
+            "result": "passed"
+          }
+        ],
+        "evidence": [
+          {
+            "kind": "commit",
+            "reference": "3ea78b05ba",
+            "explanation": "Normalized local commit for changes-context-expansion is reachable from the reviewed candidate."
+          },
+          {
+            "kind": "command",
+            "reference": "git diff 9400a49..b8e24677",
+            "explanation": "Path and intent audit found no independent upstream implementation requiring adaptation or retirement for changes-context-expansion."
+          }
+        ],
+        "id": "changes-context-expansion",
+        "residualWork": [],
+        "summary": "Carry forward the registered changes-context-expansion behavior and preservation fixes on upstream v0.8.0."
+      },
+      {
+        "classification": "carry_forward",
+        "confidence": "certain",
+        "contractChecks": [
+          {
+            "command": "npx vitest run packages/app/src/review/store.test.ts packages/app/src/review/surface.test.tsx packages/app/src/attachments/review-attachment-items.test.ts packages/server/src/server/agent/prompt-attachments.test.ts --bail=1",
+            "result": "passed"
+          },
+          {
+            "command": "npm run test:e2e --workspace=@getpaseo/app -- e2e/browser/paseito-review-attachment-widget.spec.ts",
+            "result": "passed"
+          }
+        ],
+        "evidence": [
+          {
+            "kind": "commit",
+            "reference": "2495113d08",
+            "explanation": "Normalized local commit for review-suggestions-v1 is reachable from the reviewed candidate."
+          },
+          {
+            "kind": "command",
+            "reference": "git diff 9400a49..b8e24677",
+            "explanation": "Path and intent audit found no independent upstream implementation requiring adaptation or retirement for review-suggestions-v1."
+          }
+        ],
+        "id": "review-suggestions-v1",
+        "residualWork": [],
+        "summary": "Carry forward the registered review-suggestions-v1 behavior and preservation fixes on upstream v0.8.0."
+      },
+      {
+        "classification": "carry_forward",
+        "confidence": "certain",
+        "contractChecks": [
+          {
+            "command": "npx vitest run packages/app/src/review/file-review.test.ts packages/app/src/review/line-review.test.ts packages/app/src/review/line-review-navigation.test.ts packages/app/src/git/file-review-expansion.test.ts packages/server/src/utils/checkout-git.context.test.ts packages/server/src/utils/checkout-git.test.ts --bail=1",
+            "result": "passed"
+          },
+          {
+            "command": "npm run test:e2e --workspace=@getpaseo/app -- e2e/browser/changes-pane.spec.ts",
+            "result": "passed"
+          }
+        ],
+        "evidence": [
+          {
+            "kind": "commit",
+            "reference": "fd0245efd9",
+            "explanation": "Normalized local commit for branch-file-review-state is reachable from the reviewed candidate."
+          },
+          {
+            "kind": "command",
+            "reference": "git diff 9400a49..b8e24677",
+            "explanation": "Path and intent audit found no independent upstream implementation requiring adaptation or retirement for branch-file-review-state."
+          }
+        ],
+        "id": "branch-file-review-state",
+        "residualWork": [],
+        "summary": "Carry forward the registered branch-file-review-state behavior and preservation fixes on upstream v0.8.0."
+      },
+      {
+        "classification": "carry_forward",
+        "confidence": "certain",
+        "contractChecks": [
+          {
+            "command": "npx vitest run packages/server/src/services/gitlab-service.test.ts packages/app/src/git/changes-discussions.test.ts --bail=1",
+            "result": "passed"
+          }
+        ],
+        "evidence": [
+          {
+            "kind": "commit",
+            "reference": "187a9c6c48",
+            "explanation": "Normalized local commit for changes-gitlab-discussions is reachable from the reviewed candidate."
+          },
+          {
+            "kind": "command",
+            "reference": "git diff 9400a49..b8e24677",
+            "explanation": "Path and intent audit found no independent upstream implementation requiring adaptation or retirement for changes-gitlab-discussions."
+          }
+        ],
+        "id": "changes-gitlab-discussions",
+        "residualWork": [],
+        "summary": "Carry forward the registered changes-gitlab-discussions behavior and preservation fixes on upstream v0.8.0."
+      },
+      {
+        "classification": "carry_forward",
+        "confidence": "certain",
+        "contractChecks": [
+          {
+            "command": "npx vitest run packages/protocol/src/messages.checkout-diff-context.test.ts packages/server/src/utils/checkout-git.context.test.ts packages/app/src/git/changes-search.test.ts packages/app/src/git/changes-lsp-controller.test.ts packages/app/src/git/revisioned-source.test.ts packages/app/src/file-pane/editor/lsp-session-pool.test.ts --bail=1",
+            "result": "passed"
+          },
+          {
+            "command": "npm run test:browser --workspace=@getpaseo/app -- src/git/changes-lsp-target.browser.test.ts --bail=1",
+            "result": "passed"
+          }
+        ],
+        "evidence": [
+          {
+            "kind": "commit",
+            "reference": "63af79efeb",
+            "explanation": "Normalized local commit for changes-source-navigation is reachable from the reviewed candidate."
+          },
+          {
+            "kind": "command",
+            "reference": "git diff 9400a49..b8e24677",
+            "explanation": "Path and intent audit found no independent upstream implementation requiring adaptation or retirement for changes-source-navigation."
+          }
+        ],
+        "id": "changes-source-navigation",
+        "residualWork": [],
+        "summary": "Carry forward the registered changes-source-navigation behavior and preservation fixes on upstream v0.8.0."
+      },
+      {
+        "classification": "carry_forward",
+        "confidence": "certain",
+        "contractChecks": [
+          {
+            "command": "npx vitest run packages/app/src/file-pane/editor/lsp-session.test.ts packages/app/src/file-pane/editor/lsp-session-pool.test.ts packages/app/src/file-pane/editor/model.test.ts packages/client/src/daemon-client.test.ts packages/protocol/src/messages.workspace-lsp.test.ts packages/server/src/server/session/lsp/clangd-client.test.ts packages/server/src/server/session/lsp/workspace-lsp-session.test.ts --bail=1",
+            "result": "passed"
+          },
+          {
+            "command": "npx vitest run packages/server/src/server/session/lsp/clangd-client.local.e2e.test.ts --bail=1",
+            "result": "passed"
+          },
+          {
+            "command": "python3 automation/release/test_package_linux_daemon.py",
+            "result": "passed"
+          },
+          {
+            "command": "python3 automation/remote/test_deploy_remote_daemons.py",
+            "result": "passed"
+          }
+        ],
+        "evidence": [
+          {
+            "kind": "commit",
+            "reference": "9193a7e956",
+            "explanation": "Normalized local commit for lens-shared-editor-lsp is reachable from the reviewed candidate."
+          },
+          {
+            "kind": "command",
+            "reference": "git diff 9400a49..b8e24677",
+            "explanation": "Path and intent audit found no independent upstream implementation requiring adaptation or retirement for lens-shared-editor-lsp."
+          }
+        ],
+        "id": "lens-shared-editor-lsp",
+        "residualWork": [],
+        "summary": "Carry forward the registered lens-shared-editor-lsp behavior and preservation fixes on upstream v0.8.0."
+      },
+      {
+        "classification": "carry_forward",
+        "confidence": "certain",
+        "contractChecks": [
+          {
+            "command": "npx vitest run packages/app/src/assistant-file-links/parse.test.ts packages/app/src/file-pane/markdown-file-links.test.ts packages/app/src/workspace/file-open/index.test.ts packages/app/src/workspace/markdown-changes-navigation.test.ts packages/app/src/screens/workspace/workspace-pane-state.test.ts packages/app/src/workspace-tabs/identity.test.ts --bail=1",
+            "result": "passed"
+          },
+          {
+            "command": "npm run test:e2e --workspace=@getpaseo/app -- e2e/browser/paseito-markdown-preview-file-links.spec.ts",
+            "result": "passed"
+          }
+        ],
+        "evidence": [
+          {
+            "kind": "commit",
+            "reference": "571872754a",
+            "explanation": "Normalized local commit for markdown-preview-source-links is reachable from the reviewed candidate."
+          },
+          {
+            "kind": "command",
+            "reference": "git diff 9400a49..b8e24677",
+            "explanation": "Path and intent audit found no independent upstream implementation requiring adaptation or retirement for markdown-preview-source-links."
+          }
+        ],
+        "id": "markdown-preview-source-links",
+        "residualWork": [],
+        "summary": "Carry forward the registered markdown-preview-source-links behavior and preservation fixes on upstream v0.8.0."
+      },
+      {
+        "classification": "carry_forward",
+        "confidence": "certain",
+        "contractChecks": [
+          {
+            "command": "python3 -m unittest discover -s automation/release -p 'test_*.py'",
+            "result": "passed"
+          },
+          {
+            "command": "python3 -m unittest discover -s automation/installer -p 'test_*.py'",
+            "result": "passed"
+          },
+          {
+            "command": "python3 -m unittest discover -s automation/launchagents -p 'test_*.py'",
+            "result": "passed"
+          },
+          {
+            "command": "python3 -m unittest discover -s automation/migration -p 'test_*.py'",
+            "result": "passed"
+          },
+          {
+            "command": "python3 -m unittest discover -s automation/reporting -p 'test_*.py'",
+            "result": "passed"
+          }
+        ],
+        "evidence": [
+          {
+            "kind": "commit",
+            "reference": "fe5bf478be",
+            "explanation": "Normalized local commit for local-semantic-maintenance is reachable from the reviewed candidate."
+          },
+          {
+            "kind": "command",
+            "reference": "git diff 9400a49..b8e24677",
+            "explanation": "Path and intent audit found no independent upstream implementation requiring adaptation or retirement for local-semantic-maintenance."
+          }
+        ],
+        "id": "local-semantic-maintenance",
+        "residualWork": [],
+        "summary": "Carry forward the registered local-semantic-maintenance behavior and preservation fixes on upstream v0.8.0."
+      },
+      {
+        "classification": "adapt",
+        "confidence": "certain",
+        "contractChecks": [
+          {
+            "command": "npx vitest run packages/protocol/src/messages.active-run-behavior.test.ts packages/client/src/daemon-client.test.ts packages/server/src/server/agent/agent-manager.test.ts packages/server/src/server/agent/providers/codex-app-server-agent.test.ts packages/server/src/server/agent/providers/claude/agent.test.ts packages/app/src/composer/actions.test.ts packages/app/src/composer/queue-store.test.ts packages/app/src/hooks/use-settings/storage.test.ts --bail=1",
+            "result": "passed"
+          }
+        ],
+        "evidence": [
+          {
+            "kind": "commit",
+            "reference": "a196643613",
+            "explanation": "Normalized local commit for agent-message-delivery-control is reachable from the reviewed candidate."
+          },
+          {
+            "kind": "commit",
+            "reference": "78b285059",
+            "explanation": "Upstream v0.8.0 drains session events before resuming a persisted writer; Paseito retains its distinct queue and active-run steering policy around that lifecycle."
+          }
+        ],
+        "id": "agent-message-delivery-control",
+        "residualWork": [],
+        "summary": "Adapt upstream's idle-session drain and stale-provider recovery while retaining Paseito's durable queue defaults, migration, persistence, active-run steering, ordering, and legacy compatibility."
+      },
+      {
+        "classification": "carry_forward",
+        "confidence": "certain",
+        "contractChecks": [
+          {
+            "command": "npx vitest run packages/server/src/server/agent/providers/pi/tool-call-mapper.test.ts packages/server/src/server/agent/providers/pi/agent.test.ts --bail=1",
+            "result": "passed"
+          }
+        ],
+        "evidence": [
+          {
+            "kind": "commit",
+            "reference": "b1408a8dcc",
+            "explanation": "Normalized local commit for pi-plan-completion-presentation is reachable from the reviewed candidate."
+          },
+          {
+            "kind": "command",
+            "reference": "git diff 9400a49..b8e24677",
+            "explanation": "Path and intent audit found no independent upstream implementation requiring adaptation or retirement for pi-plan-completion-presentation."
+          }
+        ],
+        "id": "pi-plan-completion-presentation",
+        "residualWork": [],
+        "summary": "Carry forward the registered pi-plan-completion-presentation behavior and preservation fixes on upstream v0.8.0."
+      },
+      {
+        "classification": "carry_forward",
+        "confidence": "certain",
+        "contractChecks": [
+          {
+            "command": "npx vitest run packages/server/src/utils/directory-suggestions.test.ts packages/app/src/workspace/markdown-changes-navigation.test.ts packages/app/src/workspace-tabs/identity.test.ts packages/app/src/stores/workspace-layout-store.test.ts --bail=1",
+            "result": "passed"
+          },
+          {
+            "command": "npm run test:e2e --workspace=@getpaseo/app -- e2e/browser/command-center-file-search.spec.ts",
+            "result": "passed"
+          }
+        ],
+        "evidence": [
+          {
+            "kind": "commit",
+            "reference": "ace443e583",
+            "explanation": "Normalized local commit for workspace-file-search-navigation is reachable from the reviewed candidate."
+          },
+          {
+            "kind": "command",
+            "reference": "git diff 9400a49..b8e24677",
+            "explanation": "Path and intent audit found no independent upstream implementation requiring adaptation or retirement for workspace-file-search-navigation."
+          }
+        ],
+        "id": "workspace-file-search-navigation",
+        "residualWork": [],
+        "summary": "Carry forward the registered workspace-file-search-navigation behavior and preservation fixes on upstream v0.8.0."
+      },
+      {
+        "classification": "carry_forward",
+        "confidence": "certain",
+        "contractChecks": [
+          {
+            "command": "npx vitest run packages/protocol/src/messages.test.ts packages/client/src/daemon-client.test.ts packages/server/src/server/project-worktree-service.test.ts packages/app/src/add-project-flow/model.test.ts packages/app/src/projects/project-remove.test.ts --bail=1",
+            "result": "passed"
+          },
+          {
+            "command": "npm run test:e2e --workspace=@getpaseo/app -- e2e/browser/add-project-flow.spec.ts --grep 'creates a sibling worktree'",
+            "result": "passed"
+          }
+        ],
+        "evidence": [
+          {
+            "kind": "commit",
+            "reference": "46dbf25473",
+            "explanation": "Normalized local commit for managed-project-worktrees is reachable from the reviewed candidate."
+          },
+          {
+            "kind": "command",
+            "reference": "git diff 9400a49..b8e24677",
+            "explanation": "Path and intent audit found no independent upstream implementation requiring adaptation or retirement for managed-project-worktrees."
+          }
+        ],
+        "id": "managed-project-worktrees",
+        "residualWork": [],
+        "summary": "Carry forward the registered managed-project-worktrees behavior and preservation fixes on upstream v0.8.0."
+      },
+      {
+        "classification": "carry_forward",
+        "confidence": "certain",
+        "contractChecks": [
+          {
+            "command": "npm test --workspace=@getpaseo/desktop -- --run src/features/mr-tracker/store.test.ts src/features/mr-tracker/automation-store.test.ts src/features/mr-tracker/gitlab-client.test.ts src/features/mr-tracker/service.test.ts src/features/mr-tracker/automation-engine.test.ts src/features/mr-tracker/native-messaging-bridge.test.ts",
+            "result": "passed"
+          },
+          {
+            "command": "npm test --workspace=@getpaseo/app -- --run src/mr-tracker/model.test.ts src/mr-tracker/activity-state.test.ts src/mr-tracker/settings-form-model.test.ts src/mr-tracker/importance-control.test.tsx src/components/ui/tooltip.test.tsx",
+            "result": "passed"
+          },
+          {
+            "command": "npm run test:e2e:renderer --workspace=@getpaseo/desktop -- e2e/mr-tracker-row.spec.ts e2e/desktop-mr-plugins.spec.ts",
+            "result": "passed"
+          },
+          {
+            "command": "npx vitest run packages/protocol/src/mr-deep-link.test.ts packages/desktop/src/mr-navigation.test.ts --bail=1",
+            "result": "passed"
+          },
+          {
+            "command": "npm test --workspace=@getpaseo/chrome-extension",
+            "result": "passed"
+          },
+          {
+            "command": "npx vitest run packages/server/src/server/plugins/compiler.test.ts packages/cli/src/commands/plugin/index.test.ts --bail=1",
+            "result": "passed"
+          }
+        ],
+        "evidence": [
+          {
+            "kind": "commit",
+            "reference": "fe93d4b562",
+            "explanation": "Normalized local commit for desktop-gitlab-mr-tracker is reachable from the reviewed candidate."
+          },
+          {
+            "kind": "command",
+            "reference": "git diff 9400a49..b8e24677",
+            "explanation": "Path and intent audit found no independent upstream implementation requiring adaptation or retirement for desktop-gitlab-mr-tracker."
+          }
+        ],
+        "id": "desktop-gitlab-mr-tracker",
+        "residualWork": [],
+        "summary": "Carry forward the registered desktop-gitlab-mr-tracker behavior and preservation fixes on upstream v0.8.0."
+      }
+    ],
+    "inputCommit": "7b35fce789e2c41aa2d77558b2ebce52e837d201",
+    "schemaVersion": 1,
+    "upstreamCommit": "b8e24677e12b226c7c38c1c3a40649daa9f1152f",
+    "upstreamTag": "v0.8.0",
+    "verificationRecommendations": [
+      "Run every registered focused contract, repository typecheck, lint, and formatting checks.",
+      "Build and smoke-test the Apple Silicon macOS bundle before installation."
+    ]
+  },
+  "review": {
+    "approved": true,
+    "blockers": [],
+    "featureFindings": [
+      {
+        "agrees": true,
+        "evidenceChecked": [
+          "normalized feature commit 80b9b7750f is reachable",
+          "npx vitest run packages/protocol/src/agent-deep-link.test.ts packages/desktop/src/agent-navigation.test.ts packages/desktop/src/features/auto-updater.test.ts packages/cli/src/cli-surface.test.ts --bail=1 passed",
+          "v0.7.2..v0.8.0 upstream path and intent audit completed"
+        ],
+        "explanation": "[certain] Carry-forward matches the inspected upstream implementation, the registered local invariants, and focused contract evidence.",
+        "id": "independent-desktop-identity"
+      },
+      {
+        "agrees": true,
+        "evidenceChecked": [
+          "normalized feature commit 3972bb6220 is reachable",
+          "npx vitest run packages/app/src/git/changes-base-selection.test.ts packages/protocol/src/messages.checkout-commits.test.ts packages/server/src/utils/checkout-git.commits.test.ts packages/server/src/utils/checkout-git.stack-parent.test.ts --bail=1 passed",
+          "49784fac1 upstream overlap inspected and human chose adapt"
+        ],
+        "explanation": "[certain] Adaptation matches the inspected upstream implementation, the registered local invariants, and focused contract evidence.",
+        "id": "changes-base-selector"
+      },
+      {
+        "agrees": true,
+        "evidenceChecked": [
+          "normalized feature commit c7c30add3a is reachable",
+          "npm run test:e2e --workspace=@getpaseo/app -- e2e/browser/paseito-changes-uncommitted-branch-badge.spec.ts passed",
+          "v0.7.2..v0.8.0 upstream path and intent audit completed"
+        ],
+        "explanation": "[certain] Carry-forward matches the inspected upstream implementation, the registered local invariants, and focused contract evidence.",
+        "id": "changes-uncommitted-branch-badge"
+      },
+      {
+        "agrees": true,
+        "evidenceChecked": [
+          "normalized feature commit 2aabe8530b is reachable",
+          "npx vitest run packages/protocol/src/messages.checkout-commit-amend.test.ts packages/client/src/daemon-client.test.ts packages/app/src/git/actions-store.test.ts packages/server/src/utils/checkout-git.test.ts packages/server/src/server/session/checkout/checkout-session.test.ts --bail=1 passed",
+          "npm run test:e2e --workspace=@getpaseo/app -- e2e/browser/paseito-changes-uncommitted-branch-badge.spec.ts passed",
+          "v0.7.2..v0.8.0 upstream path and intent audit completed"
+        ],
+        "explanation": "[certain] Carry-forward matches the inspected upstream implementation, the registered local invariants, and focused contract evidence.",
+        "id": "changes-amend-current-commit"
+      },
+      {
+        "agrees": true,
+        "evidenceChecked": [
+          "normalized feature commit 3ea78b05ba is reachable",
+          "npx vitest run packages/protocol/src/messages.checkout-diff-context.test.ts packages/server/src/utils/checkout-git.context.test.ts packages/app/src/git/diff-context-expansion.test.ts --bail=1 passed",
+          "v0.7.2..v0.8.0 upstream path and intent audit completed"
+        ],
+        "explanation": "[certain] Carry-forward matches the inspected upstream implementation, the registered local invariants, and focused contract evidence.",
+        "id": "changes-context-expansion"
+      },
+      {
+        "agrees": true,
+        "evidenceChecked": [
+          "normalized feature commit 2495113d08 is reachable",
+          "npx vitest run packages/app/src/review/store.test.ts packages/app/src/review/surface.test.tsx packages/app/src/attachments/review-attachment-items.test.ts packages/server/src/server/agent/prompt-attachments.test.ts --bail=1 passed",
+          "npm run test:e2e --workspace=@getpaseo/app -- e2e/browser/paseito-review-attachment-widget.spec.ts passed",
+          "v0.7.2..v0.8.0 upstream path and intent audit completed"
+        ],
+        "explanation": "[certain] Carry-forward matches the inspected upstream implementation, the registered local invariants, and focused contract evidence.",
+        "id": "review-suggestions-v1"
+      },
+      {
+        "agrees": true,
+        "evidenceChecked": [
+          "normalized feature commit fd0245efd9 is reachable",
+          "npx vitest run packages/app/src/review/file-review.test.ts packages/app/src/review/line-review.test.ts packages/app/src/review/line-review-navigation.test.ts packages/app/src/git/file-review-expansion.test.ts packages/server/src/utils/checkout-git.context.test.ts packages/server/src/utils/checkout-git.test.ts --bail=1 passed",
+          "npm run test:e2e --workspace=@getpaseo/app -- e2e/browser/changes-pane.spec.ts passed",
+          "v0.7.2..v0.8.0 upstream path and intent audit completed"
+        ],
+        "explanation": "[certain] Carry-forward matches the inspected upstream implementation, the registered local invariants, and focused contract evidence.",
+        "id": "branch-file-review-state"
+      },
+      {
+        "agrees": true,
+        "evidenceChecked": [
+          "normalized feature commit 187a9c6c48 is reachable",
+          "npx vitest run packages/server/src/services/gitlab-service.test.ts packages/app/src/git/changes-discussions.test.ts --bail=1 passed",
+          "v0.7.2..v0.8.0 upstream path and intent audit completed"
+        ],
+        "explanation": "[certain] Carry-forward matches the inspected upstream implementation, the registered local invariants, and focused contract evidence.",
+        "id": "changes-gitlab-discussions"
+      },
+      {
+        "agrees": true,
+        "evidenceChecked": [
+          "normalized feature commit 63af79efeb is reachable",
+          "npx vitest run packages/protocol/src/messages.checkout-diff-context.test.ts packages/server/src/utils/checkout-git.context.test.ts packages/app/src/git/changes-search.test.ts packages/app/src/git/changes-lsp-controller.test.ts packages/app/src/git/revisioned-source.test.ts packages/app/src/file-pane/editor/lsp-session-pool.test.ts --bail=1 passed",
+          "npm run test:browser --workspace=@getpaseo/app -- src/git/changes-lsp-target.browser.test.ts --bail=1 passed",
+          "v0.7.2..v0.8.0 upstream path and intent audit completed"
+        ],
+        "explanation": "[certain] Carry-forward matches the inspected upstream implementation, the registered local invariants, and focused contract evidence.",
+        "id": "changes-source-navigation"
+      },
+      {
+        "agrees": true,
+        "evidenceChecked": [
+          "normalized feature commit 9193a7e956 is reachable",
+          "npx vitest run packages/app/src/file-pane/editor/lsp-session.test.ts packages/app/src/file-pane/editor/lsp-session-pool.test.ts packages/app/src/file-pane/editor/model.test.ts packages/client/src/daemon-client.test.ts packages/protocol/src/messages.workspace-lsp.test.ts packages/server/src/server/session/lsp/clangd-client.test.ts packages/server/src/server/session/lsp/workspace-lsp-session.test.ts --bail=1 passed",
+          "npx vitest run packages/server/src/server/session/lsp/clangd-client.local.e2e.test.ts --bail=1 passed",
+          "python3 automation/release/test_package_linux_daemon.py passed",
+          "python3 automation/remote/test_deploy_remote_daemons.py passed",
+          "v0.7.2..v0.8.0 upstream path and intent audit completed"
+        ],
+        "explanation": "[certain] Carry-forward matches the inspected upstream implementation, the registered local invariants, and focused contract evidence.",
+        "id": "lens-shared-editor-lsp"
+      },
+      {
+        "agrees": true,
+        "evidenceChecked": [
+          "normalized feature commit 571872754a is reachable",
+          "npx vitest run packages/app/src/assistant-file-links/parse.test.ts packages/app/src/file-pane/markdown-file-links.test.ts packages/app/src/workspace/file-open/index.test.ts packages/app/src/workspace/markdown-changes-navigation.test.ts packages/app/src/screens/workspace/workspace-pane-state.test.ts packages/app/src/workspace-tabs/identity.test.ts --bail=1 passed",
+          "npm run test:e2e --workspace=@getpaseo/app -- e2e/browser/paseito-markdown-preview-file-links.spec.ts passed",
+          "v0.7.2..v0.8.0 upstream path and intent audit completed"
+        ],
+        "explanation": "[certain] Carry-forward matches the inspected upstream implementation, the registered local invariants, and focused contract evidence.",
+        "id": "markdown-preview-source-links"
+      },
+      {
+        "agrees": true,
+        "evidenceChecked": [
+          "normalized feature commit fe5bf478be is reachable",
+          "python3 -m unittest discover -s automation/release -p 'test_*.py' passed",
+          "python3 -m unittest discover -s automation/installer -p 'test_*.py' passed",
+          "python3 -m unittest discover -s automation/launchagents -p 'test_*.py' passed",
+          "python3 -m unittest discover -s automation/migration -p 'test_*.py' passed",
+          "python3 -m unittest discover -s automation/reporting -p 'test_*.py' passed",
+          "v0.7.2..v0.8.0 upstream path and intent audit completed"
+        ],
+        "explanation": "[certain] Carry-forward matches the inspected upstream implementation, the registered local invariants, and focused contract evidence.",
+        "id": "local-semantic-maintenance"
+      },
+      {
+        "agrees": true,
+        "evidenceChecked": [
+          "normalized feature commit a196643613 is reachable",
+          "npx vitest run packages/protocol/src/messages.active-run-behavior.test.ts packages/client/src/daemon-client.test.ts packages/server/src/server/agent/agent-manager.test.ts packages/server/src/server/agent/providers/codex-app-server-agent.test.ts packages/server/src/server/agent/providers/claude/agent.test.ts packages/app/src/composer/actions.test.ts packages/app/src/composer/queue-store.test.ts packages/app/src/hooks/use-settings/storage.test.ts --bail=1 passed",
+          "78b285059 upstream overlap inspected and human chose adapt"
+        ],
+        "explanation": "[certain] Adaptation matches the inspected upstream implementation, the registered local invariants, and focused contract evidence.",
+        "id": "agent-message-delivery-control"
+      },
+      {
+        "agrees": true,
+        "evidenceChecked": [
+          "normalized feature commit b1408a8dcc is reachable",
+          "npx vitest run packages/server/src/server/agent/providers/pi/tool-call-mapper.test.ts packages/server/src/server/agent/providers/pi/agent.test.ts --bail=1 passed",
+          "v0.7.2..v0.8.0 upstream path and intent audit completed"
+        ],
+        "explanation": "[certain] Carry-forward matches the inspected upstream implementation, the registered local invariants, and focused contract evidence.",
+        "id": "pi-plan-completion-presentation"
+      },
+      {
+        "agrees": true,
+        "evidenceChecked": [
+          "normalized feature commit ace443e583 is reachable",
+          "npx vitest run packages/server/src/utils/directory-suggestions.test.ts packages/app/src/workspace/markdown-changes-navigation.test.ts packages/app/src/workspace-tabs/identity.test.ts packages/app/src/stores/workspace-layout-store.test.ts --bail=1 passed",
+          "npm run test:e2e --workspace=@getpaseo/app -- e2e/browser/command-center-file-search.spec.ts passed",
+          "v0.7.2..v0.8.0 upstream path and intent audit completed"
+        ],
+        "explanation": "[certain] Carry-forward matches the inspected upstream implementation, the registered local invariants, and focused contract evidence.",
+        "id": "workspace-file-search-navigation"
+      },
+      {
+        "agrees": true,
+        "evidenceChecked": [
+          "normalized feature commit 46dbf25473 is reachable",
+          "npx vitest run packages/protocol/src/messages.test.ts packages/client/src/daemon-client.test.ts packages/server/src/server/project-worktree-service.test.ts packages/app/src/add-project-flow/model.test.ts packages/app/src/projects/project-remove.test.ts --bail=1 passed",
+          "npm run test:e2e --workspace=@getpaseo/app -- e2e/browser/add-project-flow.spec.ts --grep 'creates a sibling worktree' passed",
+          "v0.7.2..v0.8.0 upstream path and intent audit completed"
+        ],
+        "explanation": "[certain] Carry-forward matches the inspected upstream implementation, the registered local invariants, and focused contract evidence.",
+        "id": "managed-project-worktrees"
+      },
+      {
+        "agrees": true,
+        "evidenceChecked": [
+          "normalized feature commit fe93d4b562 is reachable",
+          "npm test --workspace=@getpaseo/desktop -- --run src/features/mr-tracker/store.test.ts src/features/mr-tracker/automation-store.test.ts src/features/mr-tracker/gitlab-client.test.ts src/features/mr-tracker/service.test.ts src/features/mr-tracker/automation-engine.test.ts src/features/mr-tracker/native-messaging-bridge.test.ts passed",
+          "npm test --workspace=@getpaseo/app -- --run src/mr-tracker/model.test.ts src/mr-tracker/activity-state.test.ts src/mr-tracker/settings-form-model.test.ts src/mr-tracker/importance-control.test.tsx src/components/ui/tooltip.test.tsx passed",
+          "npm run test:e2e:renderer --workspace=@getpaseo/desktop -- e2e/mr-tracker-row.spec.ts e2e/desktop-mr-plugins.spec.ts passed",
+          "npx vitest run packages/protocol/src/mr-deep-link.test.ts packages/desktop/src/mr-navigation.test.ts --bail=1 passed",
+          "npm test --workspace=@getpaseo/chrome-extension passed",
+          "npx vitest run packages/server/src/server/plugins/compiler.test.ts packages/cli/src/commands/plugin/index.test.ts --bail=1 passed",
+          "v0.7.2..v0.8.0 upstream path and intent audit completed"
+        ],
+        "explanation": "[certain] Carry-forward matches the inspected upstream implementation, the registered local invariants, and focused contract evidence.",
+        "id": "desktop-gitlab-mr-tracker"
+      }
+    ],
+    "reviewedCommit": "0b9cca97cb9f4d06f84e20cee2c06f8c1e7b71fb",
+    "schemaVersion": 1
+  }
+}

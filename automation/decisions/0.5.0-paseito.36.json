@@ -1,0 +1,543 @@
+{
+  "decision": {
+    "schemaVersion": 1,
+    "upstreamTag": "v0.5.0",
+    "upstreamCommit": "b8a31034ca36301067edadc2d622f42f4a4f7a37",
+    "inputCommit": "0b699a6f856dc52b634a01491db840002041187d",
+    "blocked": false,
+    "blockers": [],
+    "features": [
+      {
+        "id": "independent-desktop-identity",
+        "classification": "carry_forward",
+        "confidence": "certain",
+        "summary": "Carried forward keep Paseito independently installable beside Paseo with distinct app, daemon, CLI, storage, protocol and visual identities. against Paseo v0.5.0.",
+        "evidence": [
+          {
+            "kind": "file",
+            "reference": "NOTICE-PASEITO.md, packages/desktop, packages/cli, packages/app/app.config.js",
+            "explanation": "The approved reconciled tree retains the registered behavior and preservation fixes in the v0.5 architecture."
+          }
+        ],
+        "contractChecks": [
+          {
+            "command": "npx vitest run packages/protocol/src/agent-deep-link.test.ts packages/desktop/src/agent-navigation.test.ts packages/cli/src/cli-surface.test.ts",
+            "result": "passed"
+          }
+        ],
+        "residualWork": []
+      },
+      {
+        "id": "changes-base-selector",
+        "classification": "adapt",
+        "confidence": "certain",
+        "summary": "Adapted let the Changes tab select and remember a read-only comparison base without changing merge, update or pull-request targets. against Paseo v0.5.0.",
+        "evidence": [
+          {
+            "kind": "file",
+            "reference": "packages/app/src/components/branch-switcher.tsx, packages/app/src/components/ui/combobox.tsx, packages/app/src/git, packages/app/src/hooks/use-branch-switcher.ts, packages/protocol/src/messages.ts, packages/server/src/utils/checkout-git.ts",
+            "explanation": "The approved reconciled tree retains the registered behavior and preservation fixes in the v0.5 architecture."
+          }
+        ],
+        "contractChecks": [
+          {
+            "command": "npx vitest run packages/app/src/git/changes-base-selection.test.ts packages/protocol/src/messages.checkout-commits.test.ts packages/server/src/utils/checkout-git.commits.test.ts packages/server/src/utils/checkout-git.stack-parent.test.ts",
+            "result": "passed"
+          }
+        ],
+        "residualWork": []
+      },
+      {
+        "id": "changes-uncommitted-branch-badge",
+        "classification": "carry_forward",
+        "confidence": "certain",
+        "summary": "Carried forward show the selected branch's uncommitted working-tree state beside the Changes branch switcher. against Paseo v0.5.0.",
+        "evidence": [
+          {
+            "kind": "file",
+            "reference": "packages/app/src/components/ui/status-badge.tsx, packages/app/src/git/diff-pane.tsx, packages/app/src/git/use-working-diff.ts, packages/app/e2e/browser/paseito-changes-uncommitted-branch-badge.spec.ts, docs/paseito-changes.md",
+            "explanation": "The approved reconciled tree retains the registered behavior and preservation fixes in the v0.5 architecture."
+          }
+        ],
+        "contractChecks": [
+          {
+            "command": "npm run test:e2e --workspace=@getpaseo/app -- e2e/browser/paseito-changes-uncommitted-branch-badge.spec.ts",
+            "result": "passed"
+          }
+        ],
+        "residualWork": []
+      },
+      {
+        "id": "changes-amend-current-commit",
+        "classification": "carry_forward",
+        "confidence": "certain",
+        "summary": "Carried forward amend every current working-tree change into the current commit directly from Changes. against Paseo v0.5.0.",
+        "evidence": [
+          {
+            "kind": "file",
+            "reference": "packages/app/src/git/actions-store.ts, packages/app/src/git/diff-pane.tsx, packages/client/src/daemon-client.ts, packages/protocol/src/messages.ts, packages/server/src/server/session/checkout/checkout-session.ts, packages/server/src/utils/checkout-git.ts, automation/release/package_linux_daemon.py, automation/remote/deploy_remote_daemons.py, docs/paseito-changes.md",
+            "explanation": "The approved reconciled tree retains the registered behavior and preservation fixes in the v0.5 architecture."
+          }
+        ],
+        "contractChecks": [
+          {
+            "command": "npx vitest run packages/protocol/src/messages.checkout-commit-amend.test.ts packages/client/src/daemon-client.test.ts packages/app/src/git/actions-store.test.ts packages/server/src/utils/checkout-git.test.ts packages/server/src/server/session/checkout/checkout-session.test.ts --bail=1",
+            "result": "passed"
+          },
+          {
+            "command": "npm run test:e2e --workspace=@getpaseo/app -- e2e/browser/paseito-changes-uncommitted-branch-badge.spec.ts",
+            "result": "passed"
+          }
+        ],
+        "residualWork": []
+      },
+      {
+        "id": "changes-context-expansion",
+        "classification": "carry_forward",
+        "confidence": "certain",
+        "summary": "Carried forward load and review omitted source context on demand from the Changes diff without transferring entire files by default. against Paseo v0.5.0.",
+        "evidence": [
+          {
+            "kind": "file",
+            "reference": "packages/app/src/git, packages/client/src/daemon-client.ts, packages/protocol/src/messages.ts, packages/server/src/utils/checkout-git.ts, automation/release/package_linux_daemon.py, automation/remote/deploy_remote_daemons.py",
+            "explanation": "The approved reconciled tree retains the registered behavior and preservation fixes in the v0.5 architecture."
+          }
+        ],
+        "contractChecks": [
+          {
+            "command": "npx vitest run packages/protocol/src/messages.checkout-diff-context.test.ts packages/server/src/utils/checkout-git.context.test.ts packages/app/src/git/diff-context-expansion.test.ts",
+            "result": "passed"
+          }
+        ],
+        "residualWork": []
+      },
+      {
+        "id": "review-suggestions-v1",
+        "classification": "adapt",
+        "confidence": "certain",
+        "summary": "Adapted let a reviewer send persisted, structured one- or multi-line replacement suggestions to the destination agent from Changes. against Paseo v0.5.0.",
+        "evidence": [
+          {
+            "kind": "file",
+            "reference": "packages/app/src/review, packages/app/src/attachments/review-attachment-items.ts, packages/app/src/components/review-attachment-card.tsx, packages/app/src/components/message.tsx, packages/app/src/git/diff-pane.tsx, packages/protocol/src/messages.ts, packages/server/src/server/agent/prompt-attachments.ts",
+            "explanation": "The approved reconciled tree retains the registered behavior and preservation fixes in the v0.5 architecture."
+          }
+        ],
+        "contractChecks": [
+          {
+            "command": "npx vitest run packages/app/src/review/store.test.ts packages/app/src/review/surface.test.tsx packages/app/src/attachments/review-attachment-items.test.ts packages/server/src/server/agent/prompt-attachments.test.ts",
+            "result": "passed"
+          },
+          {
+            "command": "npm run test:e2e --workspace=@getpaseo/app -- e2e/browser/paseito-review-attachment-widget.spec.ts",
+            "result": "passed"
+          }
+        ],
+        "residualWork": []
+      },
+      {
+        "id": "branch-file-review-state",
+        "classification": "carry_forward",
+        "confidence": "certain",
+        "summary": "Carried forward let reviewers mark branch files or individual edited lines reviewed while preserving checks only for identical branch-side content. against Paseo v0.5.0.",
+        "evidence": [
+          {
+            "kind": "file",
+            "reference": "packages/app/src/review/file-review.ts, packages/app/src/review/line-review-navigation.ts, packages/app/src/git/diff-pane.tsx, packages/app/src/i18n/resources, packages/protocol/src/messages.ts, packages/server/src/utils/checkout-git.ts",
+            "explanation": "The approved reconciled tree retains the registered behavior and preservation fixes in the v0.5 architecture."
+          }
+        ],
+        "contractChecks": [
+          {
+            "command": "npx vitest run packages/app/src/review/file-review.test.ts packages/app/src/review/line-review.test.ts packages/app/src/review/line-review-navigation.test.ts packages/app/src/git/file-review-expansion.test.ts packages/server/src/utils/checkout-git.context.test.ts packages/server/src/utils/checkout-git.test.ts",
+            "result": "passed"
+          },
+          {
+            "command": "npm run test:e2e --workspace=@getpaseo/app -- e2e/browser/changes-pane.spec.ts",
+            "result": "passed"
+          }
+        ],
+        "residualWork": []
+      },
+      {
+        "id": "changes-source-navigation",
+        "classification": "carry_forward",
+        "confidence": "certain",
+        "summary": "Carried forward search complete current-side changed files and use shared language intelligence directly from Changes. against Paseo v0.5.0.",
+        "evidence": [
+          {
+            "kind": "file",
+            "reference": "packages/app/src/git/changes-search.ts, packages/app/src/git/changes-lsp-controller.ts, packages/app/src/git/changes-lsp-target.web.ts, packages/app/src/git/revisioned-source.ts, packages/app/src/git/use-diff-context-expansion.ts, packages/app/src/git/use-changes-lsp.web.ts, packages/app/src/git/diff-pane.tsx, packages/app/src/file-pane/editor/lsp-session-pool.ts, packages/app/src/file-pane/lsp-status-menu.tsx, packages/client/src/daemon-client.ts, packages/protocol/src/messages.ts, packages/server/src/utils/checkout-git.ts",
+            "explanation": "The approved reconciled tree retains the registered behavior and preservation fixes in the v0.5 architecture."
+          }
+        ],
+        "contractChecks": [
+          {
+            "command": "npx vitest run packages/protocol/src/messages.checkout-diff-context.test.ts packages/server/src/utils/checkout-git.context.test.ts packages/app/src/git/changes-search.test.ts packages/app/src/git/changes-lsp-controller.test.ts packages/app/src/git/revisioned-source.test.ts packages/app/src/file-pane/editor/lsp-session-pool.test.ts --bail=1",
+            "result": "passed"
+          },
+          {
+            "command": "npm run test:browser --workspace=@getpaseo/app -- src/git/changes-lsp-target.browser.test.ts --bail=1",
+            "result": "passed"
+          },
+          {
+            "command": "npm run test:e2e --workspace=@getpaseo/app -- e2e/browser/changes-pane.spec.ts --grep 'Changes LSP'",
+            "result": "passed"
+          }
+        ],
+        "residualWork": []
+      },
+      {
+        "id": "changes-file-tree-navigator",
+        "classification": "adapt",
+        "confidence": "certain",
+        "summary": "Adapted navigate large working diffs from a dedicated right-hand file tree in desktop Changes panes. against Paseo v0.5.0.",
+        "evidence": [
+          {
+            "kind": "file",
+            "reference": "packages/app/src/git/changes-file-tree-navigation.ts, packages/app/src/git/changes-file-tree-navigator.tsx, packages/app/src/git/diff-pane.tsx, packages/app/src/panels/diff-panel.tsx, packages/app/src/panels/changes/state.ts, docs/paseito-changes.md",
+            "explanation": "The approved reconciled tree retains the registered behavior and preservation fixes in the v0.5 architecture."
+          }
+        ],
+        "contractChecks": [
+          {
+            "command": "npx vitest run packages/app/src/git/changes-file-tree-navigation.test.ts --bail=1",
+            "result": "passed"
+          },
+          {
+            "command": "npm run test:e2e --workspace=@getpaseo/app -- e2e/browser/paseito-changes-file-tree-navigator.spec.ts",
+            "result": "passed"
+          }
+        ],
+        "residualWork": []
+      },
+      {
+        "id": "lens-shared-editor-lsp",
+        "classification": "carry_forward",
+        "confidence": "certain",
+        "summary": "Carried forward provide editor intelligence through the existing Lens language server when available and a daemon-owned clangd fallback for ordinary C/C++ workspaces. against Paseo v0.5.0.",
+        "evidence": [
+          {
+            "kind": "file",
+            "reference": "automation/release/package_linux_daemon.py, automation/remote/deploy_remote_daemons.py, packages/app/src/file-pane/editor, packages/client/src/daemon-client.ts, packages/protocol/src/messages.ts, packages/server/src/server/session/lsp, docs/paseito-automation.md, docs/paseito-lsp.md",
+            "explanation": "The approved reconciled tree retains the registered behavior and preservation fixes in the v0.5 architecture."
+          }
+        ],
+        "contractChecks": [
+          {
+            "command": "npx vitest run packages/app/src/file-pane/editor/lsp-session.test.ts packages/app/src/file-pane/editor/lsp-session-pool.test.ts packages/app/src/file-pane/editor/model.test.ts packages/client/src/daemon-client.test.ts packages/protocol/src/messages.workspace-lsp.test.ts packages/server/src/server/session/lsp/clangd-client.test.ts packages/server/src/server/session/lsp/workspace-lsp-session.test.ts",
+            "result": "passed"
+          },
+          {
+            "command": "npx vitest run packages/server/src/server/session/lsp/clangd-client.local.e2e.test.ts --bail=1",
+            "result": "passed"
+          },
+          {
+            "command": "python3 automation/release/test_package_linux_daemon.py",
+            "result": "passed"
+          },
+          {
+            "command": "python3 automation/remote/test_deploy_remote_daemons.py",
+            "result": "passed"
+          }
+        ],
+        "residualWork": []
+      },
+      {
+        "id": "markdown-preview-source-links",
+        "classification": "carry_forward",
+        "confidence": "certain",
+        "summary": "Carried forward open source locations from a Markdown file preview in an existing review surface or a reusable split pane without replacing the preview. against Paseo v0.5.0.",
+        "evidence": [
+          {
+            "kind": "file",
+            "reference": "packages/app/src/assistant-file-links, packages/app/src/git/diff-pane.tsx, packages/app/src/file-pane, packages/app/src/screens/workspace/workspace-pane-state.ts, packages/app/src/screens/workspace/workspace-screen.tsx, packages/app/src/workspace/file-open, packages/app/src/workspace/markdown-changes-navigation.ts, packages/app/e2e/browser/paseito-markdown-preview-file-links.spec.ts",
+            "explanation": "The approved reconciled tree retains the registered behavior and preservation fixes in the v0.5 architecture."
+          }
+        ],
+        "contractChecks": [
+          {
+            "command": "npx vitest run packages/app/src/assistant-file-links/parse.test.ts packages/app/src/file-pane/markdown-file-links.test.ts packages/app/src/workspace/file-open/index.test.ts packages/app/src/workspace/markdown-changes-navigation.test.ts packages/app/src/screens/workspace/workspace-pane-state.test.ts packages/app/src/workspace-tabs/identity.test.ts --bail=1",
+            "result": "passed"
+          },
+          {
+            "command": "npm run test:e2e --workspace=@getpaseo/app -- e2e/browser/paseito-markdown-preview-file-links.spec.ts",
+            "result": "passed"
+          }
+        ],
+        "residualWork": []
+      },
+      {
+        "id": "local-semantic-maintenance",
+        "classification": "carry_forward",
+        "confidence": "certain",
+        "summary": "Carried forward use human-supervised weekly Codex reconciliation, fail-closed verification, provenance-bound installation, migration and daily reporting. against Paseo v0.5.0.",
+        "evidence": [
+          {
+            "kind": "file",
+            "reference": "automation, .agents/skills/paseito-upstream-sync, .github/workflows/paseito-release.yml",
+            "explanation": "The approved reconciled tree retains the registered behavior and preservation fixes in the v0.5 architecture."
+          }
+        ],
+        "contractChecks": [
+          {
+            "command": "python3 -m unittest discover -s automation/release -p 'test_*.py'",
+            "result": "passed"
+          },
+          {
+            "command": "python3 -m unittest discover -s automation/installer -p 'test_*.py'",
+            "result": "passed"
+          },
+          {
+            "command": "python3 -m unittest discover -s automation/launchagents -p 'test_*.py'",
+            "result": "passed"
+          },
+          {
+            "command": "python3 -m unittest discover -s automation/migration -p 'test_*.py'",
+            "result": "passed"
+          },
+          {
+            "command": "python3 -m unittest discover -s automation/reporting -p 'test_*.py'",
+            "result": "passed"
+          },
+          {
+            "command": "python3 -m unittest discover -s automation/remote -p 'test_*.py'",
+            "result": "passed"
+          }
+        ],
+        "residualWork": []
+      },
+      {
+        "id": "agent-message-delivery-control",
+        "classification": "adapt",
+        "confidence": "certain",
+        "summary": "Adapted let users queue durable follow-up messages or explicitly steer an active agent run without conflating the two actions. against Paseo v0.5.0.",
+        "evidence": [
+          {
+            "kind": "file",
+            "reference": "packages/app/src/composer, packages/app/src/hooks/use-settings, packages/client/src/daemon-client.ts, packages/protocol/src/messages.ts, packages/server/src/server/agent",
+            "explanation": "The approved reconciled tree retains the registered behavior and preservation fixes in the v0.5 architecture."
+          }
+        ],
+        "contractChecks": [
+          {
+            "command": "npx vitest run packages/protocol/src/messages.active-run-behavior.test.ts packages/client/src/daemon-client.test.ts packages/server/src/server/agent/agent-manager.test.ts packages/server/src/server/agent/providers/codex-app-server-agent.test.ts packages/server/src/server/agent/providers/claude/agent.test.ts packages/app/src/composer/actions.test.ts packages/app/src/composer/queue-store.test.ts packages/app/src/hooks/use-settings/storage.test.ts",
+            "result": "passed"
+          }
+        ],
+        "residualWork": []
+      },
+      {
+        "id": "workspace-file-search-navigation",
+        "classification": "adapt",
+        "confidence": "certain",
+        "summary": "Adapted find every eligible workspace file from Command+P and open it either as source or in Changes. against Paseo v0.5.0.",
+        "evidence": [
+          {
+            "kind": "file",
+            "reference": "packages/server/src/utils/directory-suggestions.ts, packages/server/src/server/session.ts, packages/client/src/daemon-client.ts, packages/protocol/src/messages.ts, packages/app/src/command-center, packages/app/src/workspace/markdown-changes-navigation.ts, packages/app/src/git/diff-pane.tsx, docs/paseito-changes.md",
+            "explanation": "The approved reconciled tree retains the registered behavior and preservation fixes in the v0.5 architecture."
+          }
+        ],
+        "contractChecks": [
+          {
+            "command": "npx vitest run packages/server/src/utils/directory-suggestions.test.ts packages/app/src/workspace/markdown-changes-navigation.test.ts packages/app/src/git/changes-file-tree-navigation.test.ts packages/app/src/workspace-tabs/identity.test.ts packages/app/src/stores/workspace-layout-store.test.ts --bail=1",
+            "result": "passed"
+          },
+          {
+            "command": "npm run test:e2e --workspace=@getpaseo/app -- e2e/browser/command-center-file-search.spec.ts",
+            "result": "passed"
+          }
+        ],
+        "residualWork": []
+      },
+      {
+        "id": "desktop-gitlab-mr-tracker",
+        "classification": "carry_forward",
+        "confidence": "certain",
+        "summary": "Carried forward track GitLab merge requests in a read-only desktop sidebar surface without porting MR Tracker automations or personal configuration. against Paseo v0.5.0.",
+        "evidence": [
+          {
+            "kind": "file",
+            "reference": "packages/desktop/src/features/mr-tracker, packages/app/src/mr-tracker, packages/app/src/app/mrs, packages/app/src/components/left-sidebar.tsx, packages/app/src/screens/settings-screen.tsx, docs/paseito-mr-tracker.md",
+            "explanation": "The approved reconciled tree retains the registered behavior and preservation fixes in the v0.5 architecture."
+          }
+        ],
+        "contractChecks": [
+          {
+            "command": "npm test --workspace=@getpaseo/desktop -- --run src/features/mr-tracker/store.test.ts src/features/mr-tracker/gitlab-client.test.ts src/features/mr-tracker/service.test.ts",
+            "result": "passed"
+          },
+          {
+            "command": "npm test --workspace=@getpaseo/app -- --run src/mr-tracker/model.test.ts src/mr-tracker/importance-control.test.tsx src/components/ui/tooltip.test.tsx",
+            "result": "passed"
+          },
+          {
+            "command": "npm run test:e2e:renderer --workspace=@getpaseo/desktop -- e2e/mr-tracker-row.spec.ts",
+            "result": "passed"
+          }
+        ],
+        "residualWork": []
+      }
+    ],
+    "verificationRecommendations": []
+  },
+  "review": {
+    "schemaVersion": 1,
+    "reviewedCommit": "8748d6fd9780efe8b6050a5c1ce42b2809aa8cc7",
+    "approved": true,
+    "blockers": [],
+    "featureFindings": [
+      {
+        "id": "independent-desktop-identity",
+        "agrees": true,
+        "explanation": "[certain] The independent audit approved the carry_forward classification and found no semantic blocker.",
+        "evidenceChecked": [
+          "registered invariants and paths",
+          "focused contract results",
+          "approved reconciled source tree"
+        ]
+      },
+      {
+        "id": "changes-base-selector",
+        "agrees": true,
+        "explanation": "[certain] The independent audit approved the adapt classification and found no semantic blocker.",
+        "evidenceChecked": [
+          "registered invariants and paths",
+          "focused contract results",
+          "approved reconciled source tree"
+        ]
+      },
+      {
+        "id": "changes-uncommitted-branch-badge",
+        "agrees": true,
+        "explanation": "[certain] The independent audit approved the carry_forward classification and found no semantic blocker.",
+        "evidenceChecked": [
+          "registered invariants and paths",
+          "focused contract results",
+          "approved reconciled source tree"
+        ]
+      },
+      {
+        "id": "changes-amend-current-commit",
+        "agrees": true,
+        "explanation": "[certain] The independent audit approved the carry_forward classification and found no semantic blocker.",
+        "evidenceChecked": [
+          "registered invariants and paths",
+          "focused contract results",
+          "approved reconciled source tree"
+        ]
+      },
+      {
+        "id": "changes-context-expansion",
+        "agrees": true,
+        "explanation": "[certain] The independent audit approved the carry_forward classification and found no semantic blocker.",
+        "evidenceChecked": [
+          "registered invariants and paths",
+          "focused contract results",
+          "approved reconciled source tree"
+        ]
+      },
+      {
+        "id": "review-suggestions-v1",
+        "agrees": true,
+        "explanation": "[certain] The independent audit approved the adapt classification and found no semantic blocker.",
+        "evidenceChecked": [
+          "registered invariants and paths",
+          "focused contract results",
+          "approved reconciled source tree"
+        ]
+      },
+      {
+        "id": "branch-file-review-state",
+        "agrees": true,
+        "explanation": "[certain] The independent audit approved the carry_forward classification and found no semantic blocker.",
+        "evidenceChecked": [
+          "registered invariants and paths",
+          "focused contract results",
+          "approved reconciled source tree"
+        ]
+      },
+      {
+        "id": "changes-source-navigation",
+        "agrees": true,
+        "explanation": "[certain] The independent audit approved the carry_forward classification and found no semantic blocker.",
+        "evidenceChecked": [
+          "registered invariants and paths",
+          "focused contract results",
+          "approved reconciled source tree"
+        ]
+      },
+      {
+        "id": "changes-file-tree-navigator",
+        "agrees": true,
+        "explanation": "[certain] The independent audit approved the adapt classification and found no semantic blocker.",
+        "evidenceChecked": [
+          "registered invariants and paths",
+          "focused contract results",
+          "approved reconciled source tree"
+        ]
+      },
+      {
+        "id": "lens-shared-editor-lsp",
+        "agrees": true,
+        "explanation": "[certain] The independent audit approved the carry_forward classification and found no semantic blocker.",
+        "evidenceChecked": [
+          "registered invariants and paths",
+          "focused contract results",
+          "approved reconciled source tree"
+        ]
+      },
+      {
+        "id": "markdown-preview-source-links",
+        "agrees": true,
+        "explanation": "[certain] The independent audit approved the carry_forward classification and found no semantic blocker.",
+        "evidenceChecked": [
+          "registered invariants and paths",
+          "focused contract results",
+          "approved reconciled source tree"
+        ]
+      },
+      {
+        "id": "local-semantic-maintenance",
+        "agrees": true,
+        "explanation": "[certain] The independent audit approved the carry_forward classification and found no semantic blocker.",
+        "evidenceChecked": [
+          "registered invariants and paths",
+          "focused contract results",
+          "approved reconciled source tree"
+        ]
+      },
+      {
+        "id": "agent-message-delivery-control",
+        "agrees": true,
+        "explanation": "[certain] The independent audit approved the adapt classification and found no semantic blocker.",
+        "evidenceChecked": [
+          "registered invariants and paths",
+          "focused contract results",
+          "approved reconciled source tree"
+        ]
+      },
+      {
+        "id": "workspace-file-search-navigation",
+        "agrees": true,
+        "explanation": "[certain] The independent audit approved the adapt classification and found no semantic blocker.",
+        "evidenceChecked": [
+          "registered invariants and paths",
+          "focused contract results",
+          "approved reconciled source tree"
+        ]
+      },
+      {
+        "id": "desktop-gitlab-mr-tracker",
+        "agrees": true,
+        "explanation": "[certain] The independent audit approved the carry_forward classification and found no semantic blocker.",
+        "evidenceChecked": [
+          "registered invariants and paths",
+          "focused contract results",
+          "approved reconciled source tree"
+        ]
+      }
+    ]
+  }
+}
