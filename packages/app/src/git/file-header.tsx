@@ -431,7 +431,13 @@ const styles = StyleSheet.create((theme) => ({
     elevation: 0,
     shadowOpacity: 0,
   },
-  canvasInteractionContent: { flex: 1, minWidth: 0, position: "relative" },
+  canvasInteractionContent: {
+    flex: 1,
+    minWidth: 0,
+    position: "relative",
+    // The absolute controls need a full-height backing to cover canvas text beneath them.
+    alignSelf: "stretch",
+  },
   canvasRightRail: {
     position: "absolute",
     top: 0,

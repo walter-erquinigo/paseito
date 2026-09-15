@@ -148,11 +148,8 @@ export function paintWebFileHeader(input: {
   const statWidths = statLabels.map((label) => context.measureText(label).width);
   const statWidth = statWidths[0]! + 4 + statWidths[1]!;
   const statX = iconX - 8 - statWidth;
-  const statBaseline = centeredTextBaseline(context, y + DIFF_FILE_HEADER_CONTENT_HEIGHT / 2);
-  context.fillStyle = palette.statusSuccess;
-  context.fillText(statLabels[0]!, statX, statBaseline);
-  context.fillStyle = palette.statusDanger;
-  context.fillText(statLabels[1]!, statX + statWidths[0]! + 4, statBaseline);
+  // FileHeader's interactive overlay owns the counts, before its review/LSP controls.
+  // Reserve their width for truncation, but do not paint a second copy underneath.
   paintChangeIcon(
     context,
     file,

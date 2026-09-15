@@ -114,8 +114,8 @@ export function recordNativeHeaderPicture(input: {
     tone: "statusDanger",
   });
   const statX = iconX - 8 - additionsText.width - 4 - deletionsText.width;
-  paintNativeHeaderText(canvas, additionsText, statX);
-  paintNativeHeaderText(canvas, deletionsText, statX + additionsText.width + 4);
+  // FileHeader's interactive overlay owns the counts, before its review/LSP controls.
+  // Reserve their width for truncation, but do not paint a second copy underneath.
   paintNativeChangeIcon(
     canvas,
     input.file,

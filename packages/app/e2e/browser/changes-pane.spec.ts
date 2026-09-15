@@ -399,6 +399,41 @@ test("canvas file headers select without toggling for context menu and long pres
   await expect(firstFile).toHaveAttribute("aria-expanded", "true");
 });
 
+test("diff headers show counts only once in the interactive left-hand rail", async ({
+  page,
+}, testInfo) => {
+  await page.addInitScript(() => {
+    const paintedCounts: string[] = [];
+    Object.assign(window, { paintedDiffHeaderCounts: paintedCounts });
+    const fillText = CanvasRenderingContext2D.prototype.fillText;
+    CanvasRenderingContext2D.prototype.fillText = function (...args) {
+      if (this.canvas.dataset.testid?.startsWith("git-diff-") && /^[+-]\d+$/.test(args[0])) {
+        paintedCounts.push(args[0]);
+      }
+      return fillText.apply(this, args);
+    };
+  });
+  const workspace = await createWorkspaceWithMountedTabDiff({ includeDeletedFile: true });
+  await useUnwrappedDiffLines(page);
+  await openWorkspaceChanges(page, workspace);
+
+  for (const width of [1280, 800]) {
+    await page.setViewportSize({ width, height: 900 });
+    const counts = page.getByTestId("diff-file-0-stat");
+    await expect(counts).toBeVisible();
+    await expect(counts).toHaveCount(1);
+    await expect(counts).toContainText(/\+\d+/);
+    await expect(counts).toContainText(/-\d+/);
+    const rail = counts.locator("..").locator("..");
+    await expect
+      .poll(async () => (await rail.boundingBox())?.height ?? 0)
+      .toBeGreaterThanOrEqual(28);
+    await page.getByTestId("diff-file-0-toggle").hover();
+    expect(await page.evaluate(() => Reflect.get(window, "paintedDiffHeaderCounts"))).toEqual([]);
+    await page.screenshot({ path: testInfo.outputPath(`single-diff-counts-${width}.png`) });
+  }
+});
+
 test("every interactive file header has the same hover feedback", async ({ page }) => {
   const workspace = await createWorkspaceWithMountedTabDiff({ includeDeletedFile: true });
   await useUnwrappedDiffLines(page);
