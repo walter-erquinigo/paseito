@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { WorkspaceStackSchema } from "./workspace-stack.js";
 import { TerminalActivitySchema } from "./terminal-activity.js";
 import { CLIENT_CAPS } from "./client-capabilities.js";
 import { AGENT_LIFECYCLE_STATUSES } from "./agent-lifecycle.js";
@@ -2199,6 +2200,20 @@ export const CheckoutCommitRequestSchema = z.object({
   requestId: z.string(),
 });
 
+export const WorkspaceStackListRequestSchema = z.object({
+  type: z.literal("checkout.stack.list.request"),
+  cwd: z.string(),
+  requestId: z.string(),
+});
+
+export const WorkspaceStackGetChangeRequestRequestSchema = z.object({
+  type: z.literal("checkout.stack.get_change_request.request"),
+  cwd: z.string(),
+  branch: z.string(),
+  sha: z.string(),
+  requestId: z.string(),
+});
+
 export const CheckoutCommitAmendRequestSchema = z.object({
   type: z.literal("checkout.commit.amend.request"),
   cwd: z.string(),
@@ -3369,6 +3384,8 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   CheckoutDiffSearchRequestSchema,
   CheckoutCommitRequestSchema,
   CheckoutCommitAmendRequestSchema,
+  WorkspaceStackListRequestSchema,
+  WorkspaceStackGetChangeRequestRequestSchema,
   CheckoutMergeRequestSchema,
   CheckoutMergeFromBaseRequestSchema,
   CheckoutPullRequestSchema,
@@ -3822,6 +3839,8 @@ export const ServerInfoStatusPayloadSchema = z
         // COMPAT(checkoutCommitAmend): added in Paseito v0.4.0-paseito.24,
         // remove gate after 2027-02-18.
         checkoutCommitAmend: z.boolean().optional(),
+        // COMPAT(workspaceStack): added in v0.8.0-paseito.3; retire the app upgrade gate once the supported host floor reaches this version.
+        workspaceStack: z.boolean().optional(),
         // COMPAT(agentProfiles): added in v0.3.2, remove gate after 2027-02-11.
         // An older daemon parses its persisted config strictly, so writing
         // agentProfiles to one is silently dropped. The client hides the feature
@@ -5526,6 +5545,26 @@ export const CheckoutCommitResponseSchema = z.object({
   }),
 });
 
+export const WorkspaceStackListResponseSchema = z.object({
+  type: z.literal("checkout.stack.list.response"),
+  payload: z.object({
+    cwd: z.string(),
+    stack: WorkspaceStackSchema.nullable(),
+    error: CheckoutErrorSchema.nullable(),
+    requestId: z.string(),
+  }),
+});
+
+export const WorkspaceStackGetChangeRequestResponseSchema = z.object({
+  type: z.literal("checkout.stack.get_change_request.response"),
+  payload: z.object({
+    cwd: z.string(),
+    changeRequest: z.object({ number: z.number(), url: z.string() }).nullable(),
+    error: CheckoutErrorSchema.nullable(),
+    requestId: z.string(),
+  }),
+});
+
 export const CheckoutCommitAmendResponseSchema = z.object({
   type: z.literal("checkout.commit.amend.response"),
   payload: z.object({
@@ -7003,6 +7042,8 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   CheckoutDiffSearchResponseSchema,
   CheckoutCommitResponseSchema,
   CheckoutCommitAmendResponseSchema,
+  WorkspaceStackListResponseSchema,
+  WorkspaceStackGetChangeRequestResponseSchema,
   CheckoutMergeResponseSchema,
   CheckoutMergeFromBaseResponseSchema,
   CheckoutPullResponseSchema,

@@ -1810,6 +1810,7 @@ export class VoiceAssistantWebSocketServer {
         // COMPAT(checkoutCommitAmend): added in Paseito v0.4.0-paseito.24,
         // remove gate after 2027-02-18.
         checkoutCommitAmend: true,
+        workspaceStack: true,
         // COMPAT(agentProfiles): added in v0.3.2, remove gate after 2027-02-11.
         agentProfiles: true,
         // COMPAT(agentConfigApply): added in v0.3.2, remove gate after 2027-02-11.

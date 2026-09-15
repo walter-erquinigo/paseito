@@ -755,6 +755,23 @@ export const ru: TranslationResources = {
       hideFolderTree: "Скрыть дерево папок",
     },
     git: {
+      stack: {
+        title: "Stack",
+        disconnected: "Подключитесь к хосту для просмотра стека",
+        updateHost: "Обновите этот хост для использования Stack",
+        loading: "Загрузка стека...",
+        empty: "В текущей ветке нет метаданных Stack",
+        base: "База: {{branch}}",
+        current: "Текущая ветка",
+        retry: "Повторить",
+        refresh: "Обновить стек",
+        switching: "Переключение на {{branch}}...",
+        switchFailed: "Не удалось переключить ветку",
+        findingMr: "Поиск MR...",
+        noMr: "Нет MR",
+        retryMr: "Повторить поиск MR для {{branch}}",
+        openMr: "Открыть MR !{{number}} для {{branch}} в системном браузере",
+      },
       actions: {
         moreOptions: "Дополнительные параметры",
         moreActions: "Дополнительные действия",

@@ -32,7 +32,7 @@ interface FakeGitOptions {
 
 function createFakeGit(opts: FakeGitOptions = {}) {
   const resolution = opts.resolution ?? { kind: "local", name: "main" };
-  const isDirty = opts.isDirty ?? false;
+  const isDirty = opts.isDirty === undefined ? false : opts.isDirty;
   const branchExists = opts.branchExists ?? false;
   const snapshotCalls: Array<{ cwd: string; force: boolean; reason?: string }> = [];
   const invalidateCalls: Array<{ cwd: string }> = [];
@@ -124,6 +124,33 @@ describe("checkoutExistingBranch", () => {
     await expect(service.checkoutExistingBranch("/tmp/nope", "x")).rejects.toThrow(
       /Unable to inspect git status/,
     );
+  });
+
+  test("requires a fresh status before deciding that switching is safe", async () => {
+    const { service, snapshotCalls } = buildService({ isDirty: true });
+    await expect(service.checkoutExistingBranch("/tmp/nope", "main")).rejects.toThrow(
+      /uncommitted changes/,
+    );
+    expect(snapshotCalls).toEqual([
+      { cwd: "/tmp/nope", force: true, reason: "branch-switch-safety" },
+    ]);
+  });
+
+  test("refuses switching when cleanliness is unknown", async () => {
+    const { service } = buildService({ isDirty: null });
+    await expect(service.checkoutExistingBranch("/tmp/nope", "main")).rejects.toThrow(
+      /Unable to inspect git status/,
+    );
+  });
+
+  test("rejects real pending files even when a concurrent snapshot still reports clean", async () => {
+    const dir = initRepo("feature");
+    const { service } = buildService({ resolution: { kind: "local", name: "feature" } });
+    writeFileSync(join(dir, "pending.txt"), "pending\n");
+    await expect(service.checkoutExistingBranch(dir, "feature")).rejects.toThrow(
+      /uncommitted changes/,
+    );
+    expect(headBranch(dir)).toBe("main");
   });
 
   test("checks out the branch and invalidates github (real repo)", async () => {

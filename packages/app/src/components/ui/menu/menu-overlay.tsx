@@ -10,7 +10,7 @@ import {
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import {
-  Dimensions,
+  useWindowDimensions,
   Modal,
   Platform,
   Pressable,
@@ -124,6 +124,7 @@ export function useAnchoredPosition({
   scrollable: boolean;
   maxHeight?: number;
 }) {
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const [triggerRect, setTriggerRect] = useState<Rect | null>(null);
   const [contentSize, setContentSize] = useState<Size | null>(null);
   const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
@@ -133,7 +134,6 @@ export function useAnchoredPosition({
     if (!contentSize) return null;
     if (!scrollable) return contentSize;
 
-    const { height: screenHeight } = Dimensions.get("window");
     const viewportMaxHeight = Math.max(screenHeight - 16, 0);
     const resolvedMaxHeight =
       typeof maxHeight === "number" ? Math.min(maxHeight, viewportMaxHeight) : viewportMaxHeight;
@@ -142,7 +142,7 @@ export function useAnchoredPosition({
       width: contentSize.width,
       height: Math.min(contentSize.height, resolvedMaxHeight),
     };
-  }, [contentSize, scrollable, maxHeight]);
+  }, [contentSize, scrollable, maxHeight, screenHeight]);
 
   useEffect(() => {
     if (!open) {
@@ -178,12 +178,11 @@ export function useAnchoredPosition({
     return () => {
       cancelled = true;
     };
-  }, [anchorRect, anchorRef, open]);
+  }, [anchorRect, anchorRef, open, screenWidth, screenHeight]);
 
   useEffect(() => {
     if (!triggerRect || !visibleContentSize) return;
 
-    const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
     // measureInWindow and Modal both use full-screen coordinates, so the display area starts at 0.
     const result = computePosition({
       triggerRect,
@@ -196,7 +195,7 @@ export function useAnchoredPosition({
 
     setPosition({ x: result.x, y: result.y });
     setActualPlacement(result.actualPlacement);
-  }, [triggerRect, visibleContentSize, side, align, offset]);
+  }, [triggerRect, visibleContentSize, side, align, offset, screenWidth, screenHeight]);
 
   const onContentLayout = useCallback(
     (event: { nativeEvent: { layout: { width: number; height: number } } }) => {
@@ -273,6 +272,7 @@ export function AnchoredSurface({
 }: AnchoredSurfaceProps): ReactElement | null {
   const { t } = useTranslation();
   const surfaceNativeID = useId();
+  const { width: screenWidth } = useWindowDimensions();
   const { position, actualPlacement, contentSize, visibleContentSize, onContentLayout } =
     useAnchoredPosition({
       open,
@@ -304,7 +304,6 @@ export function AnchoredSurface({
   }, [contentSize, open, surfaceNativeID]);
 
   const frameStyle = useMemo<StyleProp<ViewStyle>>(() => {
-    const { width: screenWidth } = Dimensions.get("window");
     const resolvedWidthStyle: ViewStyle = fullWidth
       ? { width: screenWidth - horizontalPadding * 2 }
       : {
@@ -331,6 +330,7 @@ export function AnchoredSurface({
     position?.y,
     actualPlacement,
     align,
+    screenWidth,
   ]);
 
   const scrollViewportStyle = useMemo(

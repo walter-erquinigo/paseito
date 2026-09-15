@@ -751,6 +751,23 @@ export const ja: TranslationResources = {
       hideFolderTree: "フォルダツリーを非表示",
     },
     git: {
+      stack: {
+        title: "Stack",
+        disconnected: "スタックを表示するにはホストに接続してください",
+        updateHost: "Stackを使用するにはこのホストを更新してください",
+        loading: "スタックを読み込み中...",
+        empty: "現在のブランチにStackメタデータがありません",
+        base: "ベース: {{branch}}",
+        current: "現在のブランチ",
+        retry: "再試行",
+        refresh: "スタックを更新",
+        switching: "{{branch}}に切り替え中...",
+        switchFailed: "ブランチを切り替えられませんでした",
+        findingMr: "MRを検索中...",
+        noMr: "MRなし",
+        retryMr: "{{branch}}のMR検索を再試行",
+        openMr: "{{branch}}のMR !{{number}}をシステムブラウザーで開く",
+      },
       actions: {
         moreOptions: "その他のオプション",
         moreActions: "その他のアクション",

@@ -749,6 +749,23 @@ export const ko: TranslationResources = {
       hideFolderTree: "폴더 트리 숨기기",
     },
     git: {
+      stack: {
+        title: "Stack",
+        disconnected: "스택을 보려면 호스트에 연결하세요",
+        updateHost: "Stack을 사용하려면 이 호스트를 업데이트하세요",
+        loading: "스택 로딩 중...",
+        empty: "현재 브랜치에 Stack 메타데이터가 없습니다",
+        base: "기준: {{branch}}",
+        current: "현재 브랜치",
+        retry: "다시 시도",
+        refresh: "스택 새로 고침",
+        switching: "{{branch}}(으)로 전환 중...",
+        switchFailed: "브랜치를 전환할 수 없습니다",
+        findingMr: "MR 검색 중...",
+        noMr: "MR 없음",
+        retryMr: "{{branch}}의 MR 검색 재시도",
+        openMr: "{{branch}}의 MR !{{number}}을 시스템 브라우저에서 열기",
+      },
       actions: {
         moreOptions: "옵션 더 보기",
         moreActions: "작업 더 보기",

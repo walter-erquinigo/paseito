@@ -60,6 +60,39 @@
       ]
     },
     {
+      "id": "workspace-stack-menu",
+      "commitSubject": "feat(workspace): navigate Stack branches from the toolbar",
+      "preservationFixes": [
+        "Keep full-stack discovery metadata-driven, branch switching clean-tree-only, and MR links independent of checkout.",
+        "Keep the current-branch marker on a reserved alignment rail and remeasure open menus when the window resizes."
+      ],
+      "permanent": false,
+      "intent": "Navigate the complete current Stack from a toolbar dropdown and open each branch's MR in the system browser.",
+      "invariants": [
+        "Stack appears beside the workspace forge action and marks the current branch.",
+        "Discover local branch tips by Stack-Prefix, lexical Stack-Index, Stack-Parent and generic issue metadata; unrelated stacks sharing a base remain separate.",
+        "A branch click switches the current workspace without stashing, forcing, or redirecting to another worktree, and refuses pending tracked or untracked changes using fresh Git status.",
+        "Each branch resolves its own forge link without switching the workspace, and failures remain visible with retry.",
+        "Older hosts show an explicit update message without receiving unsupported RPCs."
+      ],
+      "contracts": [
+        "npx vitest run packages/server/src/server/checkout/stack.test.ts packages/server/src/server/session/git-mutation/git-mutation-service.test.ts packages/server/src/server/session/checkout/checkout-session.test.ts packages/protocol/src/workspace-stack.test.ts --bail=1",
+        "npm run test:e2e --workspace=@getpaseo/app -- e2e/browser/workspace-stack.spec.ts"
+      ],
+      "paths": [
+        "packages/app/src/git/stack-menu.tsx",
+        "packages/app/src/components/ui/menu/menu-overlay.tsx",
+        "packages/app/src/git/workspace-actions.tsx",
+        "packages/server/src/server/checkout/stack.ts",
+        "packages/server/src/server/session/checkout/checkout-session.ts",
+        "packages/server/src/server/session/git-mutation/git-mutation-service.ts",
+        "packages/protocol/src/workspace-stack.ts",
+        "packages/protocol/src/messages.ts",
+        "packages/client/src/daemon-client.ts",
+        "docs/paseito-changes.md"
+      ]
+    },
+    {
       "id": "changes-uncommitted-branch-badge",
       "commitSubject": "feat(changes): show uncommitted branch status",
       "preservationFixes": [

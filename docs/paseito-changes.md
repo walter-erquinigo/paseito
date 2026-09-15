@@ -26,6 +26,29 @@ An **Amend** button beside the badge stages the complete working tree and immedi
 current commit without changing its message. Paseito refreshes the status and diff after the amend;
 older hosts leave the action visible and report that the host must be updated.
 
+## Workspace stack navigation
+
+The workspace toolbar's **Stack** dropdown sits beside the forge action. It lists the entire local
+Stack in index order, marks the current branch, and provides independent MR links that open in the
+system browser. Selecting a branch switches this workspace's working tree; pending tracked or
+untracked changes block the operation. Paseito never automatically stashes or redirects to another
+worktree. Git rejects a branch already checked out elsewhere.
+
+Discovery reads branch-tip descriptions, not Git ancestry. `Stack-Prefix`, `Stack-Index`,
+`Stack-Parent`, and project-specific issue trailers identify the stack. Shared base branches do not
+join unrelated stacks. Invalid metadata or a broken parent chain produces an error rather than a
+partial stack. No machine, directory prefix, branch namespace, or issue-tracker key is compiled in.
+
+Metadata refreshes only while the dropdown is open. Forge links load separately so unavailable
+GitLab access does not block branch navigation. Link failures retain a retry action. Hosts without
+`workspaceStack` display an explicit upgrade message.
+
+The live MR-link browser test takes a private JSON fixture through `PASEITO_STACK_QA_FIXTURE`;
+its fields are declared in `packages/app/e2e/browser/workspace-stack.real.spec.ts`. Use an existing
+open MR and run that spec with Playwright's `real-provider` project. The test creates only a temporary
+local project and performs no forge mutations; a browser sign-in redirect is expected in its fresh
+profile.
+
 ## Hidden context
 
 Omitted regions use a quiet separator row instead of code-line chrome. Gaps of up to 40 lines expose

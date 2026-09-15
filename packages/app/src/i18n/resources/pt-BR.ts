@@ -752,6 +752,23 @@ export const ptBR: TranslationResources = {
       hideFolderTree: "Ocultar árvore de pastas",
     },
     git: {
+      stack: {
+        title: "Stack",
+        disconnected: "Conecte-se ao host para ver a pilha",
+        updateHost: "Atualize este host para usar Stack",
+        loading: "Carregando pilha...",
+        empty: "Sem metadados Stack na branch atual",
+        base: "Base: {{branch}}",
+        current: "Branch atual",
+        retry: "Tentar novamente",
+        refresh: "Atualizar pilha",
+        switching: "Mudando para {{branch}}...",
+        switchFailed: "Não foi possível mudar de branch",
+        findingMr: "Buscando MR...",
+        noMr: "Sem MR",
+        retryMr: "Tentar buscar MR de {{branch}} novamente",
+        openMr: "Abrir MR !{{number}} de {{branch}} no navegador do sistema",
+      },
       actions: {
         moreOptions: "Mais opções",
         moreActions: "Mais ações",

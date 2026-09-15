@@ -1,4 +1,5 @@
 import type pino from "pino";
+import pLimit from "p-limit";
 import { isAbsolute } from "node:path";
 import { getErrorMessage } from "@getpaseo/protocol/error-utils";
 import { getForgeDefinitionOrNeutral } from "@getpaseo/protocol/forge-manifest";
@@ -23,6 +24,7 @@ import type {
   CheckoutDiffSubscription,
   CheckoutDiffSubscriptionRequest,
 } from "../../checkout-diff-manager.js";
+import { getWorkspaceStack } from "../../checkout/stack.js";
 import { toCheckoutError } from "../../checkout-git-utils.js";
 import {
   buildCheckoutPrStatusPayloadFromSnapshot,
@@ -84,6 +86,9 @@ type CurrentWorkspacePullRequest = NonNullable<
 > & {
   number: number;
 };
+
+// Opening a stack must not launch an unbounded number of forge CLI processes.
+const stackForgeReads = pLimit(3);
 
 class NoResolvedForgeServiceError extends Error {
   readonly authState = "no_remote" satisfies ForgeAuthState;
@@ -600,6 +605,56 @@ export class CheckoutSession {
   // ---------------------------------------------------------------------------
   // Command operations (writes) and GitHub-PR operations
   // ---------------------------------------------------------------------------
+
+  async handleWorkspaceStackListRequest(
+    msg: Extract<SessionInboundMessage, { type: "checkout.stack.list.request" }>,
+  ): Promise<void> {
+    const { cwd, requestId } = msg;
+    try {
+      const stack = await getWorkspaceStack(expandTilde(cwd));
+      this.host.emit({
+        type: "checkout.stack.list.response",
+        payload: { cwd, requestId, stack, error: null },
+      });
+    } catch (error) {
+      this.host.emit({
+        type: "checkout.stack.list.response",
+        payload: { cwd, requestId, stack: null, error: toCheckoutError(error) },
+      });
+    }
+  }
+
+  async handleWorkspaceStackGetChangeRequest(
+    msg: Extract<SessionInboundMessage, { type: "checkout.stack.get_change_request.request" }>,
+  ): Promise<void> {
+    const { cwd, requestId, branch, sha } = msg;
+    try {
+      const resolvedCwd = expandTilde(cwd);
+      const resolved = await this.resolveForgeService(resolvedCwd);
+      const status = resolved
+        ? await stackForgeReads(() =>
+            resolved.service.getCurrentPullRequestStatus({
+              cwd: resolvedCwd,
+              headRef: branch,
+              headSha: sha,
+            }),
+          )
+        : null;
+      if (status && status.number === undefined)
+        throw new Error("The forge returned a change request without a number");
+      const changeRequest =
+        status && status.number !== undefined ? { number: status.number, url: status.url } : null;
+      this.host.emit({
+        type: "checkout.stack.get_change_request.response",
+        payload: { cwd, requestId, changeRequest, error: null },
+      });
+    } catch (error) {
+      this.host.emit({
+        type: "checkout.stack.get_change_request.response",
+        payload: { cwd, requestId, changeRequest: null, error: toCheckoutError(error) },
+      });
+    }
+  }
 
   async handleCheckoutSwitchBranchRequest(
     msg: Extract<SessionInboundMessage, { type: "checkout_switch_branch_request" }>,

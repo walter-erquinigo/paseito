@@ -208,6 +208,92 @@ function createGitSnapshot(
 }
 
 describe("CheckoutSession", () => {
+  describe("stack MR links", () => {
+    it("resolves the requested branch and revision without checking it out", async () => {
+      const lookups: Array<{ cwd: string; headRef: string; headSha?: string }> = [];
+      const service: ForgeService = {
+        ...createGitHubService(),
+        async getCurrentPullRequestStatus(input) {
+          lookups.push(input);
+          return {
+            number: 42,
+            url: "https://gitlab.example.com/project/-/merge_requests/42",
+            title: "Parent",
+            state: "open",
+            baseRefName: "main",
+            headRefName: input.headRef,
+            isMerged: false,
+            mergeable: "UNKNOWN",
+            checks: [],
+            checksStatus: "none",
+            reviewDecision: null,
+          };
+        },
+      };
+      const { checkout, emitted, gitMutationCalls } = makeCheckoutSession({
+        git: {
+          resolveForge: async () => ({ forge: "gitlab", host: "gitlab.example.com", service }),
+        },
+      });
+      await checkout.handleWorkspaceStackGetChangeRequest({
+        type: "checkout.stack.get_change_request.request",
+        cwd: "/repo",
+        branch: "developer/stack-a-parent",
+        sha: "a".repeat(40),
+        requestId: "mr",
+      });
+      expect(lookups).toEqual([
+        { cwd: "/repo", headRef: "developer/stack-a-parent", headSha: "a".repeat(40) },
+      ]);
+      expect(emitted).toEqual([
+        {
+          type: "checkout.stack.get_change_request.response",
+          payload: {
+            cwd: "/repo",
+            requestId: "mr",
+            changeRequest: {
+              number: 42,
+              url: "https://gitlab.example.com/project/-/merge_requests/42",
+            },
+            error: null,
+          },
+        },
+      ]);
+      expect(gitMutationCalls.checkoutExistingBranch).toEqual([]);
+    });
+
+    it("preserves forge errors instead of reporting that no MR exists", async () => {
+      const service: ForgeService = {
+        ...createGitHubService(),
+        async getCurrentPullRequestStatus() {
+          throw new Error("GitLab is unavailable");
+        },
+      };
+      const { checkout, emitted } = makeCheckoutSession({
+        git: {
+          resolveForge: async () => ({ forge: "gitlab", host: "gitlab.example.com", service }),
+        },
+      });
+      await checkout.handleWorkspaceStackGetChangeRequest({
+        type: "checkout.stack.get_change_request.request",
+        cwd: "/repo",
+        branch: "parent",
+        sha: "a".repeat(40),
+        requestId: "mr",
+      });
+      expect(emitted).toEqual([
+        {
+          type: "checkout.stack.get_change_request.response",
+          payload: {
+            cwd: "/repo",
+            requestId: "mr",
+            changeRequest: null,
+            error: { code: "UNKNOWN", message: "GitLab is unavailable" },
+          },
+        },
+      ]);
+    });
+  });
   describe("status", () => {
     it("emits a checkout status response built from the git snapshot", async () => {
       const { checkout, emitted } = makeCheckoutSession({

@@ -3984,6 +3984,26 @@ export class DaemonClient {
     });
   }
 
+  async getWorkspaceStack(
+    cwd: string,
+  ): Promise<CorrelatedResponsePayload<"checkout.stack.list.response">> {
+    return this.sendNamespacedCorrelatedSessionRequest<"checkout.stack.list.response">({
+      message: { type: "checkout.stack.list.request", cwd },
+    });
+  }
+
+  async getWorkspaceStackChangeRequest(input: {
+    cwd: string;
+    branch: string;
+    sha: string;
+  }): Promise<CorrelatedResponsePayload<"checkout.stack.get_change_request.response">> {
+    return this.sendNamespacedCorrelatedSessionRequest<"checkout.stack.get_change_request.response">(
+      {
+        message: { type: "checkout.stack.get_change_request.request", ...input },
+      },
+    );
+  }
+
   async checkoutAmendCommit(
     cwd: string,
   ): Promise<CorrelatedResponsePayload<"checkout.commit.amend.response">> {

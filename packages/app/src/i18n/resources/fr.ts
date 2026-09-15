@@ -755,6 +755,23 @@ export const fr: TranslationResources = {
       hideFolderTree: "Masquer l'arborescence des dossiers",
     },
     git: {
+      stack: {
+        title: "Stack",
+        disconnected: "Connectez-vous à l’hôte pour voir la pile",
+        updateHost: "Mettez cet hôte à jour pour utiliser Stack",
+        loading: "Chargement de la pile...",
+        empty: "Aucune métadonnée Stack sur la branche actuelle",
+        base: "Base : {{branch}}",
+        current: "Branche actuelle",
+        retry: "Réessayer",
+        refresh: "Actualiser la pile",
+        switching: "Passage à {{branch}}...",
+        switchFailed: "Impossible de changer de branche",
+        findingMr: "Recherche de MR...",
+        noMr: "Aucune MR",
+        retryMr: "Relancer la recherche de MR pour {{branch}}",
+        openMr: "Ouvrir la MR !{{number}} de {{branch}} dans le navigateur du système",
+      },
       actions: {
         moreOptions: "Plus d'options",
         moreActions: "Plus de propositions",

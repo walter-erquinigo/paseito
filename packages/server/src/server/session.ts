@@ -2530,6 +2530,10 @@ export class Session {
         return this.checkoutSession.handleDiffGetContextRequest(msg);
       case "checkout.diff.search.request":
         return this.checkoutSession.handleDiffSearchRequest(msg);
+      case "checkout.stack.list.request":
+        return this.checkoutSession.handleWorkspaceStackListRequest(msg);
+      case "checkout.stack.get_change_request.request":
+        return this.checkoutSession.handleWorkspaceStackGetChangeRequest(msg);
       case "checkout_switch_branch_request":
         return this.checkoutSession.handleCheckoutSwitchBranchRequest(msg);
       case "checkout.rename_branch.request":

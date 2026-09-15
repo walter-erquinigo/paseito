@@ -753,6 +753,23 @@ export const en = {
       hideFolderTree: "Hide folder tree",
     },
     git: {
+      stack: {
+        title: "Stack",
+        disconnected: "Connect to the host to view the stack",
+        updateHost: "Update this host to use Stack",
+        loading: "Loading stack...",
+        empty: "No Stack metadata on the current branch",
+        base: "Base: {{branch}}",
+        current: "Current branch",
+        retry: "Retry",
+        refresh: "Refresh stack",
+        switching: "Switching to {{branch}}...",
+        switchFailed: "Unable to switch branch",
+        findingMr: "Finding MR...",
+        noMr: "No MR",
+        retryMr: "Retry MR lookup for {{branch}}",
+        openMr: "Open MR !{{number}} for {{branch}} in the system browser",
+      },
       actions: {
         moreOptions: "More options",
         moreActions: "More actions",

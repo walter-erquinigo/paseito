@@ -274,6 +274,9 @@ instead of editing the list by hand.
   - Fix: Use valid top-commit Stack-Parent branches as the default comparison base and keep invalid markers visible.
   - Fix: Sort every werquinigo/ branch first in literal name order on both current and legacy hosts.
   - Fix: Keep branch search focused while revealing and activating the selected branch, including when it is absent from the bounded suggestion response.
+- `workspace-stack-menu` — Navigate the complete current Stack from a toolbar dropdown and open each branch's MR in the system browser.
+  - Fix: Keep full-stack discovery metadata-driven, branch switching clean-tree-only, and MR links independent of checkout.
+  - Fix: Keep the current-branch marker on a reserved alignment rail and remeasure open menus when the window resizes.
 - `changes-uncommitted-branch-badge` — Show the selected branch's uncommitted working-tree state beside the Changes branch switcher.
   - Fix: Keep the branch badge tied to live checkout dirtiness while Changes displays either comparison mode.
 - `changes-amend-current-commit` — Amend every current working-tree change into the current commit directly from Changes.

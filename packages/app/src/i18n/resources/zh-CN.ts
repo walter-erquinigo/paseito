@@ -745,6 +745,23 @@ export const zhCN: TranslationResources = {
       hideFolderTree: "隐藏文件夹树",
     },
     git: {
+      stack: {
+        title: "Stack",
+        disconnected: "连接到主机以查看堆栈",
+        updateHost: "更新此主机以使用 Stack",
+        loading: "正在加载堆栈...",
+        empty: "当前分支没有 Stack 元数据",
+        base: "基准：{{branch}}",
+        current: "当前分支",
+        retry: "重试",
+        refresh: "刷新堆栈",
+        switching: "正在切换到 {{branch}}...",
+        switchFailed: "无法切换分支",
+        findingMr: "正在查找 MR...",
+        noMr: "没有 MR",
+        retryMr: "重新查找 {{branch}} 的 MR",
+        openMr: "在系统浏览器中打开 {{branch}} 的 MR !{{number}}",
+      },
       actions: {
         moreOptions: "更多选项",
         moreActions: "更多操作",

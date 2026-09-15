@@ -749,6 +749,23 @@ export const ar: TranslationResources = {
       hideFolderTree: "إخفاء شجرة المجلدات",
     },
     git: {
+      stack: {
+        title: "Stack",
+        disconnected: "اتصل بالمضيف لعرض المكدس",
+        updateHost: "حدّث هذا المضيف لاستخدام Stack",
+        loading: "جارٍ تحميل المكدس...",
+        empty: "لا توجد بيانات Stack في الفرع الحالي",
+        base: "الأساس: {{branch}}",
+        current: "الفرع الحالي",
+        retry: "إعادة المحاولة",
+        refresh: "تحديث المكدس",
+        switching: "جارٍ التبديل إلى {{branch}}...",
+        switchFailed: "تعذر تبديل الفرع",
+        findingMr: "جارٍ البحث عن MR...",
+        noMr: "لا يوجد MR",
+        retryMr: "إعادة البحث عن MR للفرع {{branch}}",
+        openMr: "فتح MR !{{number}} للفرع {{branch}} في متصفح النظام",
+      },
       actions: {
         moreOptions: "المزيد من الخيارات",
         moreActions: "المزيد من الإجراءات",

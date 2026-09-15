@@ -755,6 +755,23 @@ export const es: TranslationResources = {
       hideFolderTree: "Ocultar árbol de carpetas",
     },
     git: {
+      stack: {
+        title: "Stack",
+        disconnected: "Conéctate al host para ver la pila",
+        updateHost: "Actualiza este host para usar Stack",
+        loading: "Cargando pila...",
+        empty: "La rama actual no tiene metadatos de Stack",
+        base: "Base: {{branch}}",
+        current: "Rama actual",
+        retry: "Reintentar",
+        refresh: "Actualizar pila",
+        switching: "Cambiando a {{branch}}...",
+        switchFailed: "No se pudo cambiar de rama",
+        findingMr: "Buscando MR...",
+        noMr: "Sin MR",
+        retryMr: "Reintentar búsqueda de MR para {{branch}}",
+        openMr: "Abrir MR !{{number}} de {{branch}} en el navegador del sistema",
+      },
       actions: {
         moreOptions: "Más opciones",
         moreActions: "Más acciones",
