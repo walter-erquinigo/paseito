@@ -2103,42 +2103,36 @@ test("Changes toggles its optional tree rail without replacing the diff", async 
   await expectFlatFileList(panel);
 });
 
-test("Changes LSP navigates a clean C++ revision and pauses while the workspace is dirty", async ({
+test("Changes toolbar LSP navigates committed and uncommitted C++ revisions while dirty", async ({
   page,
-}) => {
-  const workspace = await createCleanCommittedCppWorkspace();
+}, testInfo) => {
+  await page.setViewportSize({ width: 1400, height: 900 });
+  const workspace = await createCleanCommittedCppWorkspace(true);
   await useUnwrappedDiffLines(page);
   await openWorkspaceChanges(page, workspace);
-
+  await selectChangesComparison(page, "Committed");
   const panel = page.getByTestId("working-diff-panel").filter({ visible: true });
   const header = diffHeaderForPath(panel, "src/main.cc");
-  await header
-    .getByTestId("diff-file-0-toggle")
-    .click({ button: "right", position: { x: 80, y: 10 } });
-  await page.getByTestId("diff-file-0-open-file").filter({ visible: true }).click();
-  await expect(page.getByTestId("workspace-file-pane")).toBeVisible({ timeout: 30_000 });
-  await page.getByTestId("file-lsp-menu").click();
-  await page.getByTestId("file-lsp-workspace-toggle").click();
-  await expect(page.getByTestId("file-lsp-menu")).toContainText("clangd", { timeout: 30_000 });
-  await page.keyboard.press("Escape");
-
-  await openChangesPanel(page);
-  await expect(panel).toBeVisible({ timeout: 30_000 });
-  const fileLsp = panel.getByTestId("changes-lsp-src/main.cc-menu");
+  const fileLsp = panel.getByTestId("changes-lsp-cpp-menu");
+  await fileLsp.click();
+  await page.getByTestId("changes-lsp-cpp-workspace-toggle").click();
   await expect(fileLsp).toContainText("clangd", { timeout: 30_000 });
-  const wideHeaderBounds = await header.boundingBox();
+  await page.keyboard.press("Escape");
+  await expect(header.getByTestId(/changes-lsp-.*-menu/)).toHaveCount(0);
+  const toolbar = panel.getByTestId("changes-header");
+  await expect(toolbar.getByTestId("changes-lsp-cpp-menu")).toHaveCount(1);
+  const reviewBounds = await toolbar.getByTestId("changes-review-menu").boundingBox();
   const wideLspBounds = await fileLsp.boundingBox();
-  expect(wideHeaderBounds).not.toBeNull();
+  expect(reviewBounds).not.toBeNull();
   expect(wideLspBounds).not.toBeNull();
-  expect(wideLspBounds!.y).toBeGreaterThanOrEqual(wideHeaderBounds!.y);
-  expect(wideLspBounds!.y + wideLspBounds!.height).toBeLessThanOrEqual(
-    wideHeaderBounds!.y + wideHeaderBounds!.height,
-  );
+  expect(wideLspBounds!.x + wideLspBounds!.width).toBeLessThanOrEqual(reviewBounds!.x);
+  await page.screenshot({ path: testInfo.outputPath("lsp-toolbar-wide.png") });
 
   await page.setViewportSize({ width: 560, height: 900 });
   await expect(fileLsp).toHaveText("");
   await expect(fileLsp.locator("svg")).toHaveCount(1);
-  await expect(fileLsp).toHaveAccessibleName(/clangd/);
+  await expect(fileLsp).toHaveAccessibleName(/C\/C\+\+.*clangd/);
+  await page.screenshot({ path: testInfo.outputPath("lsp-toolbar-narrow.png") });
   await page.setViewportSize({ width: 1400, height: 900 });
   await expect(fileLsp).toContainText("clangd");
 
@@ -2147,24 +2141,56 @@ test("Changes LSP navigates a clean C++ revision and pauses while the workspace 
   await expect(page.getByTestId("changes-lsp-hover")).toContainText("add", {
     timeout: 30_000,
   });
+
+  await selectChangesComparison(page, "Uncommitted");
+  await expect(fileLsp).toContainText("clangd", { timeout: 30_000 });
+  await expect
+    .poll(async () => {
+      try {
+        return await sourceTokenPosition(page, "return add(5, 6);", "add");
+      } catch {
+        return null;
+      }
+    })
+    .not.toBeNull();
+  const dirtyPosition = await sourceTokenPosition(page, "return add(5, 6);", "add");
+  await page.mouse.move(dirtyPosition.x, dirtyPosition.y);
+  await expect(page.getByTestId("changes-lsp-hover")).toContainText("add", { timeout: 30_000 });
   await panel.getByTestId("git-diff-scroll").focus();
-  await page.mouse.move(addPosition.x, addPosition.y);
+  await page.mouse.move(dirtyPosition.x, dirtyPosition.y);
   await page.keyboard.press("F12");
   await expect(page.getByTestId("workspace-file-pane")).toBeVisible({ timeout: 30_000 });
-  await openChangesPanel(page);
-  await expect(fileLsp).toBeVisible({ timeout: 30_000 });
+});
 
-  await writeFile(path.join(workspace.repoPath, "README.md"), "dirty\n");
-  await expect(fileLsp).toHaveText("LSP paused", { timeout: 30_000 });
-  await expect(page.getByTestId("changes-lsp-hover")).toHaveCount(0);
-  await fileLsp.click();
+test("Diff toolbar groups LSP actions by language across the complete change list", async ({
+  page,
+}, testInfo) => {
+  await page.setViewportSize({ width: 1700, height: 900 });
+  const workspace = await createCleanCommittedCppWorkspace();
+  await writeFile(path.join(workspace.repoPath, "src/other.cpp"), "int other() { return 0; }\n");
+  await writeFile(path.join(workspace.repoPath, "src/helper.py"), "answer = 42\n");
+  await writeFile(path.join(workspace.repoPath, "src/extra.py"), "answer = 43\n");
+  execFileSync("git", ["add", "src"], { cwd: workspace.repoPath });
+  execFileSync("git", ["commit", "-m", "Add mixed-language changes"], { cwd: workspace.repoPath });
+  await useUnwrappedDiffLines(page);
+  await openWorkspaceChanges(page, workspace);
+  const panel = page.getByTestId("working-diff-panel").filter({ visible: true });
+  const toolbar = panel.getByTestId("changes-header");
+  await expect(toolbar.getByTestId("changes-lsp-cpp-menu")).toHaveCount(1);
+  await expect(toolbar.getByTestId("changes-lsp-python-menu")).toHaveCount(1);
   await expect(
-    page.getByTestId("changes-lsp-src/main.cc-paused").filter({ visible: true }),
-  ).toContainText("Clean the workspace to resume");
-  await page.keyboard.press("Escape");
-
-  execFileSync("git", ["checkout", "--", "README.md"], { cwd: workspace.repoPath });
-  await expect(fileLsp).toContainText("clangd", { timeout: 30_000 });
+    panel.locator("[data-diff-header-path]").getByTestId(/changes-lsp-.*-menu/),
+  ).toHaveCount(0);
+  await expect(toolbar.getByTestId("changes-lsp-cpp-menu")).toContainText("C/C++");
+  await expect(toolbar.getByTestId("changes-lsp-python-menu")).toContainText("Python");
+  const review = await toolbar.getByTestId("changes-review-menu").boundingBox();
+  const python = await toolbar.getByTestId("changes-lsp-python-menu").boundingBox();
+  expect(python!.x + python!.width).toBeLessThanOrEqual(review!.x);
+  await page.screenshot({ path: testInfo.outputPath("lsp-mixed-languages.png") });
+  await page.setViewportSize({ width: 800, height: 900 });
+  await expect(toolbar.getByTestId("changes-lsp-cpp-menu")).toHaveAccessibleName(/C\/C\+\+/);
+  await expect(toolbar.getByTestId("changes-lsp-python-menu")).toHaveAccessibleName(/Python/);
+  await page.screenshot({ path: testInfo.outputPath("lsp-mixed-narrow.png") });
 });
 
 async function expectFlatFileList(panel: Locator): Promise<void> {
@@ -2226,7 +2252,7 @@ async function expectCheckboxFixedWhileCodeScrolls(
   expect(after!.x).toBeCloseTo(before!.x, 0);
 }
 
-async function createCleanCommittedCppWorkspace(): Promise<DirtyWorkspace> {
+async function createCleanCommittedCppWorkspace(dirty = false): Promise<DirtyWorkspace> {
   const repo = await createTempGitRepo("changes-lsp-", {
     withRemote: true,
     files: [
@@ -2245,6 +2271,13 @@ async function createCleanCommittedCppWorkspace(): Promise<DirtyWorkspace> {
   );
   execFileSync("git", ["add", "src/main.cc"], { cwd: repo.path });
   execFileSync("git", ["commit", "-m", "Change add arguments"], { cwd: repo.path });
+  if (dirty) {
+    await writeFile(path.join(repo.path, "README.md"), "dirty\n");
+    await writeFile(
+      path.join(repo.path, "src/main.cc"),
+      "int add(int lhs, int rhs) { return lhs + rhs; }\nint main() { return add(5, 6); }\n",
+    );
+  }
   const client = await connectSeedClient();
   cleanupTasks.push({
     run: async () => {

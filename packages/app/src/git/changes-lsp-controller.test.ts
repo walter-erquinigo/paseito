@@ -107,7 +107,7 @@ describe("Changes LSP controller", () => {
     editor?.release();
   });
 
-  it("releases every session while dirty and resumes still-visible files when clean", async () => {
+  it("releases every session when explicitly paused and resumes still-visible files", async () => {
     const client = clientWith(async () => ({ kind: "ack", provider: "clangd" as const }));
     const controller = new ChangesLspSessionController({
       client,

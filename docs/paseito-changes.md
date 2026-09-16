@@ -174,11 +174,12 @@ Editor LSP now prefers the existing Lens broker but no longer depends on Lens fo
 When Lens is absent, the daemon starts one shared clangd for the workspace and automatically uses a
 compilation database from either the workspace root or its `build` directory. Hovering a token shows
 clangd information, while `F12`, Command/Ctrl-click, and the Electron **Go to Definition /
-Declaration** context-menu action open the source definition in Paseito. Eligible file headers show
-the shared session's provider and retry state in the file-name row without adding format-on-save
-controls. Wide Changes panes show the provider label; narrow and mobile panes use the same accessible
-icon action so the status cannot overlap diff rows. Changes pauses these sessions and actions whenever
-the live workspace has uncommitted changes, then resumes visible files after the workspace is clean.
+Declaration** context-menu action open the source definition in Paseito. The top Diff toolbar shows
+one LSP action per applicable language-server kind, immediately before **Review**, rather than one
+per file. Wide panes show language and provider labels; narrow panes use accessible icon actions.
+LSP remains available with uncommitted changes, using the exact source revision displayed by each
+comparison. Conflicting unsaved editor buffers remain protected. See [paseito-lsp.md](paseito-lsp.md)
+for session ownership and retry behavior.
 
 ## Workspace file search
 

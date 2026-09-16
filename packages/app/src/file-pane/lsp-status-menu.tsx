@@ -27,6 +27,7 @@ export interface LspStatusMenuProps {
   onRetry(): void;
   testIDPrefix?: string;
   presentation?: "label" | "icon";
+  languageLabel?: string;
 }
 
 const ThemedCode2 = withUnistyles(Code2);
@@ -83,9 +84,11 @@ export function LspStatusMenu({
   onRetry,
   testIDPrefix = "file-lsp",
   presentation = "label",
+  languageLabel,
 }: LspStatusMenuProps) {
   const paused = Boolean(pausedReason);
-  const statusLabel = lspStatusLabel(enabled, snapshot, paused);
+  const status = lspStatusLabel(enabled, snapshot, paused);
+  const statusLabel = languageLabel ? `${languageLabel} · ${status}` : status;
   const toggleEnabled = useCallback(() => onEnabledChange(!enabled), [enabled, onEnabledChange]);
   const toggleFormatOnSave = useCallback(
     () => onFormatOnSaveChange?.(!formatOnSave),

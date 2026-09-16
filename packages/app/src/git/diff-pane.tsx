@@ -117,6 +117,7 @@ import { openWorkspacePullRequest } from "@/workspace-tabs/open-supporting-view"
 import type { PullRequestOpenLocation } from "@/hooks/use-settings";
 import type { WorkspaceFileOpenOptions } from "@/workspace/file-open";
 import { useChangesLsp } from "@/git/use-changes-lsp";
+import { ChangesLspToolbar } from "@/git/changes-lsp-toolbar";
 import type { ChangesSearchMatch } from "@/git/changes-search";
 import type { FileReviewActions, ReviewableChangedLine } from "@/review";
 import { collapseReviewedFiles, revealFileAncestorFolders } from "@/git/file-review-expansion";
@@ -553,6 +554,7 @@ interface ChangesComparisonToolbarModel {
 }
 
 interface ChangesHeaderProps {
+  lspControls: ReactNode;
   compact: boolean;
   repository: ChangesRepositoryToolbarModel;
   comparison: ChangesComparisonToolbarModel;
@@ -622,6 +624,7 @@ function buildChangesHeaderModel(input: BuildChangesHeaderModelInput): {
 // Presentation resolves into these two capability models before rendering. The rows
 // never infer which host or Changes presentation produced them.
 function ChangesHeader({
+  lspControls,
   compact,
   repository,
   comparison,
@@ -632,6 +635,7 @@ function ChangesHeader({
   if (comparison.mode.kind === "diff") {
     return (
       <ChangesDiffOnlyToolbar
+        lspControls={lspControls}
         compact={compact}
         discussions={discussions}
         reviews={reviews}
@@ -661,6 +665,7 @@ function ChangesHeader({
 }
 
 function ChangesDiffOnlyToolbar({
+  lspControls,
   compact,
   discussions,
   reviews,
@@ -671,6 +676,7 @@ function ChangesDiffOnlyToolbar({
   discussions: ChangesDiscussionToolbarModel | null;
   reviews: ChangesReviewToolbarModel | null;
   mode: Extract<ChangesToolbarMode, { kind: "diff" }>;
+  lspControls: ReactNode;
   sidebarSurface: boolean;
 }) {
   return (
@@ -678,6 +684,7 @@ function ChangesDiffOnlyToolbar({
       <ChangesToolbarLeading />
       <ChangesToolbarTrailing>
         <ChangesDiscussionButton compact={compact} model={discussions} />
+        {lspControls}
         <ReviewBulkMenu model={reviews} />
         <ChangesToolbarActions mode={mode} compact={compact} />
       </ChangesToolbarTrailing>
@@ -2270,7 +2277,6 @@ export function ChangesSurface({
     serverId,
     cwd,
     active: enabled !== false,
-    dirty: hasUncommittedChanges,
     loadSource: loadChangesLspSource,
     onOpenDefinition: handleOpenLspDefinition,
   });
@@ -2310,7 +2316,6 @@ export function ChangesSurface({
       searchSupported: diffSearchSupported,
       onRevealSearchMatch: revealSearchMatch,
       lsp: changesLsp,
-      lspStatusPresentation: isMobile || (paneWidth > 0 && paneWidth < 480) ? "icon" : "label",
     }),
     [
       reviewActions,
@@ -2344,8 +2349,6 @@ export function ChangesSurface({
       diffSearchSupported,
       revealSearchMatch,
       changesLsp,
-      isMobile,
-      paneWidth,
     ],
   );
 
@@ -2612,6 +2615,17 @@ export function ChangesSurface({
     ],
   );
 
+  const lspControls = useMemo(
+    () => (
+      <ChangesLspToolbar
+        files={files}
+        lsp={changesLsp}
+        compact={isMobile || (paneWidth > 0 && paneWidth < 700)}
+      />
+    ),
+    [files, changesLsp, isMobile, paneWidth],
+  );
+
   return (
     <View
       {...{
@@ -2622,6 +2636,7 @@ export function ChangesSurface({
     >
       {isGit ? (
         <ChangesHeader
+          lspControls={lspControls}
           compact={isMobile}
           repository={changesHeaderModel.repository}
           comparison={changesHeaderModel.comparison}

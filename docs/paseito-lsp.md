@@ -56,9 +56,12 @@ an otherwise healthy editor session; later requests can succeed as clangd warms 
 
 The Changes view uses the same workspace preference and transport for current-side C/C++ and Python
 lines. Hover, F12, Command/Ctrl-click, and the Electron definition context menu are available there.
-Each eligible visible file header holds a reference-counted lease and reports the shared session's
-connecting, provider, unavailable, and retry state. Virtualized headers release their leases. The
-editor and Changes still converge on one app-side document session. When an unsaved editor buffer
+The Diff toolbar shows one action per eligible language-server kind (C/C++ and Python), immediately
+before Review. The actions cover the complete changed-file list, excluding deleted files, and show
+the shared sessions' connecting, provider, unavailable, and retry state. Visible files hold
+reference-counted leases; the toolbar also holds one representative document per language so it
+remains usable when files are collapsed or offscreen. Virtualized headers release their leases and
+contain no LSP controls. The editor and Changes still converge on one app-side document session. When an unsaved editor buffer
 differs from the diff revision, Changes reports that file unavailable until the contents agree; it
 never replaces the editor's in-memory document. Full-source reads reuse the revision-checked
 diff-context transport, so committed comparisons and hidden lines use the exact source represented
@@ -66,10 +69,10 @@ by the diff. The reconstruction verifies its terminal-newline form against that 
 shares an editor document.
 
 Changes measures navigation columns from the rendered source text. Line-number and review gutters,
-deleted-side lines, hunk controls, and other chrome never become LSP targets. Any uncommitted change
-in the live workspace pauses all Changes leases and interactions, even while Changes displays the
-committed comparison. Cleaning the workspace resumes visible files without changing the saved LSP
-preference. Editor LSP remains available while Changes is paused.
+deleted-side lines, hunk controls, and other chrome never become LSP targets. Uncommitted changes do
+not pause LSP: both committed comparisons and the Uncommitted view use their own revision-checked
+source. An unsaved editor buffer that conflicts with that source still blocks the affected document,
+not the entire workspace.
 
 The Paseito protocol uses the dotted `workspace.lsp.request` and `workspace.lsp.response` RPCs. Each
 request carries the editor document version, and the client rejects a response for a different

@@ -304,9 +304,9 @@ instead of editing the list by hand.
   - Fix: Render GitLab discussion bodies through the shared Markdown and HTML-aware renderer instead of exposing source markup.
 - `changes-source-navigation` — Search complete current-side changed files and use shared language intelligence directly from Changes.
   - Fix: Share revision-safe LSP sessions with the editor and suppress stale buffers.
-  - Fix: Anchor LSP positions to current-side source text and pause Changes intelligence while the workspace is dirty.
+  - Fix: Anchor LSP positions to revision-checked current-side source text, including while the workspace has uncommitted changes.
   - Fix: Preserve the exact terminal-newline form when rebuilding paged source for shared LSP sessions.
-  - Fix: Keep each file's responsive LSP status inside the file-header action rail so it cannot overlap diff statistics or context rows.
+  - Fix: Show one responsive LSP action per eligible language-server kind in the top Diff toolbar before Review, never in file headers.
   - Fix: Render structured LSP hover Markdown through the shared editor renderer and keep the hover inside the diff viewport.
   - Fix: Search complete changed-file source on the daemon without transferring every file before results.
 - `lens-shared-editor-lsp` — Provide editor intelligence through the existing Lens language server when available and a daemon-owned clangd fallback for ordinary C/C++ workspaces.

@@ -34,11 +34,10 @@ export function useChangesLsp(input: {
   serverId: string;
   cwd: string;
   active: boolean;
-  dirty: boolean;
   loadSource(filePath: string): Promise<string | null>;
   onOpenDefinition(location: { path: string; lineStart: number; lineEnd: number }): void;
 }): ChangesLspController {
-  const { serverId, cwd, active, dirty, loadSource, onOpenDefinition } = input;
+  const { serverId, cwd, active, loadSource, onOpenDefinition } = input;
   const client = useHostRuntimeClient(serverId);
   const supported = useSessionStore(
     (state) => state.sessions[serverId]?.serverInfo?.features?.workspaceLsp === true,
@@ -52,7 +51,7 @@ export function useChangesLsp(input: {
     language: null,
   });
   const preferenceActive = active && supported && preference.enabled && Boolean(client);
-  const enabled = preferenceActive && !dirty;
+  const enabled = preferenceActive;
   const controller = useMemo(
     () =>
       client
@@ -67,8 +66,8 @@ export function useChangesLsp(input: {
     [client, cwd, loadSource],
   );
   useEffect(() => {
-    controller?.setActivity({ enabled: preferenceActive, paused: dirty });
-  }, [controller, dirty, preferenceActive]);
+    controller?.setActivity({ enabled: preferenceActive, paused: false });
+  }, [controller, preferenceActive]);
   useEffect(() => () => controller?.dispose(), [controller]);
 
   const hover = useCallback(
@@ -96,8 +95,6 @@ export function useChangesLsp(input: {
       enabled,
       supported,
       preferenceEnabled: preference.enabled,
-      paused: dirty,
-      pauseReason: dirty ? "dirty-worktree" : null,
       standaloneClangdSupported,
       setEnabled: preference.setEnabled,
       getFileSnapshot: (filePath) => controller?.getSnapshot(filePath) ?? CONNECTING_SNAPSHOT,
@@ -111,7 +108,6 @@ export function useChangesLsp(input: {
     [
       controller,
       definition,
-      dirty,
       enabled,
       hover,
       preference.enabled,

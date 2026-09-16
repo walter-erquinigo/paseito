@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useSyncExternalStore } from "react";
+import { memo, useCallback, useEffect, useMemo } from "react";
 import { Text, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import { ListChevronsUpDown } from "lucide-react-native";
@@ -6,9 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { buildDiffContextRegions } from "@/git/diff-context-expansion";
 import { lspLanguageForFile } from "@/file-pane/editor/lsp-preferences";
-import { LspStatusMenu } from "@/file-pane/lsp-status-menu";
 import { FileHeader } from "@/git/file-header";
-import type { ChangesLspController } from "@/git/use-changes-lsp";
 import type { DiffDocumentProps, DiffFileSection } from "./types";
 import { ReviewCheckbox } from "./review-checkbox";
 import type { ReviewCheckboxState } from "./review-checkbox-model";
@@ -80,6 +78,11 @@ function WorkingDocumentFileHeader({
     },
     [mode, onToggleFile],
   );
+  const lsp = mode.lsp;
+  useEffect(() => {
+    if (!lsp?.supported || file.file.isDeleted || !lspLanguageForFile(file.path)) return;
+    return lsp.acquireVisibleFile(file.path);
+  }, [file.file.isDeleted, file.path, lsp]);
   const onExpandFile = mode.onExpandFile;
   const expandFile = useCallback(async () => {
     await onExpandFile?.(file.path);
@@ -113,25 +116,10 @@ function WorkingDocumentFileHeader({
             </TooltipContent>
           </Tooltip>
         ) : null}
-        {mode.lsp ? (
-          <DocumentFileLspStatus
-            filePath={file.path}
-            lsp={mode.lsp}
-            presentation={mode.lspStatusPresentation ?? "label"}
-          />
-        ) : null}
         {reviewControl}
       </View>
     ),
-    [
-      canExpandCompleteFile,
-      expandFile,
-      file.fileIndex,
-      file.path,
-      mode.lsp,
-      mode.lspStatusPresentation,
-      reviewControl,
-    ],
+    [canExpandCompleteFile, expandFile, file.fileIndex, file.path, reviewControl],
   );
   return (
     <View style={styles.root}>
@@ -201,46 +189,6 @@ function DocumentFileReviewControl({
   );
 }
 
-function DocumentFileLspStatus({
-  filePath,
-  lsp,
-  presentation,
-}: {
-  filePath: string;
-  lsp: ChangesLspController;
-  presentation: "label" | "icon";
-}) {
-  const language = lspLanguageForFile(filePath);
-  const subscribe = useCallback(
-    (listener: () => void) => lsp.subscribeFile(filePath, listener),
-    [filePath, lsp],
-  );
-  const getSnapshot = useCallback(() => lsp.getFileSnapshot(filePath), [filePath, lsp]);
-  const snapshot = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
-  useEffect(() => {
-    if (!language || !lsp.supported) return;
-    return lsp.acquireVisibleFile(filePath);
-  }, [filePath, language, lsp]);
-  const retry = useCallback(() => lsp.retry(filePath), [filePath, lsp]);
-  if (!language || !lsp.supported) return null;
-  return (
-    <LspStatusMenu
-      enabled={lsp.preferenceEnabled}
-      snapshot={snapshot}
-      language={language}
-      standaloneClangdSupported={lsp.standaloneClangdSupported}
-      pausedReason={
-        lsp.pauseReason === "dirty-worktree"
-          ? "Language intelligence is paused while this workspace has uncommitted changes. Clean the workspace to resume."
-          : null
-      }
-      onEnabledChange={lsp.setEnabled}
-      onRetry={retry}
-      presentation={presentation}
-      testIDPrefix={`changes-lsp-${filePath}`}
-    />
-  );
-}
 const styles = StyleSheet.create((theme) => ({
   root: { position: "relative" },
   headerControl: {
@@ -297,8 +245,7 @@ function documentFileHeaderWorkingModeMatches(
     previous.onSearch === next.onSearch &&
     previous.onRevealSearchMatch === next.onRevealSearchMatch &&
     previous.searchSupported === next.searchSupported &&
-    previous.lsp === next.lsp &&
-    previous.lspStatusPresentation === next.lspStatusPresentation
+    previous.lsp === next.lsp
   );
 }
 

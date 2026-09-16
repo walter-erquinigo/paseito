@@ -292,9 +292,9 @@
       "commitSubject": "feat(changes): add source search and navigation",
       "preservationFixes": [
         "Share revision-safe LSP sessions with the editor and suppress stale buffers.",
-        "Anchor LSP positions to current-side source text and pause Changes intelligence while the workspace is dirty.",
+        "Anchor LSP positions to revision-checked current-side source text, including while the workspace has uncommitted changes.",
         "Preserve the exact terminal-newline form when rebuilding paged source for shared LSP sessions.",
-        "Keep each file's responsive LSP status inside the file-header action rail so it cannot overlap diff statistics or context rows.",
+        "Show one responsive LSP action per eligible language-server kind in the top Diff toolbar before Review, never in file headers.",
         "Render structured LSP hover Markdown through the shared editor renderer and keep the hover inside the diff viewport.",
         "Search complete changed-file source on the daemon without transferring every file before results."
       ],
@@ -307,19 +307,23 @@
         "Search is capability-gated, returns at most 10,000 smart-case matches, and sends no source-file corpus to the client.",
         "LSP hover, F12, Command/Ctrl-click and the Electron definition context menu operate only on current-side lines and share a reference-counted document session with the editor.",
         "LSP columns are measured from rendered source text in unified, wrapped and split layouts; review and line-number gutters, hunk controls, deleted-side lines and other chrome are ineligible.",
-        "Eligible non-deleted C/C++ and Python headers acquire visibility-scoped sessions and show off, connecting, provider, unavailable, error and retry states inside the file-name row, using a label on wide panes and an accessible icon on narrow panes.",
+        "The top Diff toolbar groups the complete non-deleted C/C++ and Python change list into one action per language-server kind before Review, with off, connecting, provider, unavailable, error and retry states; narrow panes use accessible icons and file headers contain no LSP action.",
         "An unsaved editor buffer that differs from the diff revision suppresses Changes LSP instead of replacing the editor's document version.",
         "Full-source reconstruction verifies terminal-newline candidates against the exact content revision before sharing a document session.",
-        "Live workspace dirtiness releases every Changes lease, disables its global control and all navigation triggers, preserves the workspace preference, and resumes visible files when clean.",
+        "Uncommitted changes never pause Changes LSP: committed and uncommitted comparisons retain exact source revisions and stale-buffer protection. Visible files and one toolbar representative per language hold reference-counted leases.",
         "Changes exposes the same opt-in workspace language-intelligence preference and explicit old-host state as the editor."
       ],
       "contracts": [
         "npx vitest run packages/protocol/src/messages.checkout-diff-context.test.ts packages/server/src/utils/checkout-git.context.test.ts packages/app/src/git/changes-search.test.ts packages/app/src/git/changes-lsp-controller.test.ts packages/app/src/git/revisioned-source.test.ts packages/app/src/file-pane/editor/lsp-session-pool.test.ts --bail=1",
-        "npm run test:browser --workspace=@getpaseo/app -- src/git/changes-lsp-target.browser.test.ts --bail=1"
+        "npm run test:browser --workspace=@getpaseo/app -- src/git/changes-lsp-target.browser.test.ts --bail=1",
+        "npx vitest run packages/app/src/git/changes-lsp-groups.test.ts --bail=1",
+        "npm run test:e2e --workspace=@getpaseo/app -- e2e/browser/changes-pane.spec.ts -g 'Changes toolbar LSP|Diff toolbar groups LSP' --workers=1 --max-failures=1"
       ],
       "paths": [
         "packages/app/src/git/changes-search.ts",
         "packages/app/src/git/changes-lsp-controller.ts",
+        "packages/app/src/git/changes-lsp-toolbar.tsx",
+        "packages/app/src/git/changes-lsp-groups.ts",
         "packages/app/src/git/changes-lsp-target.web.ts",
         "packages/app/src/git/revisioned-source.ts",
         "packages/app/src/git/use-diff-context-expansion.ts",

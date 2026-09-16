@@ -12,8 +12,6 @@ export interface ChangesLspController {
   enabled: boolean;
   supported: boolean;
   preferenceEnabled: boolean;
-  paused: boolean;
-  pauseReason: "dirty-worktree" | null;
   standaloneClangdSupported: boolean;
   setEnabled(enabled: boolean): void;
   getFileSnapshot(filePath: string): EditorLspSnapshot;
@@ -28,7 +26,6 @@ export function useChangesLsp(_input: {
   serverId: string;
   cwd: string;
   active: boolean;
-  dirty: boolean;
   loadSource(filePath: string): Promise<string | null>;
   onOpenDefinition(location: { path: string; lineStart: number; lineEnd: number }): void;
 }): ChangesLspController {
@@ -37,8 +34,6 @@ export function useChangesLsp(_input: {
       enabled: false,
       supported: false,
       preferenceEnabled: false,
-      paused: false,
-      pauseReason: null,
       standaloneClangdSupported: false,
       setEnabled() {},
       getFileSnapshot: () => CONNECTING_SNAPSHOT,
