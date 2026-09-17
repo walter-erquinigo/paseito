@@ -1142,6 +1142,7 @@ function InlineCommentBlocks({
     <InlineReviewEditor
       key={editingCommentId ?? "new"}
       initialBody={editor.body}
+      targets={editor.targets}
       onCancel={reviewActions.onCancelEditor}
       onSave={reviewActions.onSaveEditor}
       onSuggestEdit={onSuggestEdit}
@@ -1461,12 +1462,14 @@ export function getInlineReviewThreadViewportStyle({
 
 export function InlineReviewEditor({
   initialBody,
+  targets,
   onCancel,
   onSave,
   onSuggestEdit,
   testID,
 }: {
   initialBody: string;
+  targets?: readonly ReviewableDiffTarget[];
   onCancel: () => void;
   onSave: (body: string) => void;
   onSuggestEdit?: (body: string) => void;
@@ -1478,6 +1481,11 @@ export function InlineReviewEditor({
   const canShowKeyboardHints = useHasFinePointer();
   const [body, setBody] = useState(initialBody);
   const [isFocused, setIsFocused] = useState(false);
+  const firstTarget = targets?.[0] ?? null;
+  const lastTarget = targets?.at(-1) ?? null;
+  const showTargetRange = Boolean(
+    firstTarget && lastTarget && firstTarget.lineNumber !== lastTarget.lineNumber,
+  );
   const trimmedBody = body.trim();
   const canSave = trimmedBody.length > 0;
   const showKeyboardHints = isFocused && canShowKeyboardHints;
@@ -1587,6 +1595,16 @@ export function InlineReviewEditor({
   return (
     <View ref={editorRef} style={styles.editorBlock} testID={testID}>
       {onSuggestEdit ? <ReviewComposerTabs mode="comment" onSelect={handleSelectMode} /> : null}
+      {showTargetRange ? (
+        <View style={styles.suggestionEditorHeader} testID={testID ? `${testID}-range` : undefined}>
+          <Text style={styles.suggestionLabel}>
+            {t("review.suggestion.lines", {
+              start: firstTarget?.lineNumber,
+              end: lastTarget?.lineNumber,
+            })}
+          </Text>
+        </View>
+      ) : null}
       <TextInput
         ref={inputRef}
         accessibilityLabel={t("review.comment.label")}

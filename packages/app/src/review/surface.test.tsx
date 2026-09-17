@@ -715,6 +715,23 @@ describe("InlineReviewEditor", () => {
     expect(onSuggestEdit).toHaveBeenCalledWith("Should this be optional?");
   });
 
+  it("shows the selected line range in a multi-line comment editor", () => {
+    const first = target({ lineNumber: 20 });
+    const last = target({ lineNumber: 22 });
+    const { getByTestId, getByText } = render(
+      <InlineReviewEditor
+        initialBody="Review this range"
+        targets={[first, last]}
+        onCancel={vi.fn()}
+        onSave={vi.fn()}
+        testID="editor"
+      />,
+    );
+
+    expect(getByTestId("editor-range")).toBeTruthy();
+    expect(getByText("Lines 20–22")).toBeTruthy();
+  });
+
   it("handles Escape cancel and Mod+Enter save from the focused textarea", () => {
     const onCancel = vi.fn();
     const onSave = vi.fn();
