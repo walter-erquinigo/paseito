@@ -639,6 +639,7 @@ function ChangesHeader({
         compact={compact}
         discussions={discussions}
         reviews={reviews}
+        repository={repository}
         mode={comparison.mode}
         sidebarSurface={sidebarSurface}
       />
@@ -669,19 +670,28 @@ function ChangesDiffOnlyToolbar({
   compact,
   discussions,
   reviews,
+  repository,
   mode,
   sidebarSurface,
 }: {
   compact: boolean;
   discussions: ChangesDiscussionToolbarModel | null;
   reviews: ChangesReviewToolbarModel | null;
+  repository: ChangesRepositoryToolbarModel;
   mode: Extract<ChangesToolbarMode, { kind: "diff" }>;
   lspControls: ReactNode;
   sidebarSurface: boolean;
 }) {
   return (
     <ChangesToolbarRow compact={compact} sidebarSurface={sidebarSurface} testID="changes-header">
-      <ChangesToolbarLeading />
+      <ChangesToolbarLeading>
+        <ChangesUncommittedActions
+          serverId={repository.serverId}
+          cwd={repository.cwd}
+          currentBranchName={repository.branchName}
+          hasUncommittedChanges={repository.hasUncommittedChanges}
+        />
+      </ChangesToolbarLeading>
       <ChangesToolbarTrailing>
         <ChangesDiscussionButton compact={compact} model={discussions} />
         {lspControls}

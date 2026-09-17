@@ -22,7 +22,7 @@ import { useFetchQuery } from "@/data/query";
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import { useSessionStore } from "@/stores/session-store";
 import { openExternalUrl } from "@/utils/open-external-url";
-import { invalidateCheckoutGitQueriesForClient } from "@/git/query-keys";
+import { invalidateCheckoutGitQueriesForClient, workspaceStackQueryKey } from "@/git/query-keys";
 
 interface StackMenuProps {
   serverId: string;
@@ -74,7 +74,7 @@ export function StackMenu({ serverId, cwd }: StackMenuProps) {
 function StackContent({ serverId, cwd, client }: StackContentProps) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
-  const queryKey = ["workspaceStack", serverId, cwd];
+  const queryKey = workspaceStackQueryKey(serverId, cwd);
   const query = useFetchQuery({
     queryKey,
     queryFn: async () => {

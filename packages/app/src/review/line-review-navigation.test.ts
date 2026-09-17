@@ -43,21 +43,32 @@ describe("line review navigation", () => {
     ).toBe("b1");
   });
 
-  it("moves upward without wrapping", () => {
+  it("wraps around when movement reaches the document edge", () => {
     expect(
       findNextUncheckedLine({
         lines,
         selectedLineId: "b2",
         reviewedLineIds: new Set(["a2", "b1", "b2"]),
-        direction: "up",
+        direction: "down",
       })?.id,
     ).toBe("a1");
     expect(
       findNextUncheckedLine({
         lines,
         selectedLineId: "a1",
-        reviewedLineIds: new Set(),
+        reviewedLineIds: new Set(["a1", "a2", "b1"]),
         direction: "up",
+      })?.id,
+    ).toBe("b2");
+  });
+
+  it("returns no target when every line is reviewed", () => {
+    expect(
+      findNextUncheckedLine({
+        lines,
+        selectedLineId: "a1",
+        reviewedLineIds: new Set(["a1", "a2", "b1", "b2"]),
+        direction: "down",
       }),
     ).toBeNull();
   });

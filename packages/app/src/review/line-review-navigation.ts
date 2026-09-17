@@ -61,7 +61,8 @@ export function findNextUncheckedLine(input: {
   const selectedIndex = input.lines.findIndex((line) => line.id === input.selectedLineId);
   if (selectedIndex < 0) return null;
   const step = input.direction === "down" ? 1 : -1;
-  for (let index = selectedIndex + step; index >= 0 && index < input.lines.length; index += step) {
+  for (let distance = 1; distance < input.lines.length; distance += 1) {
+    const index = (selectedIndex + step * distance + input.lines.length) % input.lines.length;
     const line = input.lines[index];
     if (line && !input.reviewedLineIds.has(line.id)) return line;
   }

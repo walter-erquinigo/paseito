@@ -74,6 +74,38 @@ describe("Changes LSP controller", () => {
     controller.dispose();
   });
 
+  it("shares a matching editor buffer with Changes", async () => {
+    const client = clientWith(async () => ({ kind: "ack", provider: "clangd" as const }));
+    const editor = acquireEditorLspSession({
+      client,
+      cwd: "/repo",
+      path: "src/a.cc",
+      content: "committed",
+      onStatus() {},
+    });
+    await editor?.session.open("committed");
+
+    const controller = new ChangesLspSessionController({
+      client,
+      cwd: "/repo",
+      loadSource: async () => "committed",
+      enabled: true,
+      paused: false,
+    });
+    const release = controller.acquireVisibleFile("src/a.cc");
+    await vi.waitFor(() =>
+      expect(controller.getSnapshot("src/a.cc")).toEqual({
+        status: "ready",
+        error: null,
+        provider: "clangd",
+      }),
+    );
+    expect(operationKinds(client)).toEqual(["open"]);
+    release();
+    controller.dispose();
+    editor?.release();
+  });
+
   it("reports a stale editor buffer without replacing the editor document", async () => {
     const client = clientWith(async () => ({ kind: "ack", provider: "clangd" as const }));
     const editor = acquireEditorLspSession({

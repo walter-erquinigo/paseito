@@ -48,6 +48,10 @@ export function checkoutCommitFileDiffQueryKey(
   return ["checkoutCommitFileDiff", serverId, cwd, sha, path] as const;
 }
 
+export function workspaceStackQueryKey(serverId: string, cwd: string) {
+  return ["workspaceStack", serverId, cwd] as const;
+}
+
 export async function invalidateCheckoutGitQueriesForClient(
   queryClient: QueryClient,
   identity: CheckoutQueryIdentity,
@@ -64,6 +68,9 @@ export async function invalidateCheckoutGitQueriesForClient(
     }),
     queryClient.invalidateQueries({
       predicate: checkoutQueryPredicate("checkoutCommits", identity),
+    }),
+    queryClient.invalidateQueries({
+      predicate: checkoutQueryPredicate("workspaceStack", identity),
     }),
     queryClient.invalidateQueries({
       predicate: checkoutQueryPredicate(prPaneTimelineQueryKind, identity),
@@ -85,6 +92,7 @@ export async function invalidateCheckoutGitQueriesForServer(
     "checkoutStatus",
     "checkoutPrStatus",
     "checkoutCommits",
+    "workspaceStack",
     prPaneTimelineQueryKind,
     prPanePipelineQueryKind,
   ];

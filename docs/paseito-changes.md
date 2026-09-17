@@ -20,11 +20,11 @@ becomes the default Changes base and opens the committed comparison. A remembere
 wins. A malformed marker or missing branch falls back to the recorded Git base and keeps an error
 badge beside the base selector until the top commit is corrected.
 
-A muted **Uncommitted** badge beside the branch switcher reports the selected branch's live
-working-tree state. It remains visible while Changes displays the **Committed** comparison.
-An **Amend** button beside the badge stages the complete working tree and immediately amends the
-current commit without changing its message. Paseito refreshes the status and diff after the amend;
-older hosts leave the action visible and report that the host must be updated.
+A muted **Uncommitted** badge reports the selected branch's live working-tree state. It remains
+visible while Changes displays the **Committed** comparison and also appears in the standalone Diff
+view. An **Amend** button beside the badge stages the complete working tree and immediately amends
+the current commit without changing its message. Paseito refreshes the status and diff after the
+amend; older hosts leave the action visible and report that the host must be updated.
 
 ## Workspace stack navigation
 
@@ -133,10 +133,10 @@ the final line collapses the file. Binary and oversized diffs remain explicitly 
 file level.
 
 Clicking an edited line selects it for keyboard review. `M` moves down and `,` moves up, approving
-the current line and selecting the next unchecked line in that direction while expanding the
-destination file and folder as needed. The selected line carries a small accent marker in the fixed
-review gutter. Keyboard navigation leaves an already-visible destination in place and centers a
-destination that is outside the diff viewport.
+the current line and selecting the next unchecked line in that direction, wrapping at the document
+edge while expanding the destination file and folder as needed. The selected line carries a small
+accent marker in the fixed review gutter. Keyboard navigation leaves an already-visible destination
+in place and centers a destination that is outside the diff viewport.
 Opening an inline comment from the line-number gutter does not select the line or recenter an older
 line selection. The viewport stays fixed when the editor fits and otherwise moves only enough to
 reveal the clipped editor. The comment editor retains keyboard focus until the reviewer leaves it.
