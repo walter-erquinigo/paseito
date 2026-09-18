@@ -1,10 +1,10 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Text, View, type GestureResponderEvent } from "react-native";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { StyleSheet } from "react-native-unistyles";
 import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
-import type { WorkspaceStackBranch } from "@getpaseo/protocol/workspace-stack";
+import type { WorkspaceStack, WorkspaceStackBranch } from "@getpaseo/protocol/workspace-stack";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -23,6 +23,8 @@ import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-
 import { useSessionStore } from "@/stores/session-store";
 import { openExternalUrl } from "@/utils/open-external-url";
 import { invalidateCheckoutGitQueriesForClient, workspaceStackQueryKey } from "@/git/query-keys";
+import { useCheckoutStatusQuery } from "@/git/use-status-query";
+import { selectVisibleWorkspaceStack } from "@/git/stack-menu-state";
 
 interface StackMenuProps {
   serverId: string;
@@ -74,6 +76,12 @@ export function StackMenu({ serverId, cwd }: StackMenuProps) {
 function StackContent({ serverId, cwd, client }: StackContentProps) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
+  const retainedStackRef = useRef<WorkspaceStack | null>(null);
+  const checkoutStatus = useCheckoutStatusQuery({ serverId, cwd });
+  const currentBranch =
+    checkoutStatus.status?.currentBranch && checkoutStatus.status.currentBranch !== "HEAD"
+      ? checkoutStatus.status.currentBranch
+      : null;
   const queryKey = workspaceStackQueryKey(serverId, cwd);
   const query = useFetchQuery({
     queryKey,
@@ -88,6 +96,28 @@ function StackContent({ serverId, cwd, client }: StackContentProps) {
     refetchIntervalInBackground: false,
     retry: false,
   });
+  const visibleStack = selectVisibleWorkspaceStack({
+    queryStack: query.data,
+    retainedStack: retainedStackRef.current,
+    currentBranch,
+  });
+  useEffect(() => {
+    if (query.data) {
+      retainedStackRef.current = selectVisibleWorkspaceStack({
+        queryStack: query.data,
+        retainedStack: null,
+        currentBranch,
+      });
+      return;
+    }
+    if (
+      currentBranch &&
+      retainedStackRef.current &&
+      retainedStackRef.current.currentBranch !== currentBranch
+    ) {
+      retainedStackRef.current = null;
+    }
+  }, [currentBranch, query.data]);
   const switchBranch = useMutation({
     mutationFn: async (branch: string) => {
       const response = await client.checkoutSwitchBranch(cwd, branch);
@@ -105,7 +135,7 @@ function StackContent({ serverId, cwd, client }: StackContentProps) {
   const refresh = useCallback(() => {
     void refetch();
   }, [refetch]);
-  if (query.isError) {
+  if (query.isError && !visibleStack) {
     return (
       <>
         <DropdownMenuHint>{query.error.message}</DropdownMenuHint>
@@ -115,9 +145,9 @@ function StackContent({ serverId, cwd, client }: StackContentProps) {
       </>
     );
   }
-  if (query.isPending)
+  if (query.isPending && !visibleStack)
     return <DropdownMenuHint>{t("workspace.git.stack.loading")}</DropdownMenuHint>;
-  const stack = query.data;
+  const stack = visibleStack;
   if (!stack) return <DropdownMenuHint>{t("workspace.git.stack.empty")}</DropdownMenuHint>;
   return (
     <>
