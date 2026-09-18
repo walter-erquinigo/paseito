@@ -19,25 +19,25 @@ function stack(currentBranch: string): WorkspaceStack {
 }
 
 describe("Stack menu display state", () => {
-  it("keeps the retained stack when a transient refresh returns no stack for the same branch", () => {
+  it("keeps the retained stack when a transient refresh returns no stack", () => {
     const retained = stack("user/topic-a-change");
 
     expect(
       selectVisibleWorkspaceStack({
         queryStack: null,
         retainedStack: retained,
-        currentBranch: "user/topic-a-change",
       }),
     ).toBe(retained);
   });
 
-  it("hides a retained stack after the checkout moves to a different branch", () => {
+  it("uses the latest stack response when it is available", () => {
+    const latest = stack("user/topic-b-change");
+
     expect(
       selectVisibleWorkspaceStack({
-        queryStack: null,
+        queryStack: latest,
         retainedStack: stack("user/topic-a-change"),
-        currentBranch: "main",
       }),
-    ).toBeNull();
+    ).toBe(latest);
   });
 });

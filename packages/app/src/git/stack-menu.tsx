@@ -23,7 +23,6 @@ import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-
 import { useSessionStore } from "@/stores/session-store";
 import { openExternalUrl } from "@/utils/open-external-url";
 import { invalidateCheckoutGitQueriesForClient, workspaceStackQueryKey } from "@/git/query-keys";
-import { useCheckoutStatusQuery } from "@/git/use-status-query";
 import { selectVisibleWorkspaceStack } from "@/git/stack-menu-state";
 
 interface StackMenuProps {
@@ -77,11 +76,6 @@ function StackContent({ serverId, cwd, client }: StackContentProps) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const retainedStackRef = useRef<WorkspaceStack | null>(null);
-  const checkoutStatus = useCheckoutStatusQuery({ serverId, cwd });
-  const currentBranch =
-    checkoutStatus.status?.currentBranch && checkoutStatus.status.currentBranch !== "HEAD"
-      ? checkoutStatus.status.currentBranch
-      : null;
   const queryKey = workspaceStackQueryKey(serverId, cwd);
   const query = useFetchQuery({
     queryKey,
@@ -99,25 +93,10 @@ function StackContent({ serverId, cwd, client }: StackContentProps) {
   const visibleStack = selectVisibleWorkspaceStack({
     queryStack: query.data,
     retainedStack: retainedStackRef.current,
-    currentBranch,
   });
   useEffect(() => {
-    if (query.data) {
-      retainedStackRef.current = selectVisibleWorkspaceStack({
-        queryStack: query.data,
-        retainedStack: null,
-        currentBranch,
-      });
-      return;
-    }
-    if (
-      currentBranch &&
-      retainedStackRef.current &&
-      retainedStackRef.current.currentBranch !== currentBranch
-    ) {
-      retainedStackRef.current = null;
-    }
-  }, [currentBranch, query.data]);
+    if (query.data) retainedStackRef.current = query.data;
+  }, [query.data]);
   const switchBranch = useMutation({
     mutationFn: async (branch: string) => {
       const response = await client.checkoutSwitchBranch(cwd, branch);
