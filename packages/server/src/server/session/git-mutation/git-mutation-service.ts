@@ -54,8 +54,21 @@ export function createGitMutationService(deps: {
 
   async function isWorkingTreeDirty(cwd: string): Promise<boolean> {
     try {
-      const snapshot = await workspaceGitService.getSnapshot(cwd);
-      return snapshot.git.isDirty === true;
+      const snapshot = await workspaceGitService.getSnapshot(cwd, {
+        force: true,
+        reason: "branch-switch-safety",
+      });
+      if (snapshot.git.isDirty === null) {
+        throw new Error("Working-tree cleanliness is unknown");
+      }
+      if (snapshot.git.isDirty) return true;
+      // A forced observer read can join an already-running refresh. Check the tree at
+      // the mutation boundary too, so a clean snapshot cannot carry pending files across.
+      const status = await runGitCommand(["status", "--porcelain=v1", "--untracked-files=all"], {
+        cwd,
+        envOverlay: { GIT_OPTIONAL_LOCKS: "0" },
+      });
+      return status.truncated || status.stdout.length > 0;
     } catch (error) {
       throw new Error(`Unable to inspect git status for ${cwd}: ${getErrorMessage(error)}`, {
         cause: error,

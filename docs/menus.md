@@ -196,6 +196,8 @@ its own.
   portal backdrop blocking the destination. On web the chat suspends one commit after it goes
   inactive, and that inactive commit is where the surface unmounts.
 - Anchoring, flipping, and edge clamping live in `menu-anchor.ts` and are unit-tested. Fix
-  positioning bugs there, not at a call site.
+  positioning bugs there, not at a call site. The shared overlay subscribes to window dimensions
+  so an open menu remeasures its trigger and scroll viewport on resize; a one-time
+  `Dimensions.get()` leaves it positioned outside a narrowed window.
 - Everything else about floating surfaces on Android — Portal/Modal escape, lifecycle gates,
   status-bar offset, the open flash — is in [floating-panels.md](floating-panels.md).
